@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="128" fill="#090d16"/>
+  <circle cx="256" cy="256" r="180" stroke="#1e293b" stroke-width="24"/>
+  <circle cx="256" cy="256" r="180" stroke="#6366f1" stroke-width="24" stroke-dasharray="1130" stroke-dashoffset="380" stroke-linecap="round"/>
+  <!-- Focus flame/pulse inside -->
+  <path d="M256 160C256 160 216 210 216 256C216 278.091 233.909 296 256 296C278.091 296 296 278.091 296 256C296 210 256 160 256 160Z" fill="#6366f1"/>
+  <path d="M256 210C256 210 236 240 236 262C236 273.046 244.954 282 256 282C267.046 282 276 273.046 276 262C276 240 256 210 256 210Z" fill="#38bdf8"/>
+  <circle cx="256" cy="350" r="12" fill="#22c55e"/>
+</svg>
