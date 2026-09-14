@@ -14,23 +14,35 @@ import {
   Key,
   AlertCircle,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Copy,
+  RefreshCw,
+  Share2
 } from 'lucide-react';
+import { Haptics } from '../utils/haptics';
 
 export const GoogleSyncModal: React.FC = () => {
   const { 
     isSyncModalOpen, 
     setIsSyncModalOpen, 
     profile, 
-    updateProfile 
+    updateProfile,
+    syncKey,
+    updateSyncKey,
+    syncWithCloudNow,
+    cloudSyncStatus,
+    lastSyncedAt
   } = useApp();
 
   const [customClientId, setCustomClientId] = useState(GoogleAuthService.getClientId());
   const [isSavedClientId, setIsSavedClientId] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'account' | 'android' | 'backup'>('account');
+  const [activeSubTab, setActiveSubTab] = useState<'devicesync' | 'account' | 'android' | 'backup'>('devicesync');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [inputSyncKey, setInputSyncKey] = useState('');
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [pairSuccess, setPairSuccess] = useState(false);
 
   // Pre-load Google Identity Services script and auto-fetch backend Client ID
   useEffect(() => {
@@ -46,19 +58,39 @@ export const GoogleSyncModal: React.FC = () => {
 
   if (!isSyncModalOpen) return null;
 
+  const handleCopyKey = () => {
+    Haptics.tap();
+    navigator.clipboard.writeText(syncKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  const handlePairDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputSyncKey.trim()) return;
+    Haptics.success();
+    await updateSyncKey(inputSyncKey.trim().toUpperCase());
+    setPairSuccess(true);
+    setInputSyncKey('');
+    setTimeout(() => setPairSuccess(false), 3000);
+  };
+
   const handleDemoSignIn = () => {
+    Haptics.tap();
     setErrorMessage(null);
     const demoUser = GoogleAuthService.signInWithDemoUser();
     updateProfile(demoUser);
   };
 
   const handleSignOut = () => {
+    Haptics.tap();
     setErrorMessage(null);
     const guestUser = GoogleAuthService.signOut();
     updateProfile(guestUser);
   };
 
   const handleSaveClientId = () => {
+    Haptics.tap();
     GoogleAuthService.setClientId(customClientId.trim());
     setIsSavedClientId(true);
     setErrorMessage(null);
@@ -103,6 +135,7 @@ export const GoogleSyncModal: React.FC = () => {
   };
 
   const handleExportData = () => {
+    Haptics.tap();
     const data = StorageService.exportAllData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -116,6 +149,7 @@ export const GoogleSyncModal: React.FC = () => {
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    Haptics.tap();
     const reader = new FileReader();
     reader.onload = event => {
       try {
@@ -130,11 +164,14 @@ export const GoogleSyncModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
       <div 
-        className="glass-panel w-full max-w-lg rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto"
+        className="glass-panel w-full sm:max-w-lg max-sm:rounded-t-3xl sm:rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5 max-sm:max-h-[88vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
+        {/* Mobile Pull Handle Pill */}
+        <div className="sm:hidden w-12 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-2" />
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
           <div className="flex items-center space-x-2.5">
@@ -142,8 +179,8 @@ export const GoogleSyncModal: React.FC = () => {
               <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Sync & Mobile Setup</h2>
-              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Synchronize study schedules across Web and Android</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Cross-Device Sync</h2>
+              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Synchronize study schedules across Phone and Web</p>
             </div>
           </div>
 
@@ -158,28 +195,48 @@ export const GoogleSyncModal: React.FC = () => {
         {/* Sub tabs */}
         <div className="flex space-x-1 p-1 rounded-xl bg-slate-200/70 dark:bg-abyss-900/80 border border-ocean-300/30 dark:border-ocean-900/60 text-xs">
           <button
-            onClick={() => setActiveSubTab('account')}
+            onClick={() => {
+              Haptics.tap();
+              setActiveSubTab('devicesync');
+            }}
+            className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
+              activeSubTab === 'devicesync' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            Device Sync
+          </button>
+          <button
+            onClick={() => {
+              Haptics.tap();
+              setActiveSubTab('account');
+            }}
             className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
               activeSubTab === 'account' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            Google Sync
+            Google
           </button>
           <button
-            onClick={() => setActiveSubTab('android')}
+            onClick={() => {
+              Haptics.tap();
+              setActiveSubTab('android');
+            }}
             className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
               activeSubTab === 'android' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            Android App
+            Android
           </button>
           <button
-            onClick={() => setActiveSubTab('backup')}
+            onClick={() => {
+              Haptics.tap();
+              setActiveSubTab('backup');
+            }}
             className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
               activeSubTab === 'backup' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            Backup JSON
+            Backup
           </button>
         </div>
 
@@ -198,6 +255,96 @@ export const GoogleSyncModal: React.FC = () => {
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Tab 0: Universal Device Sync */}
+        {activeSubTab === 'devicesync' && (
+          <div className="space-y-4">
+            {/* Status Card */}
+            <div className="p-4 rounded-2xl bg-ocean-500/10 dark:bg-ocean-950/40 border border-ocean-300/40 dark:border-ocean-800/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    Your Device Sync Key
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${cloudSyncStatus === 'synced' ? 'bg-emerald-400 animate-pulse' : cloudSyncStatus === 'syncing' ? 'bg-amber-400 animate-spin' : 'bg-slate-400'}`} />
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                    {cloudSyncStatus === 'syncing' ? 'Syncing...' : cloudSyncStatus === 'synced' ? 'Synced' : 'Ready'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sync Key Display */}
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-abyss-card border border-ocean-200 dark:border-ocean-800">
+                <span className="font-mono text-base font-black text-ocean-700 dark:text-aqua-300 tracking-wider flex-1 select-all px-2">
+                  {syncKey}
+                </span>
+                <button
+                  onClick={handleCopyKey}
+                  className="px-3 py-1.5 rounded-lg bg-ocean-500/10 hover:bg-ocean-500/20 text-ocean-600 dark:text-aqua-400 text-xs font-semibold flex items-center gap-1 transition-colors"
+                >
+                  {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-slate-500">
+                  {lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Real-time sync active'}
+                </span>
+                <button
+                  onClick={async () => {
+                    Haptics.tap();
+                    await syncWithCloudNow();
+                  }}
+                  disabled={cloudSyncStatus === 'syncing'}
+                  className="px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${cloudSyncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                  <span>Sync Now</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Pair with Phone or another Browser */}
+            <form onSubmit={handlePairDevice} className="p-4 rounded-2xl bg-slate-100/70 dark:bg-abyss-900/60 border border-ocean-200/40 dark:border-ocean-900/60 space-y-3">
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-aqua-400" />
+                  Pair Another Device
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  To sync with your phone, open StudyPulse on your phone, enter this key — or enter your phone's key below to link them.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. PULSE-ABCD12"
+                  value={inputSyncKey}
+                  onChange={(e) => setInputSyncKey(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-abyss-card border border-ocean-200 dark:border-ocean-800 text-xs font-mono uppercase text-slate-800 dark:text-slate-200 focus:outline-none focus:border-aqua-400"
+                />
+                <button
+                  type="submit"
+                  disabled={!inputSyncKey.trim()}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-ocean-600 to-aqua-500 hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold transition-all shrink-0"
+                >
+                  Pair & Pull
+                </button>
+              </div>
+
+              {pairSuccess && (
+                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium flex items-center gap-1.5 animate-in fade-in">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Devices successfully paired! Data synced.</span>
+                </div>
+              )}
+            </form>
           </div>
         )}
 

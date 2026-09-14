@@ -10,8 +10,10 @@ import {
   Cloud, 
   CloudOff,
   Sun,
-  Moon
+  Moon,
+  RefreshCw
 } from 'lucide-react';
+import { Haptics } from '../utils/haptics';
 
 export const Navbar: React.FC = () => {
   const { 
@@ -19,9 +21,12 @@ export const Navbar: React.FC = () => {
     setActiveTab, 
     openAddTopicModal, 
     openCreateSubjectModal,
+    openStreakModal,
     streaks, 
     profile, 
     setIsSyncModalOpen,
+    cloudSyncStatus,
+    syncKey,
     settings,
     toggleTheme
   } = useApp();
@@ -41,7 +46,10 @@ export const Navbar: React.FC = () => {
         
         {/* Brand Logo & Name (Minimalist) */}
         <div 
-          onClick={() => setActiveTab('study')}
+          onClick={() => {
+            Haptics.tap();
+            setActiveTab('study');
+          }}
           className="flex items-center space-x-2 cursor-pointer group select-none"
         >
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-ocean-600 to-aqua-400 flex items-center justify-center shadow-md shadow-ocean-500/20 group-hover:scale-105 transition-transform">
@@ -60,7 +68,10 @@ export const Navbar: React.FC = () => {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  Haptics.tap();
+                  setActiveTab(item.id);
+                }}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm shadow-ocean-600/30'
@@ -78,18 +89,30 @@ export const Navbar: React.FC = () => {
         {/* Quick Actions, Streak, Theme Toggle & Sync */}
         <div className="flex items-center space-x-1.5 sm:space-x-2">
           
-          {/* Streak Badge with Fire Symbol */}
-          <div 
-            title={`Streak: ${streaks.currentStreak} days`}
-            className="flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 dark:text-amber-400 text-xs font-bold"
+          {/* Clickable Streak Badge with Fire Symbol & Longest Badge */}
+          <button 
+            onClick={() => {
+              Haptics.tap();
+              openStreakModal();
+            }}
+            title={`Current Streak: ${streaks.currentStreak}d • Longest: ${streaks.longestStreak}d (Click to manage/restore)`}
+            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 dark:text-amber-400 text-xs font-bold transition-transform active:scale-95 cursor-pointer select-none"
           >
             <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500 animate-pulse" />
             <span className="font-mono">{streaks.currentStreak}d</span>
-          </div>
+            {streaks.longestStreak > 0 && (
+              <span className="hidden sm:inline-block text-[10px] text-amber-600/80 dark:text-amber-300/80 font-normal pl-1 border-l border-amber-500/30">
+                🏆 {streaks.longestStreak}d
+              </span>
+            )}
+          </button>
 
           {/* Dark / Light Theme Toggle */}
           <button
-            onClick={toggleTheme}
+            onClick={() => {
+              Haptics.tap();
+              toggleTheme();
+            }}
             title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             className="p-1.5 sm:p-2 rounded-xl border border-ocean-200/50 dark:border-ocean-900/60 bg-white/80 dark:bg-abyss-card/80 text-slate-700 dark:text-slate-300 hover:text-ocean-600 dark:hover:text-aqua-400 transition-colors"
           >
@@ -100,17 +123,30 @@ export const Navbar: React.FC = () => {
             )}
           </button>
 
-          {/* Google Sync Status Icon */}
+          {/* Cloud Sync Status Icon */}
           <button
-            onClick={() => setIsSyncModalOpen(true)}
-            title={profile.googleConnected ? `Synced: ${profile.email}` : 'Google Calendar & Sync'}
-            className={`p-1.5 sm:p-2 rounded-xl border transition-colors ${
-              profile.googleConnected
+            onClick={() => {
+              Haptics.tap();
+              setIsSyncModalOpen(true);
+            }}
+            title={
+              cloudSyncStatus === 'syncing'
+                ? 'Syncing across devices...'
+                : profile.googleConnected
+                ? `Google Synced: ${profile.email}`
+                : `Cloud Sync (${syncKey}) - Click to configure`
+            }
+            className={`p-1.5 sm:p-2 rounded-xl border transition-all active:scale-95 ${
+              cloudSyncStatus === 'syncing'
+                ? 'bg-aqua-500/20 border-aqua-400/50 text-aqua-400 animate-pulse'
+                : profile.googleConnected || cloudSyncStatus === 'synced'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20'
                 : 'bg-white/80 dark:bg-abyss-card/80 border-ocean-200/50 dark:border-ocean-900/60 text-slate-500 hover:text-ocean-600 dark:hover:text-aqua-300'
             }`}
           >
-            {profile.googleConnected ? (
+            {cloudSyncStatus === 'syncing' ? (
+              <RefreshCw className="w-4 h-4 text-aqua-400 animate-spin" />
+            ) : profile.googleConnected || cloudSyncStatus === 'synced' ? (
               <Cloud className="w-4 h-4 text-emerald-500" />
             ) : (
               <CloudOff className="w-4 h-4" />
@@ -119,7 +155,10 @@ export const Navbar: React.FC = () => {
 
           {/* Quick Add Subject Symbol Button */}
           <button
-            onClick={() => openCreateSubjectModal()}
+            onClick={() => {
+              Haptics.tap();
+              openCreateSubjectModal();
+            }}
             className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-200/80 dark:bg-abyss-card/80 hover:bg-ocean-500/10 dark:hover:bg-ocean-950/50 text-slate-700 dark:text-slate-300 text-xs font-medium border border-ocean-200/50 dark:border-ocean-900/60 transition-colors flex items-center space-x-1"
             title="Add Subject"
           >
@@ -129,7 +168,10 @@ export const Navbar: React.FC = () => {
 
           {/* Quick Add Topic Button (Liquid 3D button) */}
           <button
-            onClick={() => openAddTopicModal()}
+            onClick={() => {
+              Haptics.tap();
+              openAddTopicModal();
+            }}
             className="flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
             title="Add Topic"
           >
@@ -139,20 +181,25 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-panel py-2 px-3 flex justify-around">
+      {/* Mobile Bottom Navigation Bar with Safe-Area Inset & Tactile Active States */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-ocean-200/40 dark:border-ocean-900/60 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] px-3 flex justify-around shadow-2xl backdrop-blur-2xl">
         {navItems.map(item => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center py-1 px-3 rounded-lg text-[11px] font-medium transition-colors ${
-                isActive ? 'text-ocean-600 dark:text-aqua-400 font-bold' : 'text-slate-500 dark:text-slate-400'
+              onClick={() => {
+                Haptics.tap();
+                setActiveTab(item.id);
+              }}
+              className={`flex flex-col items-center justify-center py-1.5 px-3.5 rounded-2xl text-[11px] font-medium transition-all active:scale-90 ${
+                isActive
+                  ? 'bg-gradient-to-r from-ocean-500/20 to-aqua-500/20 text-ocean-600 dark:text-aqua-300 font-bold border border-aqua-400/30 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
             >
-              <Icon className="w-4 h-4 mb-0.5" />
+              <Icon className={`w-4 h-4 mb-0.5 ${isActive ? 'text-aqua-500 dark:text-aqua-300 scale-110' : ''}`} />
               <span>{item.label}</span>
             </button>
           );
@@ -161,3 +208,4 @@ export const Navbar: React.FC = () => {
     </header>
   );
 };
+

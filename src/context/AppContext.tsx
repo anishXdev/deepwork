@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, TaskStatus } from '../types';
+import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, TaskStatus, CloudSyncStatus } from '../types';
 import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
 import { GoogleCalendarService } from '../services/googleCalendar';
 import { GoogleAuthService } from '../services/googleAuth';
+import { CloudSyncService } from '../services/cloudSync';
 
 interface AppContextType {
   subjects: Subject[];
@@ -21,6 +22,14 @@ interface AppContextType {
   isRescheduleModalOpen: boolean;
   isSyncModalOpen: boolean;
   isCreateSubjectModalOpen: boolean;
+  isStreakModalOpen: boolean;
+
+  // Cloud Sync
+  cloudSyncStatus: CloudSyncStatus;
+  syncKey: string;
+  lastSyncedAt: string | null;
+  syncWithCloudNow: () => Promise<boolean>;
+  updateSyncKey: (newKey: string) => Promise<void>;
 
   // Actions
   setActiveTab: (tab: 'study' | 'subjects' | 'timer' | 'analytics' | 'sync') => void;
@@ -31,7 +40,14 @@ interface AppContextType {
   closeRescheduleModal: () => void;
   openCreateSubjectModal: () => void;
   closeCreateSubjectModal: () => void;
+  openStreakModal: () => void;
+  closeStreakModal: () => void;
   setIsSyncModalOpen: (open: boolean) => void;
+
+  // Streak & Preset Data Controls
+  resetStreak: (keepLongest?: boolean) => void;
+  setManualStreak: (current: number, longest?: number) => void;
+  clearAllPresetData: () => void;
 
   addSubject: (name: string, color: string, weeklyTargetHours?: number) => Subject;
   deleteSubject: (id: string) => void;
@@ -73,23 +89,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [rescheduleTargetTopic, setRescheduleTargetTopic] = useState<Topic | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isCreateSubjectModalOpen, setIsCreateSubjectModalOpen] = useState(false);
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
 
-  // Sync state changes with storage
+  // Cloud Sync state
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('idle');
+  const [syncKey, setSyncKey] = useState<string>(() => CloudSyncService.getSyncKey());
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => CloudSyncService.getLastSyncedAt());
+
+  // Startup sync & backend config
   useEffect(() => {
-    // Automatically load backend Google OAuth Client ID if available
     GoogleAuthService.fetchBackendConfig();
+
+    // Auto pull latest cloud snapshot if available
+    setCloudSyncStatus('syncing');
+    CloudSyncService.pullFromCloud().then(res => {
+      if (res.found && res.data) {
+        if (res.data.subjects) setSubjects(res.data.subjects);
+        if (res.data.topics) setTopics(res.data.topics);
+        if (res.data.sessions) setSessions(res.data.sessions);
+        if (res.data.streaks) setStreaks(res.data.streaks);
+        if (res.data.settings) setSettings(res.data.settings);
+        setCloudSyncStatus('synced');
+        setLastSyncedAt(res.updatedAt || new Date().toISOString());
+      } else {
+        setCloudSyncStatus('idle');
+      }
+    }).catch(() => {
+      setCloudSyncStatus('idle');
+    });
   }, []);
 
   useEffect(() => {
     StorageService.saveSubjects(subjects);
+    CloudSyncService.scheduleDebouncedPush();
   }, [subjects]);
 
   useEffect(() => {
     StorageService.saveTopics(topics);
+    CloudSyncService.scheduleDebouncedPush();
   }, [topics]);
 
   useEffect(() => {
     StorageService.saveSessions(sessions);
+    CloudSyncService.scheduleDebouncedPush();
   }, [sessions]);
 
   useEffect(() => {
@@ -116,6 +158,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     StorageService.saveStreaks(streaks);
+    CloudSyncService.scheduleDebouncedPush();
   }, [streaks]);
 
   const addSubject = (name: string, color: string, weeklyTargetHours = 5): Subject => {
@@ -329,6 +372,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCreateSubjectModalOpen(false);
   };
 
+  const openStreakModal = () => {
+    setIsStreakModalOpen(true);
+  };
+
+  const closeStreakModal = () => {
+    setIsStreakModalOpen(false);
+  };
+
+  const resetStreak = (keepLongest = true) => {
+    const updated = StorageService.resetStreak(keepLongest);
+    setStreaks(updated);
+    CloudSyncService.pushToCloudImmediate();
+  };
+
+  const setManualStreak = (current: number, longest?: number) => {
+    const updated = StorageService.setManualStreak(current, longest);
+    setStreaks(updated);
+    CloudSyncService.pushToCloudImmediate();
+  };
+
+  const clearAllPresetData = () => {
+    const blank = StorageService.clearSampleData();
+    setSubjects([]);
+    setTopics([]);
+    setSessions([]);
+    setStreaks(blank.streaks);
+    CloudSyncService.pushToCloudImmediate();
+  };
+
+  const syncWithCloudNow = async (): Promise<boolean> => {
+    setCloudSyncStatus('syncing');
+    const res = await CloudSyncService.pushToCloudImmediate();
+    if (res.success) {
+      setCloudSyncStatus('synced');
+      setLastSyncedAt(res.updatedAt || new Date().toISOString());
+      return true;
+    }
+    setCloudSyncStatus('error');
+    return false;
+  };
+
+  const updateSyncKey = async (newKey: string) => {
+    CloudSyncService.setSyncKey(newKey);
+    setSyncKey(newKey);
+    setCloudSyncStatus('syncing');
+    const pullRes = await CloudSyncService.pullFromCloud();
+    if (pullRes.found && pullRes.data) {
+      if (pullRes.data.subjects) setSubjects(pullRes.data.subjects);
+      if (pullRes.data.topics) setTopics(pullRes.data.topics);
+      if (pullRes.data.sessions) setSessions(pullRes.data.sessions);
+      if (pullRes.data.streaks) setStreaks(pullRes.data.streaks);
+      if (pullRes.data.settings) setSettings(pullRes.data.settings);
+      setCloudSyncStatus('synced');
+      setLastSyncedAt(pullRes.updatedAt || new Date().toISOString());
+    } else {
+      await CloudSyncService.pushToCloudImmediate();
+      setCloudSyncStatus('synced');
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -346,6 +449,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isRescheduleModalOpen,
         isSyncModalOpen,
         isCreateSubjectModalOpen,
+        isStreakModalOpen,
+        cloudSyncStatus,
+        syncKey,
+        lastSyncedAt,
+        syncWithCloudNow,
+        updateSyncKey,
         setActiveTab,
         setActiveFocusTopic,
         openAddTopicModal,
@@ -354,7 +463,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         closeRescheduleModal,
         openCreateSubjectModal,
         closeCreateSubjectModal,
+        openStreakModal,
+        closeStreakModal,
         setIsSyncModalOpen,
+        resetStreak,
+        setManualStreak,
+        clearAllPresetData,
         addSubject,
         deleteSubject,
         addTopic,

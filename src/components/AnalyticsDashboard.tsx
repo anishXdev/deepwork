@@ -29,7 +29,8 @@ export const AnalyticsDashboard: React.FC = () => {
     updateSettings, 
     streaks,
     setActiveFocusTopic,
-    setActiveTab
+    setActiveTab,
+    openStreakModal
   } = useApp();
 
   const [activeViewMode, setActiveViewMode] = useState<'overview' | 'tree'>('overview');
@@ -205,17 +206,25 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* KPI 3: Streak */}
-        <div className="glass-card rounded-2xl p-4 border border-ocean-200/50 dark:border-ocean-900/60">
+        {/* KPI 3: Streak (Clickable with Longest Display & Restore) */}
+        <div 
+          onClick={openStreakModal}
+          className="glass-card rounded-2xl p-4 border border-ocean-200/50 dark:border-ocean-900/60 cursor-pointer hover:border-amber-500/40 transition-all group select-none"
+          title="Click to manage, reset, or restore streak"
+        >
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-            <span>🔥 Streak</span>
-            <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+            <span className="group-hover:text-amber-500 transition-colors">🔥 Streak</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Edit ⚙</span>
+              <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+            </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black font-mono text-amber-500">
             {streaks.currentStreak}<span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">days</span>
           </div>
-          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono">
-            👑 Best: {streaks.longestStreak}d
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono flex items-center justify-between">
+            <span className="text-teal-600 dark:text-teal-300 font-bold">🏆 Best: {streaks.longestStreak}d</span>
+            <span className="text-ocean-600 dark:text-aqua-400 text-[10px] font-semibold underline">Restore</span>
           </div>
         </div>
 

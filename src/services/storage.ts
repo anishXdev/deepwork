@@ -7,7 +7,9 @@ const STORAGE_KEYS = {
   SETTINGS: 'studypulse_settings',
   PROFILE: 'studypulse_profile',
   STREAKS: 'studypulse_streaks',
-  LAST_SYNC: 'studypulse_last_sync'
+  LAST_SYNC: 'studypulse_last_sync',
+  INITIALIZED: 'studypulse_initialized',
+  SYNC_ROOM: 'studypulse_sync_room'
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -27,7 +29,8 @@ export const DEFAULT_PROFILE: UserProfile = {
   name: 'Focus Scholar',
   email: 'learner@example.com',
   googleConnected: false,
-  googleCalendarSyncEnabled: true
+  googleCalendarSyncEnabled: true,
+  syncKey: ''
 };
 
 // Seed realistic starter data if app is opened for the first time
@@ -148,15 +151,23 @@ export function getInitialStarterData() {
 }
 
 export const StorageService = {
-  getSubjects(): Subject[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
-    if (!raw) {
+  ensureInitialized() {
+    const isInit = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
+    if (!isInit) {
       const init = getInitialStarterData();
       this.saveSubjects(init.subjects);
-      return init.subjects;
+      this.saveTopics(init.topics);
+      this.saveSessions(init.sessions);
+      this.saveStreaks(init.streakData);
+      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     }
+  },
+
+  getSubjects(): Subject[] {
+    this.ensureInitialized();
+    const raw = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
     try {
-      return JSON.parse(raw);
+      return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
@@ -167,14 +178,10 @@ export const StorageService = {
   },
 
   getTopics(): Topic[] {
+    this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.TOPICS);
-    if (!raw) {
-      const init = getInitialStarterData();
-      this.saveTopics(init.topics);
-      return init.topics;
-    }
     try {
-      return JSON.parse(raw);
+      return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
@@ -185,14 +192,10 @@ export const StorageService = {
   },
 
   getSessions(): StudySession[] {
+    this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-    if (!raw) {
-      const init = getInitialStarterData();
-      this.saveSessions(init.sessions);
-      return init.sessions;
-    }
     try {
-      return JSON.parse(raw);
+      return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
@@ -231,14 +234,10 @@ export const StorageService = {
   },
 
   getStreaks(): StreakData {
+    this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.STREAKS);
-    if (!raw) {
-      const init = getInitialStarterData();
-      this.saveStreaks(init.streakData);
-      return init.streakData;
-    }
     try {
-      return JSON.parse(raw);
+      return raw ? JSON.parse(raw) : { currentStreak: 0, longestStreak: 0, lastActiveDate: null, activityHistory: {} };
     } catch {
       return { currentStreak: 0, longestStreak: 0, lastActiveDate: null, activityHistory: {} };
     }
@@ -246,6 +245,66 @@ export const StorageService = {
 
   saveStreaks(streaks: StreakData) {
     localStorage.setItem(STORAGE_KEYS.STREAKS, JSON.stringify(streaks));
+  },
+
+  /**
+   * Clears all sample data and resets to an empty, clean slate.
+   * Prevents automatic re-seeding on reload.
+   */
+  clearSampleData() {
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+    this.saveSubjects([]);
+    this.saveTopics([]);
+    this.saveSessions([]);
+    const resetStreaks: StreakData = {
+      currentStreak: 0,
+      longestStreak: 0,
+      lastActiveDate: null,
+      activityHistory: {}
+    };
+    this.saveStreaks(resetStreaks);
+    return {
+      subjects: [],
+      topics: [],
+      sessions: [],
+      streaks: resetStreaks
+    };
+  },
+
+  /**
+   * Resets current streak to 0, optionally preserving longest streak history.
+   */
+  resetStreak(keepLongest = true): StreakData {
+    const current = this.getStreaks();
+    const updated: StreakData = {
+      currentStreak: 0,
+      longestStreak: keepLongest ? current.longestStreak : 0,
+      lastActiveDate: null,
+      activityHistory: current.activityHistory || {}
+    };
+    this.saveStreaks(updated);
+    return updated;
+  },
+
+  /**
+   * Manually sets or restores streak to a specific number of days.
+   */
+  setManualStreak(streakDays: number, longestDays?: number): StreakData {
+    const current = this.getStreaks();
+    const targetCurrent = Math.max(0, Math.floor(streakDays));
+    const targetLongest = Math.max(
+      current.longestStreak || 0,
+      longestDays !== undefined ? Math.floor(longestDays) : targetCurrent
+    );
+    const todayStr = new Date().toISOString().split('T')[0];
+    const updated: StreakData = {
+      currentStreak: targetCurrent,
+      longestStreak: targetLongest,
+      lastActiveDate: targetCurrent > 0 ? todayStr : null,
+      activityHistory: current.activityHistory || {}
+    };
+    this.saveStreaks(updated);
+    return updated;
   },
 
   exportAllData() {
@@ -262,6 +321,7 @@ export const StorageService = {
   },
 
   importData(jsonData: any) {
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     if (jsonData.subjects) this.saveSubjects(jsonData.subjects);
     if (jsonData.topics) this.saveTopics(jsonData.topics);
     if (jsonData.sessions) this.saveSessions(jsonData.sessions);

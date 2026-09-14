@@ -51,6 +51,68 @@ export default defineConfig(({ mode }) => {
               backendReady: true
             }));
           });
+
+          // Cross-device Cloud Sync Dev Middleware
+          const devSyncStore = new Map();
+          server.middlewares.use('/api/sync', (req, res) => {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            res.setHeader('Content-Type', 'application/json');
+
+            if (req.method === 'OPTIONS') {
+              res.statusCode = 200;
+              res.end();
+              return;
+            }
+
+            const url = new URL(req.url || '', 'http://localhost');
+            const key = url.searchParams.get('key');
+
+            if (req.method === 'GET') {
+              if (!key) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ error: 'Missing key parameter' }));
+                return;
+              }
+              const payload = devSyncStore.get(key);
+              if (!payload) {
+                res.statusCode = 200;
+                res.end(JSON.stringify({ found: false }));
+                return;
+              }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ found: true, data: payload.data, updatedAt: payload.updatedAt }));
+              return;
+            }
+
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const parsed = JSON.parse(body || '{}');
+                  const targetKey = parsed.key || key;
+                  if (!targetKey || !parsed.data) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ error: 'Missing key or data' }));
+                    return;
+                  }
+                  const updatedAt = new Date().toISOString();
+                  devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({ success: true, updatedAt }));
+                } catch (e) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                }
+              });
+              return;
+            }
+
+            res.statusCode = 405;
+            res.end();
+          });
         }
       }
     ],

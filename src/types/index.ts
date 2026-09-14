@@ -38,6 +38,8 @@ export interface StudySession {
   notes?: string;
 }
 
+export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -46,6 +48,8 @@ export interface UserProfile {
   googleConnected: boolean;
   googleCalendarSyncEnabled: boolean;
   googleAccessToken?: string;
+  syncKey?: string; // 6-character room key for instant cross-device sync
+  lastSyncedAt?: string;
 }
 
 export interface UserSettings {

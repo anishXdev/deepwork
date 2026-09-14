@@ -53,11 +53,14 @@ export const TopicModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
       <div 
-        className="glass-panel w-full max-w-lg rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5"
+        className="glass-panel w-full sm:max-w-lg max-sm:rounded-t-3xl sm:rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5 max-sm:max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
+        {/* Mobile Pull Handle Pill */}
+        <div className="sm:hidden w-12 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-2" />
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
           <div className="flex items-center space-x-2.5">
