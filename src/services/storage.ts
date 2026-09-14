@@ -43,7 +43,7 @@ export function getInitialStarterData() {
     {
       id: 'sub_1',
       name: 'Computer Architecture',
-      color: '#6366f1', // Indigo
+      color: '#0d9488', // Ocean Teal
       weeklyTargetHours: 8,
       createdAt: new Date().toISOString()
     },

@@ -9,35 +9,43 @@ import { TopicModal } from './components/TopicModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { GoogleSyncModal } from './components/GoogleSyncModal';
 import { CreateSubjectModal } from './components/CreateSubjectModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const MainContent: React.FC = () => {
   const { activeTab } = useApp();
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-600 dark:selection:text-indigo-200 transition-colors">
-      <Navbar />
+    <main className="min-h-screen relative text-slate-900 dark:text-slate-100 selection:bg-ocean-500/30 selection:text-ocean-700 dark:selection:text-aqua-200 transition-colors">
+      {/* 3D Dynamic Water Caustics & Liquid Glow Background */}
+      <div className="water-caustic-bg" aria-hidden="true" />
 
-      <div className="pt-2">
-        {activeTab === 'study' && <TodayTomorrowView />}
-        {activeTab === 'subjects' && <SubjectManager />}
-        {activeTab === 'timer' && <PomodoroTimer />}
-        {activeTab === 'analytics' && <AnalyticsDashboard />}
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <Navbar />
+
+        <div className="flex-1 pt-2 pb-16">
+          {activeTab === 'study' && <TodayTomorrowView />}
+          {activeTab === 'subjects' && <SubjectManager />}
+          {activeTab === 'timer' && <PomodoroTimer />}
+          {activeTab === 'analytics' && <AnalyticsDashboard />}
+        </div>
+
+        {/* Global Modals */}
+        <TopicModal />
+        <RescheduleModal />
+        <GoogleSyncModal />
+        <CreateSubjectModal />
       </div>
-
-      {/* Global Modals */}
-      <TopicModal />
-      <RescheduleModal />
-      <GoogleSyncModal />
-      <CreateSubjectModal />
     </main>
   );
 };
 
 export function App() {
   return (
-    <AppProvider>
-      <MainContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <MainContent />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
 

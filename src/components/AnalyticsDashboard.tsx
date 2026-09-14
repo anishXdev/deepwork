@@ -96,14 +96,14 @@ export const AnalyticsDashboard: React.FC = () => {
       {/* Header with Switcher: Graphs Overview vs Knowledge Tree */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 shadow-sm">
+          <div className="w-10 h-10 rounded-2xl bg-ocean-500/10 border border-ocean-500/20 flex items-center justify-center text-ocean-600 dark:text-aqua-400 shadow-sm">
             {activeViewMode === 'overview' ? <BarChart3 className="w-5 h-5" /> : <Network className="w-5 h-5" />}
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
               <span>{activeViewMode === 'overview' ? 'Analytics & Graphs' : 'Curriculum Tree'}</span>
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-ocean-700/80 dark:text-ocean-300/80">
               {activeViewMode === 'overview' ? 'Visual pacing, graphs & activity metrics' : 'Hierarchical subject-topic knowledge tree'}
             </p>
           </div>
@@ -112,12 +112,12 @@ export const AnalyticsDashboard: React.FC = () => {
         {/* Mode Switcher & Target Editor */}
         <div className="flex items-center space-x-2 self-start sm:self-auto">
           {/* Switch View Tabs */}
-          <div className="flex p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 text-xs font-semibold">
+          <div className="flex p-1 rounded-xl bg-slate-200/70 dark:bg-abyss-900/80 border border-ocean-200/40 dark:border-ocean-900/60 text-xs font-semibold">
             <button
               onClick={() => setActiveViewMode('overview')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all ${
                 activeViewMode === 'overview'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
@@ -128,7 +128,7 @@ export const AnalyticsDashboard: React.FC = () => {
               onClick={() => setActiveViewMode('tree')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all ${
                 activeViewMode === 'tree'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
@@ -138,8 +138,8 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
 
           {/* Quick Target Settings */}
-          <div className="glass-card px-3 py-1.5 rounded-xl border border-slate-300/80 dark:border-slate-800 flex items-center space-x-2 text-xs">
-            <Target className="w-3.5 h-3.5 text-indigo-500" />
+          <div className="glass-card px-3 py-1.5 rounded-xl border border-ocean-200/50 dark:border-ocean-900/60 flex items-center space-x-2 text-xs">
+            <Target className="w-3.5 h-3.5 text-ocean-600 dark:text-aqua-400" />
             {isEditingTarget ? (
               <div className="flex items-center space-x-1">
                 <input
@@ -148,11 +148,11 @@ export const AnalyticsDashboard: React.FC = () => {
                   max="100"
                   value={tempTarget}
                   onChange={e => setTempTarget(Number(e.target.value))}
-                  className="w-12 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-mono font-bold"
+                  className="w-12 px-1.5 py-0.5 rounded bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-xs font-mono font-bold"
                 />
                 <button
                   onClick={handleSaveTarget}
-                  className="px-2 py-0.5 rounded bg-indigo-600 text-white text-[10px] font-bold"
+                  className="px-2 py-0.5 rounded liquid-btn text-white text-[10px] font-bold"
                 >
                   ✓
                 </button>
@@ -163,7 +163,7 @@ export const AnalyticsDashboard: React.FC = () => {
                   setTempTarget(settings.weeklyHoursTarget);
                   setIsEditingTarget(true);
                 }}
-                className="font-mono font-bold text-slate-700 dark:text-slate-300 hover:text-indigo-500 flex items-center gap-1"
+                className="font-mono font-bold text-slate-700 dark:text-slate-300 hover:text-ocean-600 dark:hover:text-aqua-400 flex items-center gap-1"
                 title="Edit weekly goal"
               >
                 <span>{settings.weeklyHoursTarget}h/wk</span>
@@ -192,21 +192,21 @@ export const AnalyticsDashboard: React.FC = () => {
         </div>
 
         {/* KPI 2: Week */}
-        <div className="glass-card rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800/80">
-          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+        <div className="glass-card rounded-2xl p-4 border border-ocean-200/50 dark:border-ocean-900/60">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80 mb-1">
             <span>🎯 Week</span>
-            <span className="text-indigo-500 font-mono font-bold">{percentAchieved}%</span>
+            <span className="text-ocean-600 dark:text-aqua-400 font-mono font-bold">{percentAchieved}%</span>
           </div>
           <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-slate-100">
             {hoursThisWeek}<span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">/{settings.weeklyHoursTarget}h</span>
           </div>
-          <div className="text-[10px] text-indigo-500 dark:text-indigo-400 mt-1 font-mono font-semibold">
+          <div className="text-[10px] text-ocean-600 dark:text-aqua-400 mt-1 font-mono font-semibold">
             {percentAchieved >= 100 ? '🎉 Target reached' : `⏳ ${hoursLeft}h left`}
           </div>
         </div>
 
         {/* KPI 3: Streak */}
-        <div className="glass-card rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800/80">
+        <div className="glass-card rounded-2xl p-4 border border-ocean-200/50 dark:border-ocean-900/60">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             <span>🔥 Streak</span>
             <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
@@ -220,10 +220,10 @@ export const AnalyticsDashboard: React.FC = () => {
         </div>
 
         {/* KPI 4: All-Time */}
-        <div className="glass-card rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800/80">
+        <div className="glass-card rounded-2xl p-4 border border-ocean-200/50 dark:border-ocean-900/60">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             <span>📚 Total</span>
-            <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+            <Sparkles className="w-3.5 h-3.5 text-aqua-500" />
           </div>
           <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-slate-100">
             {totalAllTimeHours}<span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">hrs</span>
@@ -243,9 +243,9 @@ export const AnalyticsDashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             
             {/* Radial Donut Progress Ring (4 cols) */}
-            <div className="lg:col-span-4 glass-card rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 flex flex-col items-center justify-center text-center">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-1.5">
-                <Target className="w-4 h-4 text-indigo-500" />
+            <div className="lg:col-span-4 glass-card rounded-2xl p-5 border border-ocean-200/50 dark:border-ocean-900/60 flex flex-col items-center justify-center text-center">
+              <span className="text-xs font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80 mb-4 flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-ocean-600 dark:text-aqua-400" />
                 <span>Weekly Goal Gauge</span>
               </span>
 
@@ -255,7 +255,7 @@ export const AnalyticsDashboard: React.FC = () => {
                     cx="50"
                     cy="50"
                     r="40"
-                    className="text-slate-200 dark:text-slate-800/90"
+                    className="text-slate-200 dark:text-abyss-950"
                     strokeWidth="8"
                     stroke="currentColor"
                     fill="transparent"
@@ -274,8 +274,8 @@ export const AnalyticsDashboard: React.FC = () => {
                   />
                   <defs>
                     <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#6366f1" />
-                      <stop offset="50%" stopColor="#38bdf8" />
+                      <stop offset="0%" stopColor="#0d9488" />
+                      <stop offset="50%" stopColor="#06b6d4" />
                       <stop offset="100%" stopColor="#10b981" />
                     </linearGradient>
                   </defs>
@@ -302,10 +302,10 @@ export const AnalyticsDashboard: React.FC = () => {
             </div>
 
             {/* 7-Day Activity Bar Graph (8 cols) */}
-            <div className="lg:col-span-8 glass-card rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-4 border-b border-slate-200/80 dark:border-slate-800 pb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <BarChart3 className="w-4 h-4 text-indigo-500" />
+            <div className="lg:col-span-8 glass-card rounded-2xl p-5 border border-ocean-200/50 dark:border-ocean-900/60 flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4 border-b border-ocean-200/40 dark:border-ocean-900/50 pb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80 flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4 text-ocean-600 dark:text-aqua-400" />
                   <span>7-Day Distribution Graph</span>
                 </span>
                 <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
@@ -321,23 +321,23 @@ export const AnalyticsDashboard: React.FC = () => {
 
                   return (
                     <div key={day.date} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                      <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors">
+                      <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 group-hover:text-ocean-600 dark:group-hover:text-aqua-400 transition-colors">
                         {day.hours > 0 ? `${day.hours}h` : '0'}
                       </span>
                       
-                      <div className="w-full max-w-[40px] bg-slate-200/80 dark:bg-slate-900 rounded-t-xl overflow-hidden flex items-end h-28 border border-slate-300/60 dark:border-slate-800">
+                      <div className="w-full max-w-[40px] bg-slate-200/80 dark:bg-abyss-950 rounded-t-xl overflow-hidden flex items-end h-28 border border-ocean-200/40 dark:border-ocean-900/50">
                         <div
                           className={`w-full rounded-t-xl transition-all duration-500 ${
                             isToday
-                              ? 'bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-md shadow-indigo-500/20'
-                              : 'bg-slate-400 dark:bg-slate-700 group-hover:bg-slate-500 dark:group-hover:bg-slate-600'
+                              ? 'bg-gradient-to-t from-ocean-600 to-aqua-400 shadow-md shadow-ocean-500/20'
+                              : 'bg-slate-400/80 dark:bg-slate-700/80 group-hover:bg-ocean-500/60'
                           }`}
                           style={{ height: `${Math.max(6, heightPercent)}%` }}
                         />
                       </div>
 
                       <span className={`text-[11px] font-mono font-bold ${
-                        isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
+                        isToday ? 'text-ocean-600 dark:text-aqua-400' : 'text-slate-500 dark:text-slate-400'
                       }`}>
                         {day.label}
                       </span>
@@ -346,7 +346,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 })}
               </div>
 
-              <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between border-t border-slate-200/60 dark:border-slate-800/80 pt-2 font-mono">
+              <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between border-t border-ocean-200/40 dark:border-ocean-900/50 pt-2 font-mono">
                 <span>Avg: {Math.round((hoursThisWeek / 7) * 10) / 10}h / day</span>
                 <span className="text-emerald-500">🔥 Peak: {Math.max(...dailyHistory.map(d => d.hours))}h</span>
               </div>
@@ -357,8 +357,8 @@ export const AnalyticsDashboard: React.FC = () => {
           {/* Subject Distribution Spectrum Graph */}
           <div className="glass-card rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-indigo-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80 flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-ocean-600 dark:text-aqua-400" />
                 <span>Subject Spectrum Distribution</span>
               </span>
               <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
@@ -367,7 +367,7 @@ export const AnalyticsDashboard: React.FC = () => {
             </div>
 
             {/* Segmented multi-color distribution bar */}
-            <div className="w-full h-4 rounded-full bg-slate-200 dark:bg-slate-900 overflow-hidden flex border border-slate-300/60 dark:border-slate-800 shadow-inner">
+            <div className="w-full h-4 rounded-full bg-slate-200 dark:bg-abyss-950 overflow-hidden flex border border-ocean-200/40 dark:border-ocean-900/50 shadow-inner">
               {subjectBreakdown.map(item => (
                 <div
                   key={item.subjectId}
@@ -384,7 +384,7 @@ export const AnalyticsDashboard: React.FC = () => {
             {/* Symbol Legend items */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
               {subjectBreakdown.map(item => (
-                <div key={item.subjectId} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs">
+                <div key={item.subjectId} className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 dark:bg-abyss-card/60 border border-ocean-200/40 dark:border-ocean-900/50 text-xs">
                   <div className="flex items-center space-x-2 truncate">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
                     <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.subjectName}</span>
@@ -398,17 +398,17 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
 
           {/* 30-Day Activity Heatmap Matrix */}
-          <div className="glass-card rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <div className="glass-card rounded-2xl p-5 border border-ocean-200/50 dark:border-ocean-900/60 space-y-3">
+            <div className="flex items-center justify-between border-b border-ocean-200/40 dark:border-ocean-900/50 pb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80 flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-emerald-500" />
                 <span>30-Day Activity Heatmap</span>
               </span>
               <div className="flex items-center space-x-1.5 text-[10px] font-mono text-slate-400">
                 <span>Less</span>
-                <span className="w-2.5 h-2.5 rounded bg-slate-200 dark:bg-slate-800" />
-                <span className="w-2.5 h-2.5 rounded bg-indigo-400/40" />
-                <span className="w-2.5 h-2.5 rounded bg-indigo-500" />
+                <span className="w-2.5 h-2.5 rounded bg-slate-200 dark:bg-abyss-950" />
+                <span className="w-2.5 h-2.5 rounded bg-ocean-400/40" />
+                <span className="w-2.5 h-2.5 rounded bg-ocean-500" />
                 <span className="w-2.5 h-2.5 rounded bg-emerald-500" />
                 <span>More</span>
               </div>
@@ -417,10 +417,10 @@ export const AnalyticsDashboard: React.FC = () => {
             {/* Heatmap Grid */}
             <div className="grid grid-cols-10 sm:grid-cols-15 md:grid-cols-30 gap-1.5 pt-2">
               {heatmapDays.map(day => {
-                let bgClass = 'bg-slate-200 dark:bg-slate-800/90';
+                let bgClass = 'bg-slate-200 dark:bg-abyss-950';
                 if (day.hours > 3) bgClass = 'bg-emerald-500 text-white';
-                else if (day.hours > 1.5) bgClass = 'bg-indigo-500 text-white';
-                else if (day.hours > 0) bgClass = 'bg-indigo-400/50 text-indigo-900 dark:text-indigo-100';
+                else if (day.hours > 1.5) bgClass = 'bg-ocean-600 text-white';
+                else if (day.hours > 0) bgClass = 'bg-ocean-400/50 text-ocean-950 dark:text-aqua-100';
 
                 return (
                   <div
@@ -440,16 +440,16 @@ export const AnalyticsDashboard: React.FC = () => {
 
       {/* VIEW 2: KNOWLEDGE TREE GRAPH */}
       {activeViewMode === 'tree' && (
-        <div className="glass-card rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800/80 space-y-6 animate-in fade-in">
+        <div className="glass-card rounded-2xl p-6 border border-ocean-200/50 dark:border-ocean-900/60 space-y-6 animate-in fade-in">
           
-          <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-3">
+          <div className="flex items-center justify-between border-b border-ocean-200/40 dark:border-ocean-900/50 pb-3">
             <div className="flex items-center space-x-2">
-              <Network className="w-5 h-5 text-indigo-500" />
+              <Network className="w-5 h-5 text-ocean-600 dark:text-aqua-400" />
               <div>
                 <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
                   Curriculum Knowledge Tree
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="text-[11px] text-ocean-700/80 dark:text-ocean-300/80">
                   Visual hierarchy connecting subjects, topics, and completed sessions.
                 </p>
               </div>
@@ -459,8 +459,8 @@ export const AnalyticsDashboard: React.FC = () => {
               <span className="flex items-center gap-1 text-emerald-500 font-bold">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" /> Done
               </span>
-              <span className="flex items-center gap-1 text-indigo-500 font-bold">
-                <span className="w-2 h-2 rounded-full bg-indigo-500" /> Pending
+              <span className="flex items-center gap-1 text-ocean-600 dark:text-aqua-400 font-bold">
+                <span className="w-2 h-2 rounded-full bg-ocean-500" /> Pending
               </span>
             </div>
           </div>
@@ -470,7 +470,7 @@ export const AnalyticsDashboard: React.FC = () => {
             
             {/* Tree Root Node */}
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-ocean-600 to-aqua-400 flex items-center justify-center text-white shadow-md shadow-ocean-500/25">
                 <Target className="w-5 h-5" />
               </div>
               <div>
@@ -484,7 +484,7 @@ export const AnalyticsDashboard: React.FC = () => {
             </div>
 
             {/* Subject Branches */}
-            <div className="border-l-2 border-slate-300 dark:border-slate-800 ml-4 pl-4 sm:pl-6 space-y-6">
+            <div className="border-l-2 border-ocean-300/50 dark:border-ocean-900/60 ml-4 pl-4 sm:pl-6 space-y-6">
               {subjects.map(subject => {
                 const isExpanded = expandedSubjectTree[subject.id] ?? true;
                 const subjectTopics = topics.filter(t => t.subjectId === subject.id);
@@ -495,12 +495,12 @@ export const AnalyticsDashboard: React.FC = () => {
                   <div key={subject.id} className="relative group/subj">
                     
                     {/* Horizontal connector line */}
-                    <div className="absolute -left-4 sm:-left-6 top-4 w-4 sm:w-6 h-0.5 bg-slate-300 dark:bg-slate-800" />
+                    <div className="absolute -left-4 sm:-left-6 top-4 w-4 sm:w-6 h-0.5 bg-ocean-300/50 dark:border-ocean-900/60" />
 
                     {/* Subject Node Box */}
                     <div 
                       onClick={() => toggleSubjectTreeNode(subject.id)}
-                      className="glass-card rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-800 flex items-center justify-between cursor-pointer hover:border-indigo-500/50 transition-all select-none"
+                      className="glass-card rounded-xl p-3 sm:p-4 border border-ocean-200/50 dark:border-ocean-900/60 flex items-center justify-between cursor-pointer hover:border-ocean-400 transition-all select-none"
                       style={{ borderLeft: `4px solid ${subject.color}` }}
                     >
                       <div className="flex items-center space-x-3">
@@ -514,14 +514,14 @@ export const AnalyticsDashboard: React.FC = () => {
                       </div>
 
                       <div className="flex items-center space-x-3 text-xs font-mono">
-                        <span className="font-bold text-indigo-500">{subHours}h invested</span>
+                        <span className="font-bold text-ocean-600 dark:text-aqua-400">{subHours}h invested</span>
                         <span className="text-slate-400">({completedCount}/{subjectTopics.length} done)</span>
                       </div>
                     </div>
 
                     {/* Topic Leaves */}
                     {isExpanded && (
-                      <div className="border-l-2 border-dashed border-slate-300 dark:border-slate-800 ml-4 sm:ml-6 pl-4 sm:pl-6 mt-3 space-y-2.5">
+                      <div className="border-l-2 border-dashed border-ocean-300/40 dark:border-ocean-900/50 ml-4 sm:ml-6 pl-4 sm:pl-6 mt-3 space-y-2.5">
                         {subjectTopics.length === 0 ? (
                           <div className="text-xs text-slate-400 italic py-1">
                             No topics added yet under this subject branch.
@@ -532,15 +532,15 @@ export const AnalyticsDashboard: React.FC = () => {
                             return (
                               <div
                                 key={topic.id}
-                                className="relative flex items-center justify-between p-2.5 rounded-xl bg-slate-100/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/80 hover:border-indigo-400/40 transition-all group/topic"
+                                className="relative flex items-center justify-between p-2.5 rounded-xl bg-white/70 dark:bg-abyss-card/70 border border-ocean-200/40 dark:border-ocean-900/50 hover:border-ocean-400/50 transition-all group/topic"
                               >
                                 {/* Horizontal connector to leaf */}
-                                <div className="absolute -left-4 sm:-left-6 top-1/2 w-4 sm:w-6 h-0.5 bg-slate-300 dark:border-slate-800" />
+                                <div className="absolute -left-4 sm:-left-6 top-1/2 w-4 sm:w-6 h-0.5 bg-ocean-300/40 dark:border-ocean-900/50" />
 
                                 <div className="flex items-center space-x-2.5 min-w-0 flex-1 mr-2">
                                   <span 
                                     className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                                      isDone ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-indigo-500 ring-2 ring-indigo-500/20'
+                                      isDone ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-ocean-500 ring-2 ring-ocean-500/20'
                                     }`} 
                                   />
                                   <span className={`text-xs font-medium truncate ${
@@ -551,14 +551,14 @@ export const AnalyticsDashboard: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center space-x-2 flex-shrink-0">
-                                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-abyss-950 px-1.5 py-0.5 rounded border border-ocean-200/30 dark:border-ocean-900/40">
                                     ⏱️ {topic.approxHours}h
                                   </span>
 
                                   {!isDone && (
                                     <button
                                       onClick={() => startTopicFocus(topic)}
-                                      className="p-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shadow-sm transition-transform active:scale-95"
+                                      className="p-1 rounded-lg liquid-btn text-white text-[10px] font-bold shadow-sm transition-transform active:scale-95"
                                       title="Start Pomodoro Focus"
                                     >
                                       <Play className="w-3 h-3 fill-white" />

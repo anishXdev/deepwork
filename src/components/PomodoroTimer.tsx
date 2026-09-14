@@ -6,12 +6,13 @@ import {
   Pause, 
   RotateCcw, 
   CheckCircle2, 
-  BookOpen,
-  Headphones,
-  Maximize2,
-  Minimize2,
-  Zap,
-  Coffee
+  BookOpen, 
+  Headphones, 
+  Maximize2, 
+  Minimize2, 
+  Waves,
+  Coffee,
+  Sparkles
 } from 'lucide-react';
 
 type TimerMode = 'work' | 'break' | 'long_break';
@@ -40,12 +41,11 @@ export const PomodoroTimer: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number>(settings.pomodoroWorkMinutes * 60);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [studiedSecondsInSession, setStudiedSecondsInSession] = useState<number>(0);
-  const [ambientSoundType, setAmbientSoundType] = useState<'none' | 'rain' | 'whitenoise' | 'deepfocus'>('none');
+  const [ambientSoundType, setAmbientSoundType] = useState<'none' | 'ocean' | 'stream' | 'rain'>('none');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   const timerRef = useRef<any>(null);
 
-  // Sync active focus topic if provided from outside
   useEffect(() => {
     if (activeFocusTopic) {
       setSelectedSubjectId(activeFocusTopic.subjectId);
@@ -53,20 +53,14 @@ export const PomodoroTimer: React.FC = () => {
     }
   }, [activeFocusTopic]);
 
-  // Set initial time when mode changes
   const switchMode = (newMode: TimerMode) => {
     setIsRunning(false);
     setMode(newMode);
-    if (newMode === 'work') {
-      setTimeLeft(workDuration);
-    } else if (newMode === 'break') {
-      setTimeLeft(breakDuration);
-    } else {
-      setTimeLeft(longBreakDuration);
-    }
+    if (newMode === 'work') setTimeLeft(workDuration);
+    else if (newMode === 'break') setTimeLeft(breakDuration);
+    else setTimeLeft(longBreakDuration);
   };
 
-  // Timer countdown loop
   useEffect(() => {
     if (isRunning) {
       timerRef.current = setInterval(() => {
@@ -92,7 +86,6 @@ export const PomodoroTimer: React.FC = () => {
     };
   }, [isRunning, mode]);
 
-  // Handle ambient audio
   useEffect(() => {
     if (isRunning && ambientSoundType !== 'none') {
       sound.startAmbientSound(ambientSoundType);
@@ -102,7 +95,6 @@ export const PomodoroTimer: React.FC = () => {
     return () => sound.stopAmbientSound();
   }, [isRunning, ambientSoundType]);
 
-  // On timer countdown completion
   const handleTimerComplete = () => {
     setIsRunning(false);
     sound.playCompletionChime();
@@ -116,15 +108,12 @@ export const PomodoroTimer: React.FC = () => {
         'pomodoro'
       );
       setStudiedSecondsInSession(0);
-
-      // Auto switch to break if configured
       switchMode('break');
     } else {
       switchMode('work');
     }
   };
 
-  // Manually log whatever time was studied
   const handleManualCompleteAndLog = () => {
     setIsRunning(false);
     if (studiedSecondsInSession >= 30) {
@@ -152,7 +141,6 @@ export const PomodoroTimer: React.FC = () => {
     setTimeLeft(prev => prev + 300);
   };
 
-  // Formatting helper
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -160,47 +148,49 @@ export const PomodoroTimer: React.FC = () => {
   };
 
   const totalTimeForMode = mode === 'work' ? workDuration : mode === 'break' ? breakDuration : longBreakDuration;
-  const progressPercent = ((totalTimeForMode - timeLeft) / totalTimeForMode) * 100;
-  const strokeDashoffset = 100 - progressPercent;
+  // Liquid fill percentage: fills up from 10% to 100% as focus time progresses
+  const fillPercent = Math.min(100, Math.max(12, Math.round(((totalTimeForMode - timeLeft) / totalTimeForMode) * 100)));
 
   const currentSubject = subjects.find(s => s.id === selectedSubjectId);
   const availableTopics = topics.filter(t => t.subjectId === selectedSubjectId);
   const currentTopic = topics.find(t => t.id === selectedTopicId);
 
   return (
-    <div className={`max-w-2xl mx-auto px-4 py-6 pb-28 ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-50 dark:bg-[#090d16] flex flex-col justify-center' : ''}`}>
+    <div className={`max-w-2xl mx-auto px-4 py-6 pb-28 relative z-10 ${
+      isFullscreen ? 'fixed inset-0 z-50 bg-[#030a12] flex flex-col justify-center' : ''
+    }`}>
       
-      {/* Fullscreen button */}
-      <div className="flex justify-end mb-2">
+      {/* Fullscreen Button */}
+      <div className="flex justify-end mb-3">
         <button
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800/60 transition-colors"
-          title={isFullscreen ? 'Exit Fullscreen' : 'Distraction-Free Mode'}
+          className="p-2.5 rounded-2xl glass-card text-slate-500 hover:text-teal-400 transition-colors"
+          title={isFullscreen ? 'Exit Fullscreen' : '3D Fluid Immersion Mode'}
         >
           {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
         </button>
       </div>
 
-      {/* Mode Switcher Tabs (Minimalist Symbols & Labels) */}
+      {/* Mode Switcher Tabs (Fluid Pills) */}
       <div className="flex items-center justify-center space-x-2 mb-8">
-        <div className="p-1 rounded-2xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 flex items-center space-x-1">
+        <div className="p-1 rounded-2xl glass-panel flex items-center space-x-1 shadow-md">
           <button
             onClick={() => switchMode('work')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               mode === 'work'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'liquid-btn text-white shadow-lg shadow-teal-500/30'
+                : 'text-slate-600 dark:text-teal-200/70 hover:text-teal-400'
             }`}
           >
-            <Zap className="w-3.5 h-3.5" />
+            <Waves className="w-3.5 h-3.5" />
             <span>Focus 25m</span>
           </button>
           <button
             onClick={() => switchMode('break')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               mode === 'break'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30'
+                : 'text-slate-600 dark:text-teal-200/70 hover:text-teal-400'
             }`}
           >
             <Coffee className="w-3.5 h-3.5" />
@@ -210,8 +200,8 @@ export const PomodoroTimer: React.FC = () => {
             onClick={() => switchMode('long_break')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               mode === 'long_break'
-                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/30'
+                : 'text-slate-600 dark:text-teal-200/70 hover:text-teal-400'
             }`}
           >
             <Coffee className="w-3.5 h-3.5" />
@@ -220,59 +210,71 @@ export const PomodoroTimer: React.FC = () => {
         </div>
       </div>
 
-      {/* Central Circular Timer Display */}
-      <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto flex items-center justify-center mb-8">
+      {/* 3D Liquid Sphere Vessel Timer */}
+      <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto flex items-center justify-center mb-9 select-none">
         
-        {/* SVG Progress Ring */}
-        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-          <circle
-            cx="50"
-            cy="50"
-            r="44"
-            className="text-slate-200 dark:text-slate-800/80"
-            strokeWidth="4"
-            stroke="currentColor"
-            fill="transparent"
-          />
-          <circle
-            cx="50"
-            cy="50"
-            r="44"
-            style={{
-              strokeDasharray: 276.46,
-              strokeDashoffset: (276.46 * strokeDashoffset) / 100,
-              stroke: currentSubject?.color || '#6366f1'
-            }}
-            strokeWidth="4.5"
-            strokeLinecap="round"
-            fill="transparent"
-            className="transition-all duration-1000 ease-linear"
-          />
-        </svg>
+        {/* Outer 3D Glass Glow */}
+        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-teal-500/20 via-cyan-500/15 to-emerald-400/20 blur-xl animate-pulse-glow pointer-events-none" />
 
-        {/* Time Text Inside Ring */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-          <span className="text-5xl sm:text-6xl font-black tracking-tighter text-slate-900 dark:text-slate-100 font-mono">
-            {formatTime(timeLeft)}
-          </span>
+        {/* 3D Liquid Sphere Container */}
+        <div className="w-full h-full liquid-sphere glass-card border border-teal-400/30 dark:border-cyan-400/25 flex items-center justify-center">
+          
+          {/* Liquid Water Fill with Moving Wave Crests */}
+          <div 
+            className="absolute left-0 right-0 bottom-0 transition-all duration-1000 ease-out overflow-hidden"
+            style={{ height: `${fillPercent}%` }}
+          >
+            {/* Primary Liquid Wave */}
+            <div className="absolute -top-6 left-0 w-[200%] h-8 opacity-70 animate-liquid-wave-1">
+              <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="w-full h-full fill-cyan-400 dark:fill-cyan-500">
+                <path d="M0,0 C150,90 350,-40 500,45 C650,130 900,-30 1200,30 L1200,120 L0,120 Z"></path>
+              </svg>
+            </div>
 
-          <span className="text-xs uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mt-2">
-            {mode === 'work' ? '⚡ Deep Focus' : '☕ Recharge'}
-          </span>
+            {/* Secondary Liquid Wave */}
+            <div className="absolute -top-7 left-0 w-[200%] h-9 opacity-80 animate-liquid-wave-2">
+              <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="w-full h-full fill-teal-500/80 dark:fill-teal-600/80">
+                <path d="M0,20 C200,-50 400,90 600,20 C800,-50 1000,80 1200,20 L1200,120 L0,120 Z"></path>
+              </svg>
+            </div>
 
-          {mode === 'work' && currentTopic && (
-            <span className="text-xs text-indigo-600 dark:text-indigo-300 font-bold max-w-[200px] truncate mt-1 px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
-              {currentTopic.name}
+            {/* Solid Deep Liquid Body */}
+            <div className="w-full h-full bg-gradient-to-b from-teal-500/75 to-cyan-700/90 dark:from-teal-600/80 dark:to-cyan-950/95" />
+          </div>
+
+          {/* Floating Micro-droplet Bubbles */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="w-2 h-2 rounded-full bg-white/40 absolute bottom-12 left-1/4 animate-float" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/50 absolute bottom-24 right-1/3 animate-float" style={{ animationDelay: '1.5s' }} />
+            <div className="w-2.5 h-2.5 rounded-full bg-white/30 absolute bottom-8 right-1/4 animate-float" style={{ animationDelay: '2.5s' }} />
+          </div>
+
+          {/* Centered 3D Glass Numbers Display */}
+          <div className="relative z-20 flex flex-col items-center justify-center text-center p-4">
+            <span className="text-5xl sm:text-6xl font-black tracking-tighter font-mono text-slate-900 dark:text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+              {formatTime(timeLeft)}
             </span>
-          )}
+
+            <span className="text-xs uppercase tracking-widest font-extrabold text-teal-800 dark:text-teal-200 mt-2 flex items-center gap-1.5">
+              <Waves className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
+              <span>{mode === 'work' ? 'Fluid Study State' : 'Refreshing Rest'}</span>
+            </span>
+
+            {mode === 'work' && currentTopic && (
+              <span className="text-xs font-bold text-teal-900 dark:text-cyan-200 max-w-[210px] truncate mt-2 px-3 py-0.5 rounded-full bg-white/40 dark:bg-black/30 backdrop-blur-md border border-white/30 dark:border-cyan-400/30 shadow-sm">
+                {currentTopic.name}
+              </span>
+            )}
+          </div>
+
         </div>
       </div>
 
-      {/* Timer Controls with Minimal Symbols */}
-      <div className="flex items-center justify-center space-x-3 sm:space-x-4 mb-8">
+      {/* Timer Controls: 3D Liquid Buttons */}
+      <div className="flex items-center justify-center space-x-4 mb-9">
         <button
           onClick={handleReset}
-          className="p-3.5 rounded-2xl bg-slate-200/80 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+          className="p-3.5 rounded-2xl glass-card text-slate-600 dark:text-teal-300 hover:text-teal-500 dark:hover:text-white transition-all active:scale-95"
           title="Reset"
         >
           <RotateCcw className="w-5 h-5" />
@@ -280,10 +282,10 @@ export const PomodoroTimer: React.FC = () => {
 
         <button
           onClick={() => setIsRunning(!isRunning)}
-          className={`px-8 py-3.5 rounded-2xl text-white font-extrabold text-base flex items-center space-x-2 shadow-lg transition-all active:scale-95 ${
+          className={`px-8 py-3.5 rounded-2xl text-white font-extrabold text-base flex items-center space-x-2 shadow-xl transition-all active:scale-95 ${
             isRunning
               ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
-              : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
+              : 'liquid-btn'
           }`}
         >
           {isRunning ? (
@@ -294,14 +296,14 @@ export const PomodoroTimer: React.FC = () => {
           ) : (
             <>
               <Play className="w-5 h-5 fill-white" />
-              <span>Start</span>
+              <span>Flow</span>
             </>
           )}
         </button>
 
         <button
           onClick={addFiveMinutes}
-          className="p-3.5 rounded-2xl bg-slate-200/80 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors text-xs font-mono font-bold"
+          className="p-3.5 rounded-2xl glass-card text-slate-700 dark:text-teal-200 hover:text-teal-500 dark:hover:text-white transition-all active:scale-95 text-xs font-mono font-bold"
           title="Add 5 Minutes"
         >
           +5m
@@ -310,33 +312,32 @@ export const PomodoroTimer: React.FC = () => {
         {mode === 'work' && studiedSecondsInSession >= 30 && (
           <button
             onClick={handleManualCompleteAndLog}
-            className="flex items-center space-x-1.5 px-3.5 py-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold transition-colors"
+            className="flex items-center space-x-1.5 px-4 py-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-all active:scale-95 shadow-md"
             title="Log Session Now"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Log</span>
+            <span>Save</span>
           </button>
         )}
       </div>
 
-      {/* Target Subject & Topic Selector Card */}
-      <div className="glass-card rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-3">
+      {/* Target Focus Target & Water Sound Effects */}
+      <div className="glass-card rounded-3xl p-5 border border-teal-500/25 space-y-4 shadow-lg">
+        <div className="flex items-center justify-between border-b border-teal-500/20 pb-3">
           <div className="flex items-center space-x-2">
-            <BookOpen className="w-4 h-4 text-indigo-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-              Session Focus Target
+            <BookOpen className="w-4 h-4 text-teal-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-teal-200">
+              Focus Stream Target
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-            Auto-logs to subject & weekly goal
+          <span className="text-[10px] font-mono text-teal-600 dark:text-teal-400/80">
+            Water level fills with study time
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Subject Dropdown */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+            <label className="block text-[11px] font-bold text-slate-600 dark:text-teal-300 mb-1">
               Subject
             </label>
             <select
@@ -345,7 +346,7 @@ export const PomodoroTimer: React.FC = () => {
                 setSelectedSubjectId(e.target.value);
                 setSelectedTopicId('');
               }}
-              className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-medium focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-teal-500/30 text-slate-800 dark:text-teal-100 text-xs font-semibold focus:outline-none focus:border-teal-400"
             >
               {subjects.map(s => (
                 <option key={s.id} value={s.id}>
@@ -355,17 +356,16 @@ export const PomodoroTimer: React.FC = () => {
             </select>
           </div>
 
-          {/* Topic Dropdown */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+            <label className="block text-[11px] font-bold text-slate-600 dark:text-teal-300 mb-1">
               Topic (Optional)
             </label>
             <select
               value={selectedTopicId}
               onChange={e => setSelectedTopicId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-medium focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-teal-500/30 text-slate-800 dark:text-teal-100 text-xs font-semibold focus:outline-none focus:border-teal-400"
             >
-              <option value="">-- General Study --</option>
+              <option value="">-- General Subject Study --</option>
               {availableTopics.map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name} ({t.approxHours}h)
@@ -375,25 +375,25 @@ export const PomodoroTimer: React.FC = () => {
           </div>
         </div>
 
-        {/* Ambient Sound Selector with minimal symbols */}
-        <div className="flex flex-wrap items-center justify-between pt-2 gap-2">
+        {/* Ambient Water & Nature Sounds */}
+        <div className="flex flex-wrap items-center justify-between pt-2 gap-2 border-t border-teal-500/15">
           <div className="flex items-center space-x-2">
-            <Headphones className="w-4 h-4 text-slate-500" />
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Ambient Sound:</span>
+            <Headphones className="w-4 h-4 text-teal-500" />
+            <span className="text-xs font-bold text-slate-700 dark:text-teal-200">Fluid Soundscape:</span>
           </div>
 
           <div className="flex items-center space-x-1.5">
-            {(['none', 'rain', 'whitenoise', 'deepfocus'] as const).map(type => (
+            {(['none', 'ocean', 'stream', 'rain'] as const).map(type => (
               <button
                 key={type}
                 onClick={() => setAmbientSoundType(type)}
-                className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-colors ${
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
                   ambientSoundType === type
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-slate-200 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-300 dark:border-slate-800'
+                    ? 'liquid-btn text-white shadow-md'
+                    : 'bg-white/50 dark:bg-slate-900/60 text-slate-600 dark:text-teal-300 hover:text-teal-500 border border-teal-500/20'
                 }`}
               >
-                {type === 'none' ? 'Off' : type === 'rain' ? '🌧️ Rain' : type === 'whitenoise' ? '📻 White' : '🌊 Drone'}
+                {type === 'none' ? 'Mute' : type === 'ocean' ? '🌊 Ocean' : type === 'stream' ? '🏞️ Brook' : '🌧️ Rain'}
               </button>
             ))}
           </div>

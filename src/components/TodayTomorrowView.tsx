@@ -80,10 +80,10 @@ export const TodayTomorrowView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-indigo-500/20" />
+            <span className="w-2.5 h-2.5 rounded-full bg-ocean-500 ring-4 ring-ocean-500/20 animate-pulse" />
             <span>Focus Queue</span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-ocean-700/80 dark:text-ocean-300/80 mt-0.5">
             Pending topics and study tasks.
           </p>
         </div>
@@ -93,17 +93,17 @@ export const TodayTomorrowView: React.FC = () => {
           {/* Add New Subject Button */}
           <button
             onClick={() => openCreateSubjectModal()}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-300 dark:border-slate-700/80 shadow-sm transition-all active:scale-95"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/80 dark:bg-abyss-card/80 hover:bg-ocean-500/10 text-slate-700 dark:text-slate-200 text-xs font-bold border border-ocean-200/50 dark:border-ocean-900/60 shadow-sm transition-all active:scale-95"
             title="Create a new study subject"
           >
-            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+            <BookOpen className="w-3.5 h-3.5 text-ocean-600 dark:text-aqua-400" />
             <span>+ Subject</span>
           </button>
 
           {/* Add Study Topic Button */}
           <button
             onClick={() => openAddTopicModal(activeFilter === 'tomorrow' ? tomorrowStr : todayStr)}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all active:scale-95"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
           >
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
             <span>+ Topic</span>
@@ -112,15 +112,15 @@ export const TodayTomorrowView: React.FC = () => {
       </div>
 
       {/* Filter Tabs: Today's Pending / Tomorrow / All Pending / Completed */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800/80 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ocean-200/40 dark:border-ocean-900/50 pb-3">
         
         {/* Timing Filters with Symbols */}
-        <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 text-xs font-medium">
+        <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-200/70 dark:bg-abyss-900/80 border border-ocean-200/40 dark:border-ocean-900/60 text-xs font-medium">
           <button
             onClick={() => setActiveFilter('today')}
             className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg transition-all ${
               activeFilter === 'today'
-                ? 'bg-indigo-600 text-white shadow-sm font-bold'
+                ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
@@ -136,7 +136,7 @@ export const TodayTomorrowView: React.FC = () => {
             onClick={() => setActiveFilter('tomorrow')}
             className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg transition-all ${
               activeFilter === 'tomorrow'
-                ? 'bg-indigo-600 text-white shadow-sm font-bold'
+                ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
@@ -152,7 +152,7 @@ export const TodayTomorrowView: React.FC = () => {
             onClick={() => setActiveFilter('all')}
             className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg transition-all ${
               activeFilter === 'all'
-                ? 'bg-indigo-600 text-white shadow-sm font-bold'
+                ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
@@ -187,7 +187,7 @@ export const TodayTomorrowView: React.FC = () => {
             <select
               value={selectedSubjectFilter}
               onChange={e => setSelectedSubjectFilter(e.target.value)}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700/80 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 font-bold"
+              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-ocean-500 font-bold"
             >
               <option value="all">📚 All Subjects</option>
               {subjects.map(s => (
@@ -202,9 +202,9 @@ export const TodayTomorrowView: React.FC = () => {
 
       {/* Main Study Topics List */}
       {displayTopics.length === 0 ? (
-        <div className="glass-card rounded-2xl p-8 sm:p-12 text-center border border-dashed border-slate-300 dark:border-slate-800 animate-in fade-in">
-          <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 text-emerald-500 flex items-center justify-center mx-auto mb-3 border border-slate-200 dark:border-slate-800">
-            {activeFilter === 'completed' ? <CheckCircle2 className="w-6 h-6" /> : <Sparkles className="w-6 h-6 text-indigo-500" />}
+        <div className="glass-card rounded-2xl p-8 sm:p-12 text-center border border-dashed border-ocean-300 dark:border-ocean-800 animate-in fade-in">
+          <div className="w-12 h-12 rounded-full bg-ocean-500/10 text-ocean-600 dark:text-aqua-400 flex items-center justify-center mx-auto mb-3 border border-ocean-500/20">
+            {activeFilter === 'completed' ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Sparkles className="w-6 h-6 text-ocean-500" />}
           </div>
           <h3 className="text-slate-800 dark:text-slate-200 font-bold text-base mb-1">
             {activeFilter === 'today' && 'Queue is clear for today!'}
@@ -222,7 +222,7 @@ export const TodayTomorrowView: React.FC = () => {
           <div className="flex flex-wrap justify-center gap-2.5">
             <button
               onClick={() => openAddTopicModal(activeFilter === 'tomorrow' ? tomorrowStr : todayStr)}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all"
+              className="px-4 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all"
             >
               + Add Topic
             </button>
@@ -305,7 +305,7 @@ export const TodayTomorrowView: React.FC = () => {
                         </span>
 
                         {/* Approx hours badge */}
-                        <span className="flex items-center text-[10px] font-mono text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20 font-bold">
+                        <span className="flex items-center text-[10px] font-mono text-ocean-700 dark:text-aqua-300 bg-ocean-500/10 px-2 py-0.5 rounded-md border border-ocean-500/20 font-bold">
                           ⏱️ {topic.approxHours}h
                           {topic.completedHours > 0 && ` (${topic.completedHours}h done)`}
                         </span>
@@ -327,12 +327,12 @@ export const TodayTomorrowView: React.FC = () => {
                       {/* Mini Progress Track if in progress */}
                       {topic.completedHours > 0 && !isCompleted && (
                         <div className="mt-1.5 flex items-center space-x-2 max-w-xs">
-                          <div className="flex-1 bg-slate-200 dark:bg-slate-900 rounded-full h-1.5 overflow-hidden border border-slate-300/60 dark:border-slate-800">
+                          <div className="flex-1 bg-slate-200/80 dark:bg-abyss-950 rounded-full h-1.5 overflow-hidden border border-ocean-200/40 dark:border-ocean-900/50">
                             <div 
                               className="h-full rounded-full transition-all duration-300"
                               style={{ 
                                 width: `${progressPercent}%`,
-                                backgroundColor: subject?.color || '#6366f1'
+                                backgroundColor: subject?.color || '#0d9488'
                               }}
                             />
                           </div>
@@ -354,7 +354,7 @@ export const TodayTomorrowView: React.FC = () => {
                         target="_blank"
                         rel="noreferrer"
                         title="Google Calendar"
-                        className="p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-slate-300/80 dark:border-slate-800 transition-colors"
+                        className="p-1.5 sm:p-2 rounded-xl bg-slate-100 dark:bg-abyss-950 hover:bg-ocean-500/10 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 border border-ocean-200/40 dark:border-ocean-900/50 transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
@@ -364,17 +364,17 @@ export const TodayTomorrowView: React.FC = () => {
                     <button
                       onClick={() => openRescheduleModal(topic)}
                       title="Reschedule"
-                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300/80 dark:border-slate-800 transition-colors"
+                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-abyss-950 hover:bg-ocean-500/10 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-ocean-200/40 dark:border-ocean-900/50 transition-colors"
                     >
                       <CalendarClock className="w-3.5 h-3.5 text-slate-400" />
                       <span>🗓️</span>
                     </button>
 
-                    {/* Start Pomodoro Focus Button */}
+                    {/* Start Pomodoro Focus Button (Liquid Button) */}
                     {!isCompleted && (
                       <button
                         onClick={() => startFocusOnTopic(topic)}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm shadow-indigo-600/25 transition-all active:scale-95"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
                       >
                         <Play className="w-3.5 h-3.5 fill-white" />
                         <span>▶ Focus</span>

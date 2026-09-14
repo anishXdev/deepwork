@@ -4,6 +4,7 @@ import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, Ta
 import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
 import { GoogleCalendarService } from '../services/googleCalendar';
+import { GoogleAuthService } from '../services/googleAuth';
 
 interface AppContextType {
   subjects: Subject[];
@@ -74,6 +75,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateSubjectModalOpen, setIsCreateSubjectModalOpen] = useState(false);
 
   // Sync state changes with storage
+  useEffect(() => {
+    // Automatically load backend Google OAuth Client ID if available
+    GoogleAuthService.fetchBackendConfig();
+  }, []);
+
   useEffect(() => {
     StorageService.saveSubjects(subjects);
   }, [subjects]);

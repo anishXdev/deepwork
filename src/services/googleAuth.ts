@@ -1,7 +1,7 @@
 import { UserProfile } from '../types';
 import { StorageService } from './storage';
 
-// Google OAuth client ID can be provided via .env or user settings
+// Google OAuth client ID can be provided via .env, Vercel backend /api/config, or user settings
 const GOOGLE_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '';
 
 export const GoogleAuthService = {
@@ -11,6 +11,30 @@ export const GoogleAuthService = {
 
   setClientId(clientId: string) {
     localStorage.setItem('studypulse_google_client_id', clientId);
+  },
+
+  /**
+   * Fetches the Google Client ID automatically from the backend /api/config endpoint.
+   * This ensures users never have to enter it in the UI if configured in Vercel or .env.
+   */
+  async fetchBackendConfig(): Promise<string> {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.clientId) {
+          this.setClientId(data.clientId);
+          return data.clientId;
+        }
+      }
+    } catch {
+      // Static host or offline fallback
+    }
+    return this.getClientId();
+  },
+
+  isBackendConfigured(): boolean {
+    return Boolean(this.getClientId());
   },
 
   /**
@@ -65,9 +89,12 @@ export const GoogleAuthService = {
    * Initializes Google Identity Services token client
    */
   async initGoogleTokenClient(onSuccess: (token: string, profile: Partial<UserProfile>) => void, onError: (err: any) => void) {
-    const clientId = this.getClientId();
+    let clientId = this.getClientId();
     if (!clientId) {
-      onError(new Error('Please enter your Google Cloud OAuth Client ID in the field below first, or click "Connect with Demo Account" to test all features immediately.'));
+      clientId = await this.fetchBackendConfig();
+    }
+    if (!clientId) {
+      onError(new Error('Google Client ID is not configured. You can enter one below, set GOOGLE_CLIENT_ID in your backend/Vercel settings, or click "Connect with Demo Account" to test all features immediately.'));
       return;
     }
 

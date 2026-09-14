@@ -44,18 +44,16 @@ export const Navbar: React.FC = () => {
           onClick={() => setActiveTab('study')}
           className="flex items-center space-x-2 cursor-pointer group select-none"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-ocean-600 to-aqua-400 flex items-center justify-center shadow-md shadow-ocean-500/20 group-hover:scale-105 transition-transform">
+            <span className="text-white text-sm">🌊</span>
           </div>
-          <span className="font-bold tracking-tight text-sm sm:text-base font-sans flex items-center gap-1.5">
+          <span className="font-bold tracking-tight text-sm sm:text-base font-sans flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
             StudyPulse
           </span>
         </div>
 
         {/* Desktop Navigation Tabs (Clean & Symbol-focused) */}
-        <nav className="hidden md:flex items-center space-x-1 p-1 rounded-xl bg-slate-200/60 dark:bg-slate-900/60 border border-slate-300/60 dark:border-slate-800">
+        <nav className="hidden md:flex items-center space-x-1 p-1 rounded-xl bg-slate-200/60 dark:bg-abyss-900/60 border border-ocean-200/40 dark:border-ocean-900/50">
           {navItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -65,8 +63,8 @@ export const Navbar: React.FC = () => {
                 onClick={() => setActiveTab(item.id)}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+                    ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm shadow-ocean-600/30'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-ocean-700 dark:hover:text-aqua-300 hover:bg-ocean-500/10'
                 }`}
                 title={item.label}
               >
@@ -93,7 +91,7 @@ export const Navbar: React.FC = () => {
           <button
             onClick={toggleTheme}
             title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="p-1.5 sm:p-2 rounded-xl border border-slate-300/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl border border-ocean-200/50 dark:border-ocean-900/60 bg-white/80 dark:bg-abyss-card/80 text-slate-700 dark:text-slate-300 hover:text-ocean-600 dark:hover:text-aqua-400 transition-colors"
           >
             {isDark ? (
               <Sun className="w-4 h-4 text-amber-400 hover:rotate-45 transition-transform" />
@@ -109,7 +107,7 @@ export const Navbar: React.FC = () => {
             className={`p-1.5 sm:p-2 rounded-xl border transition-colors ${
               profile.googleConnected
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20'
-                : 'bg-white/80 dark:bg-slate-900/80 border-slate-300/80 dark:border-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                : 'bg-white/80 dark:bg-abyss-card/80 border-ocean-200/50 dark:border-ocean-900/60 text-slate-500 hover:text-ocean-600 dark:hover:text-aqua-300'
             }`}
           >
             {profile.googleConnected ? (
@@ -122,17 +120,17 @@ export const Navbar: React.FC = () => {
           {/* Quick Add Subject Symbol Button */}
           <button
             onClick={() => openCreateSubjectModal()}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium border border-slate-300 dark:border-slate-700 transition-colors flex items-center space-x-1"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-200/80 dark:bg-abyss-card/80 hover:bg-ocean-500/10 dark:hover:bg-ocean-950/50 text-slate-700 dark:text-slate-300 text-xs font-medium border border-ocean-200/50 dark:border-ocean-900/60 transition-colors flex items-center space-x-1"
             title="Add Subject"
           >
-            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+            <BookOpen className="w-3.5 h-3.5 text-ocean-600 dark:text-aqua-400" />
             <span className="hidden lg:inline">+ Subject</span>
           </button>
 
-          {/* Quick Add Topic Button */}
+          {/* Quick Add Topic Button (Liquid 3D button) */}
           <button
             onClick={() => openAddTopicModal()}
-            className="flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all active:scale-95"
+            className="flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
             title="Add Topic"
           >
             <Plus className="w-3.5 h-3.5 stroke-[3]" />
@@ -151,7 +149,7 @@ export const Navbar: React.FC = () => {
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={`flex flex-col items-center py-1 px-3 rounded-lg text-[11px] font-medium transition-colors ${
-                isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'
+                isActive ? 'text-ocean-600 dark:text-aqua-400 font-bold' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               <Icon className="w-4 h-4 mb-0.5" />

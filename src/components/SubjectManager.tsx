@@ -15,14 +15,14 @@ import {
 } from 'lucide-react';
 
 const PRESET_COLORS = [
-  '#6366f1', // Indigo
-  '#38bdf8', // Sky
-  '#10b981', // Emerald
-  '#f59e0b', // Amber
-  '#ec4899', // Pink
-  '#8b5cf6', // Purple
-  '#14b8a6', // Teal
-  '#f43f5e', // Rose
+  '#0d9488', // Ocean Teal
+  '#06b6d4', // Aqua Cyan
+  '#14b8a6', // Turquoise
+  '#0ea5e9', // Sky Flow
+  '#10b981', // Emerald Wave
+  '#f59e0b', // Sun Gold
+  '#f43f5e', // Coral Reef
+  '#8b5cf6', // Deep Violet
 ];
 
 export const SubjectManager: React.FC = () => {
@@ -73,17 +73,17 @@ export const SubjectManager: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-500" />
+            <BookOpen className="w-5 h-5 text-ocean-600 dark:text-aqua-400" />
             <span>Curriculum Domains</span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-ocean-700/80 dark:text-ocean-300/80 mt-0.5">
             Manage your study subjects, target hours, and nested topics.
           </p>
         </div>
 
         <button
           onClick={() => setIsCreatingSubject(true)}
-          className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all active:scale-95"
+          className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
         >
           <Plus className="w-4 h-4" />
           <span>+ Subject</span>
@@ -94,9 +94,9 @@ export const SubjectManager: React.FC = () => {
       {isCreatingSubject && (
         <form 
           onSubmit={handleCreateSubject}
-          className="glass-card rounded-2xl p-5 border border-indigo-500/30 mb-6 space-y-4 animate-in fade-in"
+          className="glass-card rounded-2xl p-5 border border-ocean-400/40 dark:border-ocean-700/50 mb-6 space-y-4 animate-in fade-in"
         >
-          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Add Subject</h3>
             <button
               type="button"
@@ -118,7 +118,7 @@ export const SubjectManager: React.FC = () => {
                 placeholder="e.g. Distributed Systems, Machine Learning..."
                 value={newSubjectName}
                 onChange={e => setNewSubjectName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500 font-medium"
+                className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-ocean-500 font-medium"
               />
             </div>
 
@@ -133,7 +133,7 @@ export const SubjectManager: React.FC = () => {
                 step="0.5"
                 value={newSubjectWeeklyTarget}
                 onChange={e => setNewSubjectWeeklyTarget(parseFloat(e.target.value) || 1)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-indigo-500 font-mono font-bold"
+                className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-ocean-500 font-mono font-bold"
               />
             </div>
           </div>
@@ -149,7 +149,7 @@ export const SubjectManager: React.FC = () => {
                   type="button"
                   onClick={() => setNewSubjectColor(color)}
                   className={`w-7 h-7 rounded-full transition-transform ${
-                    newSubjectColor === color ? 'scale-125 ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-900' : 'hover:scale-110'
+                    newSubjectColor === color ? 'scale-125 ring-2 ring-ocean-500 ring-offset-2 dark:ring-offset-abyss-950' : 'hover:scale-110'
                   }`}
                   style={{ backgroundColor: color }}
                 />
@@ -167,7 +167,7 @@ export const SubjectManager: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm"
+              className="px-4 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold"
             >
               Save Subject
             </button>
@@ -177,15 +177,15 @@ export const SubjectManager: React.FC = () => {
 
       {/* Subjects List */}
       {subjects.length === 0 ? (
-        <div className="glass-card rounded-2xl p-10 text-center border border-dashed border-slate-300 dark:border-slate-800">
-          <BookOpen className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+        <div className="glass-card rounded-2xl p-10 text-center border border-dashed border-ocean-300 dark:border-ocean-800">
+          <BookOpen className="w-10 h-10 text-ocean-400 mx-auto mb-3" />
           <h3 className="text-slate-800 dark:text-slate-200 font-bold mb-1">No subjects created yet</h3>
           <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">
             Add your subjects to organize topics, hours, and schedules.
           </p>
           <button
             onClick={() => setIsCreatingSubject(true)}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
+            className="px-4 py-2 rounded-xl liquid-btn text-white text-xs font-bold"
           >
             + Create First Subject
           </button>
@@ -223,7 +223,7 @@ export const SubjectManager: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex items-center space-x-2.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                        <span>⏱️ <strong className="text-indigo-600 dark:text-indigo-400">{hoursInvested}h</strong> invested</span>
+                        <span>⏱️ <strong className="text-ocean-600 dark:text-aqua-400">{hoursInvested}h</strong> invested</span>
                         <span>•</span>
                         <span>✓ {completedTopicsCount}/{subjectTopics.length}</span>
                         {subject.weeklyTargetHours && (
@@ -242,7 +242,7 @@ export const SubjectManager: React.FC = () => {
                         e.stopPropagation();
                         openAddTopicModal();
                       }}
-                      className="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-700 transition-colors"
+                      className="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-abyss-950 hover:bg-ocean-500/10 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-ocean-200/50 dark:border-ocean-900/60 transition-colors"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Topic</span>
@@ -273,14 +273,14 @@ export const SubjectManager: React.FC = () => {
 
                 {/* Expanded Topics Container */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30">
+                  <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t border-ocean-200/40 dark:border-ocean-900/50 bg-slate-50/40 dark:bg-abyss-950/40">
                     <div className="flex items-center justify-between mb-3 pt-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80">
                         Topics
                       </span>
                       <button
                         onClick={() => openAddTopicModal()}
-                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                        className="text-xs font-bold text-ocean-600 dark:text-aqua-400 hover:underline flex items-center gap-1"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>+ Add Topic</span>
@@ -296,11 +296,11 @@ export const SubjectManager: React.FC = () => {
                         {subjectTopics.map(topic => (
                           <div
                             key={topic.id}
-                            className="p-3 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                            className="p-3 rounded-xl bg-white/70 dark:bg-abyss-card/80 border border-ocean-200/40 dark:border-ocean-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center space-x-2">
-                                <span className={`w-2 h-2 rounded-full ${topic.status === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
+                                <span className={`w-2 h-2 rounded-full ${topic.status === 'completed' ? 'bg-emerald-500' : 'bg-ocean-500'}`} />
                                 <span className={`text-xs sm:text-sm font-semibold ${topic.status === 'completed' ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>
                                   {topic.name}
                                 </span>
@@ -330,13 +330,13 @@ export const SubjectManager: React.FC = () => {
                               )}
                               <button
                                 onClick={() => openRescheduleModal(topic)}
-                                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold border border-slate-300 dark:border-slate-700"
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-abyss-950 hover:bg-ocean-500/10 text-slate-700 dark:text-slate-300 text-[11px] font-semibold border border-ocean-200/40 dark:border-ocean-900/60"
                               >
                                 🗓️ Reschedule
                               </button>
                               <button
                                 onClick={() => startFocusOnTopic(topic)}
-                                className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold"
+                                className="flex items-center space-x-1 px-2.5 py-1 rounded-lg liquid-btn text-white text-[11px] font-bold"
                               >
                                 <Play className="w-3 h-3 fill-white" />
                                 <span>Focus</span>

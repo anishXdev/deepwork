@@ -59,20 +59,20 @@ export const TopicModal: React.FC = () => {
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
           <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+            <div className="p-2 rounded-xl bg-ocean-500/10 text-ocean-600 dark:text-aqua-400 border border-ocean-500/20">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Add Study Topic</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Queue a new topic or task</p>
+              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Queue a new topic or task</p>
             </div>
           </div>
 
           <button
             onClick={closeTopicModal}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-ocean-500/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -87,7 +87,7 @@ export const TopicModal: React.FC = () => {
             <button
               type="button"
               onClick={openCreateSubjectModal}
-              className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
+              className="px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold"
             >
               + Create Subject
             </button>
@@ -104,7 +104,7 @@ export const TopicModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={openCreateSubjectModal}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold flex items-center gap-1"
+                  className="text-xs text-ocean-600 dark:text-aqua-400 hover:underline font-bold flex items-center gap-1"
                 >
                   <span>+ New Subject</span>
                 </button>
@@ -112,7 +112,7 @@ export const TopicModal: React.FC = () => {
               <select
                 value={subjectId}
                 onChange={e => setSubjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:outline-none focus:border-ocean-500"
               >
                 {subjects.map(sub => (
                   <option key={sub.id} value={sub.id}>
@@ -134,7 +134,7 @@ export const TopicModal: React.FC = () => {
                 placeholder="e.g. Dynamic Programming: Longest Common Subsequence"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-ocean-500"
               />
             </div>
 
@@ -153,7 +153,7 @@ export const TopicModal: React.FC = () => {
                     required
                     value={approxHours}
                     onChange={e => setApproxHours(parseFloat(e.target.value) || 0.5)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold focus:outline-none focus:border-ocean-500"
                   />
                   <span className="absolute right-3 top-2 text-xs text-slate-400 pointer-events-none">
                     hrs
@@ -170,7 +170,7 @@ export const TopicModal: React.FC = () => {
                   required
                   value={scheduledDate}
                   onChange={e => setScheduledDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-ocean-500"
                 />
               </div>
 
@@ -182,7 +182,7 @@ export const TopicModal: React.FC = () => {
                   type="time"
                   value={scheduledTime}
                   onChange={e => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-ocean-500"
                 />
               </div>
             </div>
@@ -197,12 +197,12 @@ export const TopicModal: React.FC = () => {
                 placeholder="Key concepts, references..."
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs focus:outline-none focus:border-ocean-500"
               />
             </div>
 
             {/* Google Calendar Notification */}
-            <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-600 dark:text-indigo-300 flex items-center justify-between font-semibold">
+            <div className="p-3 rounded-xl bg-ocean-500/10 border border-ocean-500/20 text-[11px] text-ocean-700 dark:text-aqua-300 flex items-center justify-between font-semibold">
               <span>📅 Auto-schedules event on Google Calendar</span>
               <span className="text-emerald-500">Ready</span>
             </div>
@@ -219,7 +219,7 @@ export const TopicModal: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all active:scale-95 disabled:opacity-50"
+                className="px-5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all disabled:opacity-50"
               >
                 {isSubmitting ? 'Scheduling...' : 'Add Topic'}
               </button>

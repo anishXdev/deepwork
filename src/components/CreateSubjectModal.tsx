@@ -3,14 +3,14 @@ import { useApp } from '../context/AppContext';
 import { BookOpen, X, Check } from 'lucide-react';
 
 const PRESET_COLORS = [
-  '#6366f1', // Indigo
-  '#38bdf8', // Sky
-  '#10b981', // Emerald
-  '#f59e0b', // Amber
-  '#ec4899', // Pink
-  '#8b5cf6', // Purple
-  '#14b8a6', // Teal
-  '#f43f5e', // Rose
+  '#0d9488', // Ocean Teal
+  '#06b6d4', // Aqua Cyan
+  '#14b8a6', // Turquoise
+  '#0ea5e9', // Sky Flow
+  '#10b981', // Emerald Wave
+  '#f59e0b', // Sun Gold
+  '#f43f5e', // Coral Reef
+  '#8b5cf6', // Deep Violet
 ];
 
 export const CreateSubjectModal: React.FC = () => {
@@ -34,23 +34,23 @@ export const CreateSubjectModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
       <div 
-        className="glass-panel w-full max-w-md rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5"
+        className="glass-panel w-full max-w-md rounded-2xl border border-ocean-200/50 dark:border-ocean-900/60 shadow-2xl p-6 space-y-5"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
           <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+            <div className="p-2 rounded-xl bg-ocean-500/10 text-ocean-600 dark:text-aqua-400 border border-ocean-500/20">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Add Subject</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Create a study domain</p>
+              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Create a study domain</p>
             </div>
           </div>
 
           <button
             onClick={closeCreateSubjectModal}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-ocean-500/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -68,7 +68,7 @@ export const CreateSubjectModal: React.FC = () => {
               placeholder="e.g. Distributed Systems, Organic Chemistry..."
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-indigo-500"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-ocean-500"
             />
           </div>
 
@@ -83,7 +83,7 @@ export const CreateSubjectModal: React.FC = () => {
               step="0.5"
               value={weeklyTargetHours}
               onChange={e => setWeeklyTargetHours(parseFloat(e.target.value) || 1)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold focus:outline-none focus:border-indigo-500"
+              className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold focus:outline-none focus:border-ocean-500"
             />
           </div>
 
@@ -98,7 +98,7 @@ export const CreateSubjectModal: React.FC = () => {
                   type="button"
                   onClick={() => setColor(c)}
                   className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                    color === c ? 'scale-125 ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-900' : 'hover:scale-110 opacity-75 hover:opacity-100'
+                    color === c ? 'scale-125 ring-2 ring-ocean-500 ring-offset-2 dark:ring-offset-abyss-950' : 'hover:scale-110 opacity-75 hover:opacity-100'
                   }`}
                   style={{ backgroundColor: c }}
                 >
@@ -118,7 +118,7 @@ export const CreateSubjectModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/25 transition-all active:scale-95"
+              className="px-5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
             >
               Create Subject
             </button>
