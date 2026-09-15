@@ -28,10 +28,19 @@ export const Navbar: React.FC = () => {
     cloudSyncStatus,
     syncKey,
     settings,
-    toggleTheme
+    toggleTheme,
+    isTimerRunning,
+    timeLeft,
+    timerMode
   } = useApp();
 
   const isDark = settings.theme === 'dark';
+
+  const formatTimerShort = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const navItems = [
     { id: 'study', label: 'Study', icon: CalendarDays },
@@ -89,6 +98,21 @@ export const Navbar: React.FC = () => {
         {/* Quick Actions, Streak, Theme Toggle & Sync */}
         <div className="flex items-center space-x-1.5 sm:space-x-2">
           
+          {/* Active Focus Mini-Timer Pill (shown when running and navigating away from Focus tab) */}
+          {activeTab !== 'timer' && isTimerRunning && (
+            <button
+              onClick={() => {
+                Haptics.tap();
+                setActiveTab('timer');
+              }}
+              title="Focus timer is running! Click to jump to Focus vessel"
+              className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-teal-500/20 border border-teal-400/50 text-teal-600 dark:text-teal-300 text-xs font-mono font-bold animate-pulse hover:bg-teal-500/30 transition-all cursor-pointer shadow-md shadow-teal-500/20 active:scale-95"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping" />
+              <span>{formatTimerShort(timeLeft)}</span>
+            </button>
+          )}
+
           {/* Clickable Streak Badge with Fire Symbol & Longest Badge */}
           <button 
             onClick={() => {
@@ -193,14 +217,22 @@ export const Navbar: React.FC = () => {
                 Haptics.tap();
                 setActiveTab(item.id);
               }}
-              className={`flex flex-col items-center justify-center py-1.5 px-3.5 rounded-2xl text-[11px] font-medium transition-all active:scale-90 ${
+              className={`relative flex flex-col items-center justify-center py-1.5 px-3.5 rounded-2xl text-[11px] font-medium transition-all active:scale-90 ${
                 isActive
                   ? 'bg-gradient-to-r from-ocean-500/20 to-aqua-500/20 text-ocean-600 dark:text-aqua-300 font-bold border border-aqua-400/30 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
             >
-              <Icon className={`w-4 h-4 mb-0.5 ${isActive ? 'text-aqua-500 dark:text-aqua-300 scale-110' : ''}`} />
-              <span>{item.label}</span>
+              <div className="relative">
+                <Icon className={`w-4 h-4 mb-0.5 ${isActive ? 'text-aqua-500 dark:text-aqua-300 scale-110' : ''}`} />
+                {item.id === 'timer' && isTimerRunning && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                  </span>
+                )}
+              </div>
+              <span>{item.id === 'timer' && isTimerRunning && activeTab !== 'timer' ? formatTimerShort(timeLeft) : item.label}</span>
             </button>
           );
         })}

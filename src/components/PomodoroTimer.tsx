@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { sound } from '../services/audio';
 import { 
   Play, 
   Pause, 
@@ -14,132 +13,36 @@ import {
   Coffee,
   Sparkles
 } from 'lucide-react';
-
-type TimerMode = 'work' | 'break' | 'long_break';
+import { Haptics } from '../utils/haptics';
 
 export const PomodoroTimer: React.FC = () => {
   const { 
     subjects, 
     topics, 
-    activeFocusTopic, 
-    logStudySession, 
-    settings 
+    settings,
+    timerMode,
+    timeLeft,
+    isTimerRunning,
+    timerSelectedSubjectId,
+    setTimerSelectedSubjectId,
+    timerSelectedTopicId,
+    setTimerSelectedTopicId,
+    studiedSecondsInSession,
+    ambientSoundType,
+    setAmbientSoundType,
+    startTimer,
+    pauseTimer,
+    resetTimer,
+    switchTimerMode,
+    addFiveMinutes,
+    manualCompleteAndLog
   } = useApp();
 
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
-    activeFocusTopic ? activeFocusTopic.subjectId : subjects[0]?.id || ''
-  );
-  const [selectedTopicId, setSelectedTopicId] = useState<string>(
-    activeFocusTopic ? activeFocusTopic.id : ''
-  );
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  const [mode, setMode] = useState<TimerMode>('work');
   const workDuration = settings.pomodoroWorkMinutes * 60;
   const breakDuration = settings.pomodoroBreakMinutes * 60;
   const longBreakDuration = settings.pomodoroLongBreakMinutes * 60;
-
-  const [timeLeft, setTimeLeft] = useState<number>(settings.pomodoroWorkMinutes * 60);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
-  const [studiedSecondsInSession, setStudiedSecondsInSession] = useState<number>(0);
-  const [ambientSoundType, setAmbientSoundType] = useState<'none' | 'ocean' | 'stream' | 'rain'>('none');
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-
-  const timerRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (activeFocusTopic) {
-      setSelectedSubjectId(activeFocusTopic.subjectId);
-      setSelectedTopicId(activeFocusTopic.id);
-    }
-  }, [activeFocusTopic]);
-
-  const switchMode = (newMode: TimerMode) => {
-    setIsRunning(false);
-    setMode(newMode);
-    if (newMode === 'work') setTimeLeft(workDuration);
-    else if (newMode === 'break') setTimeLeft(breakDuration);
-    else setTimeLeft(longBreakDuration);
-  };
-
-  useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            handleTimerComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-
-        if (mode === 'work') {
-          setStudiedSecondsInSession(prev => prev + 1);
-        }
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRunning, mode]);
-
-  useEffect(() => {
-    if (isRunning && ambientSoundType !== 'none') {
-      sound.startAmbientSound(ambientSoundType);
-    } else {
-      sound.stopAmbientSound();
-    }
-    return () => sound.stopAmbientSound();
-  }, [isRunning, ambientSoundType]);
-
-  const handleTimerComplete = () => {
-    setIsRunning(false);
-    sound.playCompletionChime();
-
-    if (mode === 'work') {
-      const minutesCompleted = Math.max(1, Math.round(workDuration / 60));
-      logStudySession(
-        selectedSubjectId,
-        selectedTopicId || undefined,
-        minutesCompleted,
-        'pomodoro'
-      );
-      setStudiedSecondsInSession(0);
-      switchMode('break');
-    } else {
-      switchMode('work');
-    }
-  };
-
-  const handleManualCompleteAndLog = () => {
-    setIsRunning(false);
-    if (studiedSecondsInSession >= 30) {
-      const minutes = Math.round(studiedSecondsInSession / 60 * 10) / 10;
-      logStudySession(
-        selectedSubjectId,
-        selectedTopicId || undefined,
-        Math.max(1, Math.round(minutes)),
-        'pomodoro'
-      );
-      sound.playCompletionChime();
-    }
-    setStudiedSecondsInSession(0);
-    setTimeLeft(workDuration);
-  };
-
-  const handleReset = () => {
-    setIsRunning(false);
-    if (mode === 'work') setTimeLeft(workDuration);
-    else if (mode === 'break') setTimeLeft(breakDuration);
-    else setTimeLeft(longBreakDuration);
-  };
-
-  const addFiveMinutes = () => {
-    setTimeLeft(prev => prev + 300);
-  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -147,13 +50,13 @@ export const PomodoroTimer: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const totalTimeForMode = mode === 'work' ? workDuration : mode === 'break' ? breakDuration : longBreakDuration;
-  // Liquid fill percentage: fills up from 10% to 100% as focus time progresses
+  const totalTimeForMode = timerMode === 'work' ? workDuration : timerMode === 'break' ? breakDuration : longBreakDuration;
+  // Liquid fill percentage: fills up from 12% to 100% as focus time progresses
   const fillPercent = Math.min(100, Math.max(12, Math.round(((totalTimeForMode - timeLeft) / totalTimeForMode) * 100)));
 
-  const currentSubject = subjects.find(s => s.id === selectedSubjectId);
-  const availableTopics = topics.filter(t => t.subjectId === selectedSubjectId);
-  const currentTopic = topics.find(t => t.id === selectedTopicId);
+  const currentSubject = subjects.find(s => s.id === timerSelectedSubjectId);
+  const availableTopics = topics.filter(t => t.subjectId === timerSelectedSubjectId);
+  const currentTopic = topics.find(t => t.id === timerSelectedTopicId);
 
   return (
     <div className={`max-w-2xl mx-auto px-4 py-6 pb-28 relative z-10 ${
@@ -175,9 +78,9 @@ export const PomodoroTimer: React.FC = () => {
       <div className="flex items-center justify-center space-x-2 mb-8">
         <div className="p-1 rounded-2xl glass-panel flex items-center space-x-1 shadow-md">
           <button
-            onClick={() => switchMode('work')}
+            onClick={() => switchTimerMode('work')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              mode === 'work'
+              timerMode === 'work'
                 ? 'liquid-btn text-white shadow-lg shadow-teal-500/30'
                 : 'text-slate-600 dark:text-teal-200/70 hover:text-teal-400'
             }`}
@@ -186,9 +89,9 @@ export const PomodoroTimer: React.FC = () => {
             <span>Focus 25m</span>
           </button>
           <button
-            onClick={() => switchMode('break')}
+            onClick={() => switchTimerMode('break')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              mode === 'break'
+              timerMode === 'break'
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30'
                 : 'text-slate-600 dark:text-teal-200/70 hover:text-teal-400'
             }`}
@@ -197,9 +100,9 @@ export const PomodoroTimer: React.FC = () => {
             <span>Rest 5m</span>
           </button>
           <button
-            onClick={() => switchMode('long_break')}
+            onClick={() => switchTimerMode('long_break')}
             className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              mode === 'long_break'
+              timerMode === 'long_break'
                 ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/30'
                 : 'text-slate-600 dark:text-teal-200/70 hover:text-teal-400'
             }`}
@@ -257,10 +160,10 @@ export const PomodoroTimer: React.FC = () => {
 
             <span className="text-xs uppercase tracking-widest font-extrabold text-teal-800 dark:text-teal-200 mt-2 flex items-center gap-1.5">
               <Waves className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
-              <span>{mode === 'work' ? 'Fluid Study State' : 'Refreshing Rest'}</span>
+              <span>{timerMode === 'work' ? 'Fluid Study State' : 'Refreshing Rest'}</span>
             </span>
 
-            {mode === 'work' && currentTopic && (
+            {timerMode === 'work' && currentTopic && (
               <span className="text-xs font-bold text-teal-900 dark:text-cyan-200 max-w-[210px] truncate mt-2 px-3 py-0.5 rounded-full bg-white/40 dark:bg-black/30 backdrop-blur-md border border-white/30 dark:border-cyan-400/30 shadow-sm">
                 {currentTopic.name}
               </span>
@@ -273,7 +176,7 @@ export const PomodoroTimer: React.FC = () => {
       {/* Timer Controls: 3D Liquid Buttons */}
       <div className="flex items-center justify-center space-x-4 mb-9">
         <button
-          onClick={handleReset}
+          onClick={resetTimer}
           className="p-3.5 rounded-2xl glass-card text-slate-600 dark:text-teal-300 hover:text-teal-500 dark:hover:text-white transition-all active:scale-95"
           title="Reset"
         >
@@ -281,14 +184,14 @@ export const PomodoroTimer: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setIsRunning(!isRunning)}
+          onClick={() => (isTimerRunning ? pauseTimer() : startTimer())}
           className={`px-8 py-3.5 rounded-2xl text-white font-extrabold text-base flex items-center space-x-2 shadow-xl transition-all active:scale-95 ${
-            isRunning
+            isTimerRunning
               ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
               : 'liquid-btn'
           }`}
         >
-          {isRunning ? (
+          {isTimerRunning ? (
             <>
               <Pause className="w-5 h-5 fill-white" />
               <span>Pause</span>
@@ -309,9 +212,9 @@ export const PomodoroTimer: React.FC = () => {
           +5m
         </button>
 
-        {mode === 'work' && studiedSecondsInSession >= 30 && (
+        {timerMode === 'work' && studiedSecondsInSession >= 30 && (
           <button
-            onClick={handleManualCompleteAndLog}
+            onClick={manualCompleteAndLog}
             className="flex items-center space-x-1.5 px-4 py-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-all active:scale-95 shadow-md"
             title="Log Session Now"
           >
@@ -341,10 +244,10 @@ export const PomodoroTimer: React.FC = () => {
               Subject
             </label>
             <select
-              value={selectedSubjectId}
+              value={timerSelectedSubjectId}
               onChange={e => {
-                setSelectedSubjectId(e.target.value);
-                setSelectedTopicId('');
+                setTimerSelectedSubjectId(e.target.value);
+                setTimerSelectedTopicId('');
               }}
               className="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-teal-500/30 text-slate-800 dark:text-teal-100 text-xs font-semibold focus:outline-none focus:border-teal-400"
             >
@@ -361,8 +264,8 @@ export const PomodoroTimer: React.FC = () => {
               Topic (Optional)
             </label>
             <select
-              value={selectedTopicId}
-              onChange={e => setSelectedTopicId(e.target.value)}
+              value={timerSelectedTopicId}
+              onChange={e => setTimerSelectedTopicId(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-teal-500/30 text-slate-800 dark:text-teal-100 text-xs font-semibold focus:outline-none focus:border-teal-400"
             >
               <option value="">-- General Subject Study --</option>

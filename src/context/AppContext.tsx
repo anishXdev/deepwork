@@ -1,11 +1,23 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, TaskStatus, CloudSyncStatus } from '../types';
+import { 
+  Subject, 
+  Topic, 
+  StudySession, 
+  UserSettings, 
+  UserProfile, 
+  StreakData, 
+  TaskStatus, 
+  CloudSyncStatus,
+  TimerMode,
+  AmbientSoundType
+} from '../types';
 import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
 import { GoogleCalendarService } from '../services/googleCalendar';
 import { GoogleAuthService } from '../services/googleAuth';
 import { CloudSyncService } from '../services/cloudSync';
+import { sound } from '../services/audio';
 
 interface AppContextType {
   subjects: Subject[];
@@ -23,6 +35,24 @@ interface AppContextType {
   isSyncModalOpen: boolean;
   isCreateSubjectModalOpen: boolean;
   isStreakModalOpen: boolean;
+
+  // Persistent Global Focus Timer
+  timerMode: TimerMode;
+  timeLeft: number;
+  isTimerRunning: boolean;
+  timerSelectedSubjectId: string;
+  setTimerSelectedSubjectId: (id: string) => void;
+  timerSelectedTopicId: string;
+  setTimerSelectedTopicId: (id: string) => void;
+  studiedSecondsInSession: number;
+  ambientSoundType: AmbientSoundType;
+  setAmbientSoundType: (type: AmbientSoundType) => void;
+  startTimer: () => void;
+  pauseTimer: () => void;
+  resetTimer: () => void;
+  switchTimerMode: (mode: TimerMode) => void;
+  addFiveMinutes: () => void;
+  manualCompleteAndLog: () => void;
 
   // Cloud Sync
   cloudSyncStatus: CloudSyncStatus;
@@ -80,7 +110,236 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [streaks, setStreaks] = useState<StreakData>(() => StorageService.getStreaks());
 
   const [activeTab, setActiveTab] = useState<'study' | 'subjects' | 'timer' | 'analytics' | 'sync'>('study');
-  const [activeFocusTopic, setActiveFocusTopic] = useState<Topic | null>(null);
+  const [activeFocusTopic, setActiveFocusTopicState] = useState<Topic | null>(null);
+
+  // Persistent Global Focus Timer State & Delta Engine
+  const [timerMode, setTimerMode] = useState<TimerMode>('work');
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    const savedTime = sessionStorage.getItem('studypulse_timer_timeleft');
+    return savedTime ? parseInt(savedTime, 10) : settings.pomodoroWorkMinutes * 60;
+  });
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  const [timerSelectedSubjectId, setTimerSelectedSubjectId] = useState<string>(() => subjects[0]?.id || '');
+  const [timerSelectedTopicId, setTimerSelectedTopicId] = useState<string>('');
+  const [studiedSecondsInSession, setStudiedSecondsInSession] = useState<number>(0);
+  const [ambientSoundType, setAmbientSoundType] = useState<AmbientSoundType>('none');
+  const targetEndTimeRef = useRef<number | null>(null);
+  const lastTickTimeRef = useRef<number>(Date.now());
+
+  // Auto-select subject for timer if unselected
+  useEffect(() => {
+    if (!timerSelectedSubjectId && subjects.length > 0) {
+      setTimerSelectedSubjectId(subjects[0].id);
+    }
+  }, [subjects, timerSelectedSubjectId]);
+
+  // Restore timer target from sessionStorage on reload
+  useEffect(() => {
+    const savedTarget = sessionStorage.getItem('studypulse_timer_target');
+    if (savedTarget) {
+      const target = parseInt(savedTarget, 10);
+      const remaining = Math.ceil((target - Date.now()) / 1000);
+      if (remaining > 0) {
+        targetEndTimeRef.current = target;
+        setTimeLeft(remaining);
+        setIsTimerRunning(true);
+      } else {
+        sessionStorage.removeItem('studypulse_timer_target');
+        sessionStorage.removeItem('studypulse_timer_timeleft');
+      }
+    }
+  }, []);
+
+  const setActiveFocusTopic = (topic: Topic | null) => {
+    setActiveFocusTopicState(topic);
+    if (topic) {
+      setTimerSelectedSubjectId(topic.subjectId);
+      setTimerSelectedTopicId(topic.id);
+    }
+  };
+
+  const getModeDuration = (m: TimerMode) => {
+    if (m === 'work') return settings.pomodoroWorkMinutes * 60;
+    if (m === 'break') return settings.pomodoroBreakMinutes * 60;
+    return settings.pomodoroLongBreakMinutes * 60;
+  };
+
+  const startTimer = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+    const currentRemaining = timeLeft <= 0 ? getModeDuration(timerMode) : timeLeft;
+    const target = Date.now() + currentRemaining * 1000;
+    targetEndTimeRef.current = target;
+    lastTickTimeRef.current = Date.now();
+    sessionStorage.setItem('studypulse_timer_target', target.toString());
+    sessionStorage.setItem('studypulse_timer_timeleft', currentRemaining.toString());
+    setTimeLeft(currentRemaining);
+    setIsTimerRunning(true);
+  };
+
+  const pauseTimer = () => {
+    if (targetEndTimeRef.current) {
+      const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      sessionStorage.setItem('studypulse_timer_timeleft', remaining.toString());
+    }
+    targetEndTimeRef.current = null;
+    sessionStorage.removeItem('studypulse_timer_target');
+    setIsTimerRunning(false);
+  };
+
+  const resetTimer = () => {
+    targetEndTimeRef.current = null;
+    sessionStorage.removeItem('studypulse_timer_target');
+    setIsTimerRunning(false);
+    const dur = getModeDuration(timerMode);
+    setTimeLeft(dur);
+    sessionStorage.setItem('studypulse_timer_timeleft', dur.toString());
+  };
+
+  const switchTimerMode = (newMode: TimerMode) => {
+    targetEndTimeRef.current = null;
+    sessionStorage.removeItem('studypulse_timer_target');
+    setIsTimerRunning(false);
+    setTimerMode(newMode);
+    const dur = getModeDuration(newMode);
+    setTimeLeft(dur);
+    sessionStorage.setItem('studypulse_timer_timeleft', dur.toString());
+  };
+
+  const addFiveMinutes = () => {
+    if (targetEndTimeRef.current) {
+      targetEndTimeRef.current += 300 * 1000;
+      sessionStorage.setItem('studypulse_timer_target', targetEndTimeRef.current.toString());
+    }
+    setTimeLeft(prev => {
+      const next = prev + 300;
+      sessionStorage.setItem('studypulse_timer_timeleft', next.toString());
+      return next;
+    });
+  };
+
+  const handleTimerComplete = () => {
+    targetEndTimeRef.current = null;
+    sessionStorage.removeItem('studypulse_timer_target');
+    setIsTimerRunning(false);
+    sound.playCompletionChime();
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(timerMode === 'work' ? "Focus Session Complete! 🌊" : "Break Concluded! ⏰", {
+          body: timerMode === 'work' 
+            ? "Splendid flow session! Time for a refreshing break." 
+            : "Break is over. Ready to dive back into focus?",
+          icon: "/icon.svg"
+        });
+      } catch {}
+    }
+
+    if (timerMode === 'work') {
+      const completedMins = Math.max(1, Math.round(getModeDuration('work') / 60));
+      logStudySession(
+        timerSelectedSubjectId || (subjects[0]?.id || ''),
+        timerSelectedTopicId || undefined,
+        completedMins,
+        'pomodoro'
+      );
+      setStudiedSecondsInSession(0);
+      switchTimerMode('break');
+    } else {
+      switchTimerMode('work');
+    }
+  };
+
+  const manualCompleteAndLog = () => {
+    targetEndTimeRef.current = null;
+    sessionStorage.removeItem('studypulse_timer_target');
+    setIsTimerRunning(false);
+    if (studiedSecondsInSession >= 30) {
+      const minutes = Math.round((studiedSecondsInSession / 60) * 10) / 10;
+      logStudySession(
+        timerSelectedSubjectId || (subjects[0]?.id || ''),
+        timerSelectedTopicId || undefined,
+        Math.max(1, Math.round(minutes)),
+        'pomodoro'
+      );
+      sound.playCompletionChime();
+    }
+    setStudiedSecondsInSession(0);
+    const dur = getModeDuration(timerMode);
+    setTimeLeft(dur);
+    sessionStorage.setItem('studypulse_timer_timeleft', dur.toString());
+  };
+
+  // Real-Time Delta Loop & Visibility/Focus Sync
+  useEffect(() => {
+    if (!isTimerRunning) {
+      document.title = 'StudyPulse 🌊 Focus & Flow';
+      return;
+    }
+
+    const updateTitle = (secs: number) => {
+      const mins = Math.floor(secs / 60);
+      const remainingSecs = secs % 60;
+      document.title = `(${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}) 🌊 StudyPulse`;
+    };
+
+    updateTitle(timeLeft);
+
+    const interval = setInterval(() => {
+      if (!targetEndTimeRef.current) return;
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
+      setTimeLeft(remaining);
+      sessionStorage.setItem('studypulse_timer_timeleft', remaining.toString());
+      updateTitle(remaining);
+
+      // Add elapsed study seconds
+      const elapsed = Math.max(0, (now - lastTickTimeRef.current) / 1000);
+      lastTickTimeRef.current = now;
+      if (timerMode === 'work') {
+        setStudiedSecondsInSession(prev => prev + elapsed);
+      }
+
+      if (now >= targetEndTimeRef.current) {
+        clearInterval(interval);
+        handleTimerComplete();
+      }
+    }, 250);
+
+    // Immediate sync on tab switch or window focus
+    const handleSyncOnFocus = () => {
+      if (!targetEndTimeRef.current) return;
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
+      setTimeLeft(remaining);
+      sessionStorage.setItem('studypulse_timer_timeleft', remaining.toString());
+      updateTitle(remaining);
+      if (now >= targetEndTimeRef.current) {
+        handleTimerComplete();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleSyncOnFocus);
+    window.addEventListener('focus', handleSyncOnFocus);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleSyncOnFocus);
+      window.removeEventListener('focus', handleSyncOnFocus);
+    };
+  }, [isTimerRunning, timerMode, timeLeft, timerSelectedSubjectId, timerSelectedTopicId]);
+
+  // Ambient sound sync
+  useEffect(() => {
+    if (isTimerRunning && ambientSoundType !== 'none') {
+      sound.startAmbientSound(ambientSoundType);
+    } else {
+      sound.stopAmbientSound();
+    }
+    return () => sound.stopAmbientSound();
+  }, [isTimerRunning, ambientSoundType]);
 
   // Modals state
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
@@ -450,6 +709,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSyncModalOpen,
         isCreateSubjectModalOpen,
         isStreakModalOpen,
+        // Persistent Global Focus Timer
+        timerMode,
+        timeLeft,
+        isTimerRunning,
+        timerSelectedSubjectId,
+        setTimerSelectedSubjectId,
+        timerSelectedTopicId,
+        setTimerSelectedTopicId,
+        studiedSecondsInSession,
+        ambientSoundType,
+        setAmbientSoundType,
+        startTimer,
+        pauseTimer,
+        resetTimer,
+        switchTimerMode,
+        addFiveMinutes,
+        manualCompleteAndLog,
+        // Cloud Sync
         cloudSyncStatus,
         syncKey,
         lastSyncedAt,

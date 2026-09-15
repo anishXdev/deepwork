@@ -39,6 +39,8 @@ export interface StudySession {
 }
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+export type TimerMode = 'work' | 'break' | 'long_break';
+export type AmbientSoundType = 'none' | 'ocean' | 'stream' | 'rain';
 
 export interface UserProfile {
   id: string;
