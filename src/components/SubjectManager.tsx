@@ -11,19 +11,10 @@ import {
   CalendarClock, 
   ChevronDown, 
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Check
 } from 'lucide-react';
-
-const PRESET_COLORS = [
-  '#0d9488', // Ocean Teal
-  '#06b6d4', // Aqua Cyan
-  '#14b8a6', // Turquoise
-  '#0ea5e9', // Sky Flow
-  '#10b981', // Emerald Wave
-  '#f59e0b', // Sun Gold
-  '#f43f5e', // Coral Reef
-  '#8b5cf6', // Deep Violet
-];
+import { SUBJECT_PALETTE } from '../types';
 
 export const SubjectManager: React.FC = () => {
   const { 
@@ -42,7 +33,7 @@ export const SubjectManager: React.FC = () => {
   const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(subjects[0]?.id || null);
   const [isCreatingSubject, setIsCreatingSubject] = useState(false);
   const [newSubjectName, setNewSubjectName] = useState('');
-  const [newSubjectColor, setNewSubjectColor] = useState(PRESET_COLORS[0]);
+  const [newSubjectColor, setNewSubjectColor] = useState(SUBJECT_PALETTE[0].hex);
   const [newSubjectWeeklyTarget, setNewSubjectWeeklyTarget] = useState(5);
 
   const handleCreateSubject = (e: React.FormEvent) => {
@@ -120,6 +111,19 @@ export const SubjectManager: React.FC = () => {
                 onChange={e => setNewSubjectName(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-ocean-500 font-medium"
               />
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className="text-[10px] text-slate-400">Quick suggestions:</span>
+                {['DBMS', 'Machine Learning', 'Mathematics', 'Computer Networks', 'Operating Systems', 'System Design'].map(name => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setNewSubjectName(name)}
+                    className="text-[10px] px-2 py-0.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/20 transition-colors"
+                  >
+                    + {name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
@@ -139,20 +143,30 @@ export const SubjectManager: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-2">
-              Color Accent
-            </label>
-            <div className="flex items-center space-x-2.5">
-              {PRESET_COLORS.map(color => (
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                Color Accent (20 Themes)
+              </label>
+              <span className="text-[10px] font-medium text-ocean-600 dark:text-ocean-400">
+                {SUBJECT_PALETTE.find(c => c.hex === newSubjectColor)?.name || 'Selected'}
+              </span>
+            </div>
+            <div className="grid grid-cols-10 gap-2 p-2.5 rounded-xl bg-white/50 dark:bg-black/30 border border-ocean-200/40 dark:border-ocean-900/50">
+              {SUBJECT_PALETTE.map(c => (
                 <button
-                  key={color}
+                  key={c.hex}
                   type="button"
-                  onClick={() => setNewSubjectColor(color)}
-                  className={`w-7 h-7 rounded-full transition-transform ${
-                    newSubjectColor === color ? 'scale-125 ring-2 ring-ocean-500 ring-offset-2 dark:ring-offset-abyss-950' : 'hover:scale-110'
+                  title={c.name}
+                  onClick={() => setNewSubjectColor(c.hex)}
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all ${
+                    newSubjectColor === c.hex 
+                      ? 'scale-125 ring-2 ring-white shadow-lg' 
+                      : 'hover:scale-110 opacity-75 hover:opacity-100'
                   }`}
-                  style={{ backgroundColor: color }}
-                />
+                  style={{ backgroundColor: c.hex }}
+                >
+                  {newSubjectColor === c.hex && <Check className="w-3.5 h-3.5 text-white stroke-[3] drop-shadow-md" />}
+                </button>
               ))}
             </div>
           </div>

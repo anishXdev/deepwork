@@ -1,9 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="128" fill="#090d16"/>
-  <circle cx="256" cy="256" r="180" stroke="#1e293b" stroke-width="24"/>
-  <circle cx="256" cy="256" r="180" stroke="#6366f1" stroke-width="24" stroke-dasharray="1130" stroke-dashoffset="380" stroke-linecap="round"/>
-  <!-- Focus flame/pulse inside -->
-  <path d="M256 160C256 160 216 210 216 256C216 278.091 233.909 296 256 296C278.091 296 296 278.091 296 256C296 210 256 160 256 160Z" fill="#6366f1"/>
-  <path d="M256 210C256 210 236 240 236 262C236 273.046 244.954 282 256 282C267.046 282 276 273.046 276 262C276 240 256 210 256 210Z" fill="#38bdf8"/>
-  <circle cx="256" cy="350" r="12" fill="#22c55e"/>
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#030a12" />
+      <stop offset="100%" stopColor="#081e2b" />
+    </linearGradient>
+    <linearGradient id="dstudy-grad" x1="80" y1="60" x2="440" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#2dd4bf" />
+      <stop offset="35%" stopColor="#06b6d4" />
+      <stop offset="70%" stopColor="#0d9488" />
+      <stop offset="100%" stopColor="#10b981" />
+    </linearGradient>
+    <radialGradient id="dstudy-core" cx="220" cy="300" r="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.75" />
+      <stop offset="60%" stopColor="#0d9488" stopOpacity="0.3" />
+      <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
+    </radialGradient>
+    <linearGradient id="dstudy-highlight" x1="140" y1="120" x2="340" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+      <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Dark Rounded Container with Subtle Border -->
+  <rect width="512" height="512" rx="128" fill="url(#bg-grad)" stroke="#14b8a6" stroke-width="4" stroke-opacity="0.3" />
+
+  <!-- Core Glow -->
+  <circle cx="260" cy="280" r="160" fill="url(#dstudy-core)" />
+
+  <!-- Lowercase 'd' Geometric Sculpture -->
+  <!-- Bowl Fill -->
+  <path d="M 330 190 A 120 120 0 1 0 330 410 L 330 190 Z" fill="url(#dstudy-grad)" fill-opacity="0.18" />
+
+  <!-- Outer 'd' Continuous Stroke -->
+  <path d="M 336 80 C 336 65 318 60 300 75 L 318 200 A 120 120 0 1 0 336 380 L 336 80 Z" 
+        stroke="url(#dstudy-grad)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Inner Focal Pupil -->
+  <circle cx="224" cy="290" r="52" fill="url(#dstudy-grad)" />
+
+  <!-- Specular Highlight Arc -->
+  <path d="M 140 250 A 100 100 0 0 1 260 185" stroke="url(#dstudy-highlight)" stroke-width="14" stroke-linecap="round" />
+
+  <!-- Top Beacon Spark -->
+  <circle cx="330" cy="80" r="18" fill="#ffffff" />
 </svg>

@@ -82,6 +82,33 @@ class SoundService {
     } catch {}
   }
 
+  // Warning tone for distraction detection in strict mode
+  playWarningAlert() {
+    try {
+      const ctx = this.getAudioContext();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.25);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch {}
+  }
+
+  playAmbient(type: 'ocean' | 'stream' | 'rain' | 'whitenoise' | 'none') {
+    if (type === 'none') {
+      this.stopAmbientSound();
+    } else {
+      this.startAmbientSound(type);
+    }
+  }
+
   // Water & Nature Ambient Sound Generator
   startAmbientSound(type: 'ocean' | 'stream' | 'rain' | 'whitenoise', volume = 0.2) {
     this.stopAmbientSound();

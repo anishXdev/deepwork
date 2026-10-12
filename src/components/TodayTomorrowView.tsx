@@ -30,14 +30,67 @@ export const TodayTomorrowView: React.FC = () => {
     openAddTopicModal, 
     openRescheduleModal,
     openCreateSubjectModal,
-    deleteTopic 
+    deleteTopic,
+    addTopic,
+    addSubject
   } = useApp();
 
   const [activeFilter, setActiveFilter] = useState<PendingFilter>('today');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
 
+  // Instant Quick-Add Task State
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickSubjectId, setQuickSubjectId] = useState(subjects[0]?.id || '');
+  const [quickDate, setQuickDate] = useState<'today' | 'tomorrow'>('today');
+  const [quickHours, setQuickHours] = useState<number>(1);
+  const [isQuickAddingSubject, setIsQuickAddingSubject] = useState(false);
+  const [quickNewSubjectName, setQuickNewSubjectName] = useState('');
+  const [quickAddSuccess, setQuickAddSuccess] = useState(false);
+
   const todayStr = AnalyticsService.getTodayDateString();
   const tomorrowStr = AnalyticsService.getTomorrowDateString();
+
+  const handleQuickAdd = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!quickTitle.trim()) return;
+
+    let targetSubjectId = quickSubjectId;
+    if (!targetSubjectId && subjects.length > 0) {
+      targetSubjectId = subjects[0].id;
+    }
+
+    if (!targetSubjectId) {
+      const defSub = addSubject('General Study', '#14b8a6', 5);
+      targetSubjectId = defSub.id;
+    }
+
+    const scheduledDate = quickDate === 'today' ? todayStr : tomorrowStr;
+
+    await addTopic({
+      name: quickTitle.trim(),
+      subjectId: targetSubjectId,
+      approxHours: quickHours,
+      scheduledDate,
+      scheduledTime: quickDate === 'today' ? '10:00' : '09:00',
+      status: 'todo',
+      notes: ''
+    });
+
+    setQuickTitle('');
+    setQuickAddSuccess(true);
+    setTimeout(() => setQuickAddSuccess(false), 2000);
+  };
+
+  const handleQuickCreateSubject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickNewSubjectName.trim()) return;
+    const colors = ['#0d9488', '#06b6d4', '#14b8a6', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
+    const chosenColor = colors[subjects.length % colors.length];
+    const created = addSubject(quickNewSubjectName.trim(), chosenColor, 5);
+    setQuickSubjectId(created.id);
+    setQuickNewSubjectName('');
+    setIsQuickAddingSubject(false);
+  };
 
   // All pending topics (status !== 'completed')
   const allPendingTopics = topics.filter(t => t.status !== 'completed');
@@ -109,6 +162,148 @@ export const TodayTomorrowView: React.FC = () => {
             <span>+ Topic</span>
           </button>
         </div>
+      </div>
+
+      {/* Instant Quick-Add Task & Subject Bar */}
+      <div className="glass-card p-3.5 sm:p-4 rounded-2xl border border-teal-500/25 shadow-lg space-y-2.5">
+        <form onSubmit={handleQuickAdd} className="space-y-2.5">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="⚡ Quick add topic or task... (e.g. Read Chapter 4)"
+                value={quickTitle}
+                onChange={e => setQuickTitle(e.target.value)}
+                className="w-full pl-3 pr-20 py-2 rounded-xl bg-white/70 dark:bg-black/40 border border-teal-500/30 text-xs font-semibold text-slate-800 dark:text-slate-100 placeholder-teal-600/50 dark:placeholder-teal-400/40 focus:outline-none focus:border-teal-400"
+              />
+              {quickAddSuccess && (
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-emerald-500 font-bold flex items-center gap-0.5 animate-in fade-in">
+                  <Check className="w-3.5 h-3.5" /> Added!
+                </span>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={!quickTitle.trim()}
+              className="px-4 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all disabled:opacity-40 active:scale-95 shadow-md flex items-center space-x-1 shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>Add</span>
+            </button>
+          </div>
+
+          {/* Quick Selectors: Subject, Timing, Hours */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Subject selector */}
+              {isQuickAddingSubject ? (
+                <div className="flex items-center gap-1 bg-white/80 dark:bg-black/50 p-1 rounded-xl border border-teal-500/40">
+                  <input
+                    type="text"
+                    placeholder="New subject..."
+                    value={quickNewSubjectName}
+                    onChange={e => setQuickNewSubjectName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickCreateSubject(e);
+                      } else if (e.key === 'Escape') {
+                        setIsQuickAddingSubject(false);
+                      }
+                    }}
+                    autoFocus
+                    className="px-2 py-0.5 text-xs bg-transparent border-none outline-none text-slate-800 dark:text-teal-100 placeholder-teal-400/50 w-28"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleQuickCreateSubject}
+                    className="px-2 py-0.5 rounded-lg bg-teal-500 text-white text-[10px] font-bold"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickAddingSubject(false)}
+                    className="text-slate-400 hover:text-slate-200 px-1 text-[10px]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <select
+                    value={quickSubjectId || (subjects[0]?.id || '')}
+                    onChange={e => {
+                      if (e.target.value === '__new__') {
+                        setIsQuickAddingSubject(true);
+                      } else {
+                        setQuickSubjectId(e.target.value);
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-white/70 dark:bg-black/30 border border-teal-500/30 text-xs font-semibold text-slate-800 dark:text-teal-200 focus:outline-none cursor-pointer"
+                  >
+                    {subjects.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                    <option value="__new__">+ New Subject...</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Due Date Toggle */}
+              <div className="flex items-center p-0.5 rounded-xl bg-white/60 dark:bg-black/30 border border-teal-500/25 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setQuickDate('today')}
+                  className={`px-2 py-0.5 rounded-lg transition-colors ${
+                    quickDate === 'today' ? 'bg-teal-500 text-white shadow-sm' : 'text-slate-600 dark:text-teal-300/80 hover:text-teal-400'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickDate('tomorrow')}
+                  className={`px-2 py-0.5 rounded-lg transition-colors ${
+                    quickDate === 'tomorrow' ? 'bg-teal-500 text-white shadow-sm' : 'text-slate-600 dark:text-teal-300/80 hover:text-teal-400'
+                  }`}
+                >
+                  Tomorrow
+                </button>
+              </div>
+
+              {/* Hour Pills */}
+              <div className="flex items-center space-x-1">
+                {[0.5, 1, 2, 3].map(h => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setQuickHours(h)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                      quickHours === h
+                        ? 'bg-teal-500/20 text-teal-700 dark:text-teal-200 border border-teal-400/50 shadow-sm'
+                        : 'bg-white/40 dark:bg-black/20 text-slate-500 dark:text-teal-400/60 hover:text-teal-300'
+                    }`}
+                  >
+                    {h === 0.5 ? '30m' : `${h}h`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Detailed Modal Trigger Link */}
+            <button
+              type="button"
+              onClick={() => openAddTopicModal(quickDate === 'tomorrow' ? tomorrowStr : todayStr)}
+              className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 font-semibold"
+            >
+              <span>More options...</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Filter Tabs: Today's Pending / Tomorrow / All Pending / Completed */}

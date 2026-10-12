@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { GoogleAuthService } from '../services/googleAuth';
 import { StorageService } from '../services/storage';
+import { CloudSyncService } from '../services/cloudSync';
+import { UserProfile } from '../types';
 import { 
   X, 
   Cloud, 
@@ -11,13 +13,11 @@ import {
   Check, 
   Download, 
   Upload, 
-  Key,
   AlertCircle,
-  HelpCircle,
   Sparkles,
   Copy,
   RefreshCw,
-  Share2
+  Database
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
@@ -34,24 +34,23 @@ export const GoogleSyncModal: React.FC = () => {
     lastSyncedAt
   } = useApp();
 
-  const [customClientId, setCustomClientId] = useState(GoogleAuthService.getClientId());
-  const [isSavedClientId, setIsSavedClientId] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'devicesync' | 'account' | 'android' | 'backup'>('devicesync');
+  const [activeSubTab, setActiveSubTab] = useState<'devicesync' | 'account' | 'backup'>('devicesync');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [inputSyncKey, setInputSyncKey] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
   const [pairSuccess, setPairSuccess] = useState(false);
+  const [mongoStatus, setMongoStatus] = useState<{ connected: boolean; cluster?: string; database?: string } | null>(null);
 
-  // Pre-load Google Identity Services script and auto-fetch backend Client ID
+  // Pre-load Google Identity Services and check MongoDB connection on open
   useEffect(() => {
     if (isSyncModalOpen) {
       GoogleAuthService.loadGoogleScript().catch(err => {
         console.warn('Preloading Google Identity Services script:', err);
       });
-      GoogleAuthService.fetchBackendConfig().then(id => {
-        if (id) setCustomClientId(id);
+      GoogleAuthService.fetchBackendConfig();
+      CloudSyncService.checkMongoDBStatus().then(st => {
+        setMongoStatus(st);
       });
     }
   }, [isSyncModalOpen]);
@@ -89,43 +88,20 @@ export const GoogleSyncModal: React.FC = () => {
     updateProfile(guestUser);
   };
 
-  const handleSaveClientId = () => {
-    Haptics.tap();
-    GoogleAuthService.setClientId(customClientId.trim());
-    setIsSavedClientId(true);
-    setErrorMessage(null);
-    setTimeout(() => setIsSavedClientId(false), 2500);
-  };
-
   const handleGoogleRealSignIn = async () => {
+    Haptics.tap();
     setErrorMessage(null);
-    let clientId = customClientId.trim() || GoogleAuthService.getClientId();
-    if (!clientId) {
-      clientId = await GoogleAuthService.fetchBackendConfig();
-      if (clientId) setCustomClientId(clientId);
-    }
-    if (!clientId) {
-      setErrorMessage(
-        'Google OAuth Client ID is missing. Add it to your Vercel Environment Variables (GOOGLE_CLIENT_ID) or paste it in the field below. You can also click "Connect Demo (Instant)"!'
-      );
-      return;
-    }
-
     setIsAuthenticating(true);
+
     try {
       await GoogleAuthService.initGoogleTokenClient(
-        (token, userPartial) => {
+        (_token: string, updatedProfile: Partial<UserProfile>) => {
           setIsAuthenticating(false);
-          updateProfile({
-            ...userPartial,
-            googleConnected: true,
-            googleAccessToken: token,
-            googleCalendarSyncEnabled: true
-          });
+          updateProfile(updatedProfile);
         },
-        (err) => {
+        (err: any) => {
           setIsAuthenticating(false);
-          setErrorMessage(err?.message || 'Google OAuth Sign-in failed. Check your client ID and origin settings.');
+          setErrorMessage(err?.message || 'Failed to authenticate with Google.');
         }
       );
     } catch (err: any) {
@@ -141,7 +117,7 @@ export const GoogleSyncModal: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `studypulse-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `dstudy-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -179,8 +155,8 @@ export const GoogleSyncModal: React.FC = () => {
               <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Cross-Device Sync</h2>
-              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Synchronize study schedules across Phone and Web</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Cloud Sync & Data</h2>
+              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Cross-device real-time synchronization</p>
             </div>
           </div>
 
@@ -192,7 +168,7 @@ export const GoogleSyncModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Sub tabs */}
+        {/* Sub tabs (Android tab removed) */}
         <div className="flex space-x-1 p-1 rounded-xl bg-slate-200/70 dark:bg-abyss-900/80 border border-ocean-300/30 dark:border-ocean-900/60 text-xs">
           <button
             onClick={() => {
@@ -219,17 +195,6 @@ export const GoogleSyncModal: React.FC = () => {
           <button
             onClick={() => {
               Haptics.tap();
-              setActiveSubTab('android');
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
-              activeSubTab === 'android' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            Android
-          </button>
-          <button
-            onClick={() => {
-              Haptics.tap();
               setActiveSubTab('backup');
             }}
             className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
@@ -246,22 +211,38 @@ export const GoogleSyncModal: React.FC = () => {
             <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p>{errorMessage}</p>
-              {!GoogleAuthService.getClientId() && (
-                <button
-                  onClick={handleDemoSignIn}
-                  className="font-bold text-ocean-600 dark:text-aqua-300 underline block pt-0.5"
-                >
-                  👉 Click here to use the 1-Click Demo Account instead
-                </button>
-              )}
             </div>
           </div>
         )}
 
-        {/* Tab 0: Universal Device Sync */}
+        {/* Tab 1: Universal Device Sync */}
         {activeSubTab === 'devicesync' && (
           <div className="space-y-4">
-            {/* Status Card */}
+            {/* Cloud Sync Live Connection Card */}
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                  <Cloud className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Cloud Sync
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 dark:text-emerald-300/90 mt-0.5 font-medium">
+                    Automatic real-time data sync active
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/30">
+                Connected
+              </span>
+            </div>
+
+            {/* Device Sync Key Card */}
             <div className="p-4 rounded-2xl bg-ocean-500/10 dark:bg-ocean-950/40 border border-ocean-300/40 dark:border-ocean-800/60 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -301,10 +282,10 @@ export const GoogleSyncModal: React.FC = () => {
                     await syncWithCloudNow();
                   }}
                   disabled={cloudSyncStatus === 'syncing'}
-                  className="px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                  className="px-3.5 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 disabled:opacity-50 shadow-md"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${cloudSyncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-                  <span>Sync Now</span>
+                  <span>Sync</span>
                 </button>
               </div>
             </div>
@@ -317,7 +298,7 @@ export const GoogleSyncModal: React.FC = () => {
                   Pair Another Device
                 </h4>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  To sync with your phone, open StudyPulse on your phone, enter this key — or enter your phone's key below to link them.
+                  Enter your phone or laptop&apos;s key below to link both devices immediately.
                 </p>
               </div>
 
@@ -348,7 +329,7 @@ export const GoogleSyncModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 1: Google Account & Calendar */}
+        {/* Tab 2: Clean Google Account & Calendar (Zero Backend OAuth Visible) */}
         {activeSubTab === 'account' && (
           <div className="space-y-4">
             {profile.googleConnected ? (
@@ -405,9 +386,9 @@ export const GoogleSyncModal: React.FC = () => {
                   <Globe className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-200">Connect Google Account</h4>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-200">Sign In with Google</h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
-                    Sync tasks across devices, and auto-schedule study sessions directly into Google Calendar.
+                    Sync tasks across all your devices and schedule sessions into Google Calendar.
                   </p>
                 </div>
 
@@ -417,122 +398,18 @@ export const GoogleSyncModal: React.FC = () => {
                     className="px-4 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all flex items-center justify-center space-x-1.5"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Connect Demo (Instant)</span>
+                    <span>Instant Demo Account</span>
                   </button>
                   <button
                     onClick={handleGoogleRealSignIn}
                     disabled={isAuthenticating}
                     className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-300 dark:border-slate-700 transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50"
                   >
-                    <span>{isAuthenticating ? 'Connecting...' : 'Google OAuth Sign-In'}</span>
+                    <span>{isAuthenticating ? 'Connecting...' : 'Sign in with Google'}</span>
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Backend Auto-Configuration & Google Client ID */}
-            <div className="p-3.5 rounded-xl bg-ocean-500/5 dark:bg-abyss-900/70 border border-ocean-200/50 dark:border-ocean-800/60 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Key className="w-3.5 h-3.5 text-ocean-500 dark:text-aqua-400" />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Backend OAuth Integration
-                  </span>
-                </div>
-                {Boolean(customClientId) ? (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Auto-Configured
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowSetupGuide(!showSetupGuide)}
-                    className="text-[11px] text-ocean-600 dark:text-aqua-400 hover:underline flex items-center space-x-1 font-bold"
-                  >
-                    <HelpCircle className="w-3 h-3" />
-                    <span>{showSetupGuide ? 'Hide Guide' : 'How to get?'}</span>
-                  </button>
-                )}
-              </div>
-
-              {Boolean(customClientId) && (
-                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center space-x-1.5 font-medium">
-                  <span>🌊 Client ID loaded from backend (Vercel / .env). Users do not need to enter it!</span>
-                </div>
-              )}
-
-              {showSetupGuide && (
-                <div className="p-3 rounded-lg bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-900 text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5">
-                  <p className="font-bold text-slate-800 dark:text-slate-300">Quick 2-minute setup in Google Cloud Console:</p>
-                  <ol className="list-decimal list-inside space-y-0.5 pl-1">
-                    <li>Go to <strong className="text-slate-800 dark:text-slate-200">console.cloud.google.com</strong></li>
-                    <li>Create or select a project &gt; Enable <strong>Google Calendar API</strong>.</li>
-                    <li>Under <strong>Credentials</strong> &gt; <strong>Create Credentials</strong> &gt; <strong>OAuth client ID</strong>.</li>
-                    <li>Application type: <strong>Web application</strong>.</li>
-                    <li>Add Authorized JavaScript origins: <code className="text-ocean-600 dark:text-aqua-300 bg-slate-100 dark:bg-slate-900 px-1 rounded font-mono">http://localhost:5173</code> (and your Vercel domain).</li>
-                    <li>Set <code className="text-ocean-600 dark:text-aqua-300 font-mono">GOOGLE_CLIENT_ID</code> in Vercel Environment Variables — no client typing required!</li>
-                  </ol>
-                </div>
-              )}
-
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="e.g. 12345-abcde.apps.googleusercontent.com"
-                  value={customClientId}
-                  onChange={e => setCustomClientId(e.target.value)}
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:border-ocean-500"
-                />
-                <button
-                  onClick={handleSaveClientId}
-                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-300 dark:border-slate-700 flex items-center space-x-1"
-                >
-                  {isSavedClientId ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : null}
-                  <span>{isSavedClientId ? 'Saved' : 'Save ID'}</span>
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Note: All scheduled study tasks also generate 1-click Google Calendar web links to add events straight to your calendar!
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Android App Setup */}
-        {activeSubTab === 'android' && (
-          <div className="space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
-            <div className="p-3.5 rounded-xl bg-ocean-500/10 border border-ocean-500/20 flex items-start space-x-3">
-              <Smartphone className="w-5 h-5 text-ocean-600 dark:text-aqua-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <strong className="text-slate-900 dark:text-slate-100 block mb-1">Dual Android Deployment:</strong>
-                StudyPulse is ready to install as an Android Progressive Web App (PWA) and can also be compiled to a native Android APK via Capacitor.
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="font-bold text-slate-900 dark:text-slate-200 flex items-center space-x-1.5">
-                <span>Method 1: Direct Android Install (PWA)</span>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.2 rounded font-mono font-bold">Recommended</span>
-              </div>
-              <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-400 pl-1 leading-relaxed">
-                <li>Open this app in Chrome on your Android phone.</li>
-                <li>Tap the three dots menu (⋮) in Chrome.</li>
-                <li>Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
-                <li>The app launches standalone with no browser address bar and full offline support.</li>
-              </ol>
-            </div>
-
-            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <div className="font-bold text-slate-900 dark:text-slate-200">
-                Method 2: Native Android Studio APK (Capacitor)
-              </div>
-              <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-abyss-950 font-mono text-[11px] text-ocean-600 dark:text-aqua-300 space-y-1">
-                <div>npx cap add android</div>
-                <div>npm run build</div>
-                <div>npx cap sync</div>
-                <div>npx cap open android</div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -568,10 +445,11 @@ export const GoogleSyncModal: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-end pt-2">
+        {/* Footer */}
+        <div className="pt-2 border-t border-ocean-200/40 dark:border-ocean-900/50 flex justify-end">
           <button
             onClick={() => setIsSyncModalOpen(false)}
-            className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition-colors"
+            className="px-4 py-2 rounded-xl bg-slate-200/80 dark:bg-abyss-card hover:bg-slate-300 dark:hover:bg-abyss-card/80 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
           >
             Close
           </button>

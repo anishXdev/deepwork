@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.studypulse.app',
-  appName: 'StudyPulse',
+  appName: 'dstudy',
   webDir: 'dist',
   server: {
     androidScheme: 'https'

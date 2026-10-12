@@ -1,5 +1,35 @@
 export type TaskStatus = 'todo' | 'in_progress' | 'completed';
 
+export interface SubjectColor {
+  hex: string;
+  name: string;
+}
+
+export const SUBJECT_PALETTE: SubjectColor[] = [
+  { hex: '#0d9488', name: 'Ocean Teal' },
+  { hex: '#06b6d4', name: 'Aqua Cyan' },
+  { hex: '#0284c7', name: 'Sky Wave' },
+  { hex: '#3b82f6', name: 'Cobalt Blue' },
+  { hex: '#6366f1', name: 'Indigo' },
+  { hex: '#8b5cf6', name: 'Electric Violet' },
+  { hex: '#a855f7', name: 'Bright Purple' },
+  { hex: '#d946ef', name: 'Neon Fuchsia' },
+  { hex: '#ec4899', name: 'Rose Quartz' },
+  { hex: '#f43f5e', name: 'Coral Pink' },
+  { hex: '#ef4444', name: 'Ruby Crimson' },
+  { hex: '#f97316', name: 'Deep Orange' },
+  { hex: '#f59e0b', name: 'Solar Amber' },
+  { hex: '#eab308', name: 'Golden Sun' },
+  { hex: '#84cc16', name: 'Lime Green' },
+  { hex: '#10b981', name: 'Emerald Gem' },
+  { hex: '#14b8a6', name: 'Turquoise' },
+  { hex: '#0f766e', name: 'Dark Teal' },
+  { hex: '#64748b', name: 'Steel Slate' },
+  { hex: '#fb7185', name: 'Watermelon' },
+];
+
+export const PRESET_COLORS = SUBJECT_PALETTE.map(c => c.hex);
+
 export interface Subject {
   id: string;
   name: string;
@@ -65,6 +95,8 @@ export interface UserSettings {
   weekStartsOnMonday: boolean;
   theme: 'dark' | 'light';
 }
+
+export type AppSettings = UserSettings;
 
 export interface StreakData {
   currentStreak: number;

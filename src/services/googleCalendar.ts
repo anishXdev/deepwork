@@ -18,7 +18,7 @@ export const GoogleCalendarService = {
       `Subject: ${subject ? subject.name : 'General'}\n` +
       `Estimated Hours: ${topic.approxHours} hrs\n` +
       `Notes: ${topic.notes || 'None'}\n\n` +
-      `Scheduled via StudyPulse App`
+      `Scheduled via dstudy App`
     );
 
     // Calculate start and end times
@@ -76,7 +76,7 @@ export const GoogleCalendarService = {
 
       const eventBody = {
         summary: `[Study] ${subject ? subject.name + ': ' : ''}${topic.name}`,
-        description: `Subject: ${subject?.name || 'General'}\nEstimated: ${topic.approxHours} hrs\n${topic.notes || ''}\nScheduled via StudyPulse`,
+        description: `Subject: ${subject?.name || 'General'}\nEstimated: ${topic.approxHours} hrs\n${topic.notes || ''}\nScheduled via dstudy`,
         start: {
           dateTime: startDate.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone

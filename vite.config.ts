@@ -52,9 +52,22 @@ export default defineConfig(({ mode }) => {
             }));
           });
 
-          // Cross-device Cloud Sync Dev Middleware
+          // Cross-device Cloud Sync Dev Middleware powered by MongoDB Atlas
           const devSyncStore = new Map();
-          server.middlewares.use('/api/sync', (req, res) => {
+          const mongoUri = env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+          let devMongoClient: any = null;
+
+          const getDevCollection = async () => {
+            if (!devMongoClient) {
+              const { MongoClient } = await import('mongodb');
+              devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 5000 });
+              await devMongoClient.connect();
+              console.log('[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.user_data)');
+            }
+            return devMongoClient.db('studypulse').collection('user_data');
+          };
+
+          server.middlewares.use('/api/sync', async (req, res) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -68,6 +81,26 @@ export default defineConfig(({ mode }) => {
 
             const url = new URL(req.url || '', 'http://localhost');
             const key = url.searchParams.get('key');
+            const status = url.searchParams.get('status');
+
+            if (status === '1') {
+              try {
+                const col = await getDevCollection();
+                const count = await col.countDocuments();
+                res.statusCode = 200;
+                res.end(JSON.stringify({
+                  connected: true,
+                  cluster: 'cluster0.pmmziei.mongodb.net',
+                  database: 'studypulse',
+                  collection: 'user_data',
+                  totalUsers: count
+                }));
+              } catch (err: any) {
+                res.statusCode = 200;
+                res.end(JSON.stringify({ connected: false, error: err?.message, fallbackMode: true }));
+              }
+              return;
+            }
 
             if (req.method === 'GET') {
               if (!key) {
@@ -75,6 +108,19 @@ export default defineConfig(({ mode }) => {
                 res.end(JSON.stringify({ error: 'Missing key parameter' }));
                 return;
               }
+
+              try {
+                const col = await getDevCollection();
+                const doc = await col.findOne({ _id: key });
+                if (doc && doc.data) {
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({ found: true, data: doc.data, updatedAt: doc.updatedAt, storage: 'mongodb' }));
+                  return;
+                }
+              } catch (err: any) {
+                console.warn('[StudyPulse Dev] MongoDB query fallback:', err?.message);
+              }
+
               const payload = devSyncStore.get(key);
               if (!payload) {
                 res.statusCode = 200;
@@ -82,14 +128,14 @@ export default defineConfig(({ mode }) => {
                 return;
               }
               res.statusCode = 200;
-              res.end(JSON.stringify({ found: true, data: payload.data, updatedAt: payload.updatedAt }));
+              res.end(JSON.stringify({ found: true, data: payload.data, updatedAt: payload.updatedAt, storage: 'memory' }));
               return;
             }
 
             if (req.method === 'POST') {
               let body = '';
               req.on('data', chunk => { body += chunk; });
-              req.on('end', () => {
+              req.on('end', async () => {
                 try {
                   const parsed = JSON.parse(body || '{}');
                   const targetKey = parsed.key || key;
@@ -99,9 +145,25 @@ export default defineConfig(({ mode }) => {
                     return;
                   }
                   const updatedAt = new Date().toISOString();
-                  devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
-                  res.statusCode = 200;
-                  res.end(JSON.stringify({ success: true, updatedAt }));
+
+                  try {
+                    const col = await getDevCollection();
+                    await col.updateOne(
+                      { _id: targetKey },
+                      { $set: { data: parsed.data, updatedAt } },
+                      { upsert: true }
+                    );
+                    devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({ success: true, storage: 'mongodb', updatedAt }));
+                    return;
+                  } catch (err: any) {
+                    console.warn('[StudyPulse Dev] MongoDB save fallback:', err?.message);
+                    devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({ success: true, storage: 'fallback', updatedAt, warning: err?.message }));
+                    return;
+                  }
                 } catch (e) {
                   res.statusCode = 400;
                   res.end(JSON.stringify({ error: 'Invalid JSON' }));

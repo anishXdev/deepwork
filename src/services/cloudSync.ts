@@ -140,6 +140,19 @@ export const CloudSyncService = {
   },
 
   /**
+   * Checks live MongoDB connection status
+   */
+  async checkMongoDBStatus(): Promise<{ connected: boolean; cluster?: string; database?: string; totalUsers?: number; error?: string }> {
+    try {
+      const res = await fetch('/api/sync?status=1');
+      if (!res.ok) return { connected: false, error: `HTTP ${res.status}` };
+      return await res.json();
+    } catch (e: any) {
+      return { connected: false, error: e?.message || 'Network unreachable' };
+    }
+  },
+
+  /**
    * Imports data from a JSON file
    */
   async importFromFile(file: File): Promise<boolean> {

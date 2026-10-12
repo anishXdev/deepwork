@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
               Flow Interrupted
             </h2>
             <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-              StudyPulse caught an unexpected ripple. Don't worry, your progress is safely preserved.
+              dstudy caught an unexpected ripple. Don't worry, your progress is safely preserved.
             </p>
 
             {this.state.error && (

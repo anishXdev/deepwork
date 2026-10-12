@@ -23,6 +23,7 @@ export const MobileFab: React.FC = () => {
       {/* Expanded Quick Action Items */}
       {isOpen && (
         <div className="flex flex-col items-end gap-2.5 mb-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
+
           {/* Quick Add Topic */}
           <button
             onClick={() => handleAction(() => openAddTopicModal())}

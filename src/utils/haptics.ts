@@ -40,5 +40,31 @@ export const Haptics = {
     } catch {
       // Ignore
     }
+  },
+
+  /**
+   * Notification alert pattern
+   */
+  notification() {
+    try {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([20, 50, 20]);
+      }
+    } catch {
+      // Ignore
+    }
+  },
+
+  /**
+   * Selection tick (8ms)
+   */
+  selection() {
+    try {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(8);
+      }
+    } catch {
+      // Ignore
+    }
   }
 };

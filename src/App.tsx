@@ -10,8 +10,15 @@ import { RescheduleModal } from './components/RescheduleModal';
 import { GoogleSyncModal } from './components/GoogleSyncModal';
 import { CreateSubjectModal } from './components/CreateSubjectModal';
 import { StreakModal } from './components/StreakModal';
+import { AuthModal } from './components/AuthModal';
+import { InteractiveTourCoach } from './components/InteractiveTourCoach';
+import { TaskCelebrationOverlay } from './components/TaskCelebrationOverlay';
+import { StrictFocusOverlay } from './components/StrictFocusOverlay';
+import { ToastContainer } from './components/ToastContainer';
 import { MobileFab } from './components/MobileFab';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Haptics } from './utils/haptics';
 
 const MainContent: React.FC = () => {
   const { activeTab, isStreakModalOpen, closeStreakModal } = useApp();
@@ -34,12 +41,20 @@ const MainContent: React.FC = () => {
         {/* Global Floating Action Button for Mobile */}
         <MobileFab />
 
-        {/* Global Modals */}
+        {/* Mobile Bottom Navigation Bar (Independent viewport-anchored) */}
+        <MobileBottomNav />
+
+        {/* Global Modals & Overlays */}
         <TopicModal />
         <RescheduleModal />
         <GoogleSyncModal />
         <CreateSubjectModal />
+        <AuthModal />
+        <InteractiveTourCoach />
+        <TaskCelebrationOverlay />
         <StreakModal isOpen={isStreakModalOpen} onClose={closeStreakModal} />
+        <StrictFocusOverlay />
+        <ToastContainer />
       </div>
     </main>
   );

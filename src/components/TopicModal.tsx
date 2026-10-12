@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { X, BookOpen, AlertCircle } from 'lucide-react';
+import { X, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
 
 export const TopicModal: React.FC = () => {
   const { 
@@ -10,7 +10,9 @@ export const TopicModal: React.FC = () => {
     topicModalDefaultDate, 
     subjects, 
     addTopic,
-    openCreateSubjectModal
+    openCreateSubjectModal,
+    isTourOpen,
+    tourStep
   } = useApp();
 
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
@@ -97,6 +99,15 @@ export const TopicModal: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Step 1 Guided Action Highlight Banner */}
+            {isTourOpen && tourStep === 1 && (
+              <div className="p-3 rounded-2xl bg-teal-500/15 border border-teal-400/40 text-teal-300 text-xs flex items-center space-x-2.5 animate-pulse shadow-md shadow-teal-500/10">
+                <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
+                <span className="font-medium leading-snug">
+                  <strong className="text-white font-bold">Step 1 of 3:</strong> Enter what you want to study, choose estimated hours, and tap <strong className="text-teal-300 font-bold">Save Topic</strong>!
+                </span>
+              </div>
+            )}
             
             {/* Subject Selector */}
             <div>

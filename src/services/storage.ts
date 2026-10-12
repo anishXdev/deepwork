@@ -66,85 +66,14 @@ export function getInitialStarterData() {
     }
   ];
 
-  const topics: Topic[] = [
-    {
-      id: 'top_1',
-      subjectId: 'sub_1',
-      name: 'Pipelining & Branch Hazards',
-      approxHours: 2.0,
-      scheduledDate: todayStr,
-      scheduledTime: '10:00',
-      completedHours: 0.8,
-      status: 'in_progress',
-      notes: 'Review classic 5-stage MIPS pipeline and forwarding paths.',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'top_2',
-      subjectId: 'sub_2',
-      name: 'Dijkstra & A* Shortest Path',
-      approxHours: 1.5,
-      scheduledDate: todayStr,
-      scheduledTime: '14:30',
-      completedHours: 0,
-      status: 'todo',
-      notes: 'Implement priority queue based adjacency list solver.',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'top_3',
-      subjectId: 'sub_3',
-      name: 'ACID Transactions & Two-Phase Locking',
-      approxHours: 2.5,
-      scheduledDate: tomorrowStr,
-      scheduledTime: '11:00',
-      completedHours: 0,
-      status: 'todo',
-      notes: 'Concurrency control anomalies and strict 2PL.',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  ];
-
-  // Seed yesterday & earlier today sessions for realistic streak & weekly progress
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-  const sessions: StudySession[] = [
-    {
-      id: 'sess_1',
-      subjectId: 'sub_1',
-      topicId: 'top_1',
-      startTime: `${todayStr}T09:00:00.000Z`,
-      endTime: `${todayStr}T09:48:00.000Z`,
-      durationMinutes: 48,
-      durationHours: 0.8,
-      mode: 'pomodoro',
-      completed: true
-    },
-    {
-      id: 'sess_2',
-      subjectId: 'sub_2',
-      startTime: `${yesterdayStr}T15:00:00.000Z`,
-      endTime: `${yesterdayStr}T17:00:00.000Z`,
-      durationMinutes: 120,
-      durationHours: 2.0,
-      mode: 'pomodoro',
-      completed: true
-    }
-  ];
+  const topics: Topic[] = [];
+  const sessions: StudySession[] = [];
 
   const streakData: StreakData = {
-    currentStreak: 3,
-    longestStreak: 7,
-    lastActiveDate: todayStr,
-    activityHistory: {
-      [todayStr]: 0.8,
-      [yesterdayStr]: 2.0
-    }
+    currentStreak: 0,
+    longestStreak: 0,
+    lastActiveDate: null,
+    activityHistory: {}
   };
 
   return { subjects, topics, sessions, streakData };
@@ -161,6 +90,18 @@ export const StorageService = {
       this.saveStreaks(init.streakData);
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     }
+  },
+
+  resetToCleanSlate() {
+    this.saveTopics([]);
+    this.saveSessions([]);
+    this.saveStreaks({
+      currentStreak: 0,
+      longestStreak: 0,
+      lastActiveDate: null,
+      activityHistory: {}
+    });
+    localStorage.removeItem('dstudy_interactive_tour_completed');
   },
 
   getSubjects(): Subject[] {

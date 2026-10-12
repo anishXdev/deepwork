@@ -18,6 +18,8 @@ import { GoogleCalendarService } from '../services/googleCalendar';
 import { GoogleAuthService } from '../services/googleAuth';
 import { CloudSyncService } from '../services/cloudSync';
 import { sound } from '../services/audio';
+import { Notifications } from '../services/notifications';
+import { Haptics } from '../utils/haptics';
 
 interface AppContextType {
   subjects: Subject[];
@@ -35,6 +37,30 @@ interface AppContextType {
   isSyncModalOpen: boolean;
   isCreateSubjectModalOpen: boolean;
   isStreakModalOpen: boolean;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  isTourOpen: boolean;
+  setIsTourOpen: (open: boolean) => void;
+  tourStep: 1 | 2 | 3;
+  setTourStep: (step: 1 | 2 | 3) => void;
+  nextTourStep: () => void;
+  completeTour: () => void;
+  celebrationTask: { name: string; quote: string } | null;
+  setCelebrationTask: (val: { name: string; quote: string } | null) => void;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
+
+  setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
+  setTopics: React.Dispatch<React.SetStateAction<Topic[]>>;
+  setSessions: React.Dispatch<React.SetStateAction<StudySession[]>>;
+  setStreaks: React.Dispatch<React.SetStateAction<StreakData>>;
+
+  // Strict Focus Mode (Distraction Lockdown)
+  isStrictFocusActive: boolean;
+  distractionCount: number;
+  enableStrictFocus: () => void;
+  disableStrictFocus: () => void;
+  incrementDistractionCount: () => void;
 
   // Persistent Global Focus Timer
   timerMode: TimerMode;
@@ -226,19 +252,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsTimerRunning(false);
     sound.playCompletionChime();
 
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(timerMode === 'work' ? "Focus Session Complete! 🌊" : "Break Concluded! ⏰", {
-          body: timerMode === 'work' 
-            ? "Splendid flow session! Time for a refreshing break." 
-            : "Break is over. Ready to dive back into focus?",
-          icon: "/icon.svg"
-        });
-      } catch {}
+    if (isStrictFocusActive) {
+      setIsStrictFocusActive(false);
     }
 
     if (timerMode === 'work') {
       const completedMins = Math.max(1, Math.round(getModeDuration('work') / 60));
+      const topicName = topics.find(t => t.id === timerSelectedTopicId)?.name;
+      Notifications.notifyFocusComplete(topicName, completedMins);
+
       logStudySession(
         timerSelectedSubjectId || (subjects[0]?.id || ''),
         timerSelectedTopicId || undefined,
@@ -248,6 +270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStudiedSecondsInSession(0);
       switchTimerMode('break');
     } else {
+      Notifications.notifyBreakComplete();
       switchTimerMode('work');
     }
   };
@@ -275,14 +298,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Real-Time Delta Loop & Visibility/Focus Sync
   useEffect(() => {
     if (!isTimerRunning) {
-      document.title = 'StudyPulse 🌊 Focus & Flow';
+      document.title = 'dstudy — Minimalist Focus & Deep Flow';
       return;
     }
 
     const updateTitle = (secs: number) => {
       const mins = Math.floor(secs / 60);
       const remainingSecs = secs % 60;
-      document.title = `(${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}) 🌊 StudyPulse`;
+      document.title = `(${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}) 🌊 dstudy`;
     };
 
     updateTitle(timeLeft);
@@ -349,6 +372,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isCreateSubjectModalOpen, setIsCreateSubjectModalOpen] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => {
+    // Auto popup on website load if user has not yet authenticated
+    const hasAuth = localStorage.getItem('dstudy_has_authenticated');
+    return !hasAuth;
+  });
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState<1 | 2 | 3>(1);
+  const [celebrationTask, setCelebrationTask] = useState<{ name: string; quote: string } | null>(null);
+
+  const openAuthModal = () => setIsAuthModalOpen(true);
+  const closeAuthModal = () => setIsAuthModalOpen(false);
+
+  const nextTourStep = () => {
+    if (tourStep === 1) {
+      setTourStep(2);
+      setActiveTab('timer');
+    } else if (tourStep === 2) {
+      setTourStep(3);
+      setActiveTab('analytics');
+    } else {
+      completeTour();
+    }
+  };
+
+  const completeTour = () => {
+    localStorage.setItem('dstudy_interactive_tour_completed', 'true');
+    setIsTourOpen(false);
+    setTourStep(1);
+    setActiveTab('study');
+    confetti({
+      particleCount: 75,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  };
+
+  // Strict Focus Mode state
+  const [isStrictFocusActive, setIsStrictFocusActive] = useState(false);
+  const [distractionCount, setDistractionCount] = useState(0);
+
+  const enableStrictFocus = () => {
+    setIsStrictFocusActive(true);
+    setDistractionCount(0);
+    startTimer();
+  };
+
+  const disableStrictFocus = () => {
+    setIsStrictFocusActive(false);
+  };
+
+  const incrementDistractionCount = () => {
+    setDistractionCount(prev => prev + 1);
+  };
 
   // Cloud Sync state
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('idle');
@@ -475,6 +551,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setTopics(prev => [newTopic, ...prev]);
+
+    // If in interactive tour step 1, advance to step 2
+    if (isTourOpen && tourStep === 1) {
+      setTimeout(() => {
+        setTourStep(2);
+        setActiveTab('timer');
+      }, 700);
+    }
+
     return newTopic;
   };
 
@@ -497,11 +582,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (t.id !== id) return t;
         const newStatus: TaskStatus = t.status === 'completed' ? 'todo' : 'completed';
         if (newStatus === 'completed') {
+          // Multi-stage confetti celebration
           confetti({
-            particleCount: 60,
-            spread: 60,
-            origin: { y: 0.8 }
+            particleCount: 85,
+            spread: 75,
+            origin: { y: 0.65 },
+            colors: ['#0d9488', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6']
           });
+          setTimeout(() => {
+            confetti({
+              particleCount: 45,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0.1, y: 0.7 }
+            });
+            confetti({
+              particleCount: 45,
+              angle: 120,
+              spread: 55,
+              origin: { x: 0.9, y: 0.7 }
+            });
+          }, 180);
+
+          sound.playCompletionChime();
+          Haptics.success();
+
+          const quotes = [
+            "Outstanding focus! Every conquered task strengthens your momentum.",
+            "Brilliant discipline! You showed up, focused, and delivered today.",
+            "Goal crushed! Mastery is built one completed topic at a time.",
+            "Victory in the books! Your streak and determination are unstoppable.",
+            "Superb dedication! Consistency is your ultimate superpower."
+          ];
+          const chosenQuote = quotes[Math.floor(Math.random() * quotes.length)];
+          setCelebrationTask({ name: t.name, quote: chosenQuote });
+          Notifications.toast('success', `🎉 "${t.name}" completed! ${chosenQuote}`, 4000);
         }
         return {
           ...t,
@@ -639,6 +754,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsStreakModalOpen(false);
   };
 
+
+
   const resetStreak = (keepLongest = true) => {
     const updated = StorageService.resetStreak(keepLongest);
     setStreaks(updated);
@@ -709,6 +826,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSyncModalOpen,
         isCreateSubjectModalOpen,
         isStreakModalOpen,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        isTourOpen,
+        setIsTourOpen,
+        tourStep,
+        setTourStep,
+        nextTourStep,
+        completeTour,
+        celebrationTask,
+        setCelebrationTask,
+        openAuthModal,
+        closeAuthModal,
+        setProfile,
+        setTopics,
+        setSessions,
+        setStreaks,
+        // Strict Focus Mode
+        isStrictFocusActive,
+        distractionCount,
+        enableStrictFocus,
+        disableStrictFocus,
+        incrementDistractionCount,
         // Persistent Global Focus Timer
         timerMode,
         timeLeft,

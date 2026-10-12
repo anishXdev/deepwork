@@ -1,23 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { BookOpen, X, Check } from 'lucide-react';
-
-const PRESET_COLORS = [
-  '#0d9488', // Ocean Teal
-  '#06b6d4', // Aqua Cyan
-  '#14b8a6', // Turquoise
-  '#0ea5e9', // Sky Flow
-  '#10b981', // Emerald Wave
-  '#f59e0b', // Sun Gold
-  '#f43f5e', // Coral Reef
-  '#8b5cf6', // Deep Violet
-];
+import { SUBJECT_PALETTE } from '../types';
 
 export const CreateSubjectModal: React.FC = () => {
   const { isCreateSubjectModalOpen, closeCreateSubjectModal, addSubject } = useApp();
 
   const [name, setName] = useState('');
-  const [color, setColor] = useState(PRESET_COLORS[0]);
+  const [color, setColor] = useState(SUBJECT_PALETTE[0].hex);
   const [weeklyTargetHours, setWeeklyTargetHours] = useState(5);
 
   if (!isCreateSubjectModalOpen) return null;
@@ -91,21 +81,29 @@ export const CreateSubjectModal: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-              Color Tag
-            </label>
-            <div className="flex items-center space-x-2.5">
-              {PRESET_COLORS.map(c => (
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Color Tag (20 Palette Options)
+              </label>
+              <span className="text-[11px] font-mono text-ocean-600 dark:text-aqua-300 font-bold">
+                {SUBJECT_PALETTE.find(p => p.hex === color)?.name || color}
+              </span>
+            </div>
+            <div className="grid grid-cols-10 gap-2 p-2.5 rounded-xl bg-white/50 dark:bg-black/30 border border-ocean-200/40 dark:border-ocean-900/50">
+              {SUBJECT_PALETTE.map(c => (
                 <button
-                  key={c}
+                  key={c.hex}
                   type="button"
-                  onClick={() => setColor(c)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                    color === c ? 'scale-125 ring-2 ring-ocean-500 ring-offset-2 dark:ring-offset-abyss-950' : 'hover:scale-110 opacity-75 hover:opacity-100'
+                  title={c.name}
+                  onClick={() => setColor(c.hex)}
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all ${
+                    color === c.hex 
+                      ? 'scale-125 ring-2 ring-white shadow-lg' 
+                      : 'hover:scale-110 opacity-75 hover:opacity-100'
                   }`}
-                  style={{ backgroundColor: c }}
+                  style={{ backgroundColor: c.hex }}
                 >
-                  {color === c && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                  {color === c.hex && <Check className="w-3.5 h-3.5 text-white stroke-[3] drop-shadow-md" />}
                 </button>
               ))}
             </div>

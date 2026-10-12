@@ -11,7 +11,8 @@ import {
   Minimize2, 
   Waves,
   Coffee,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
@@ -35,7 +36,10 @@ export const PomodoroTimer: React.FC = () => {
     resetTimer,
     switchTimerMode,
     addFiveMinutes,
-    manualCompleteAndLog
+    manualCompleteAndLog,
+    enableStrictFocus,
+    isTourOpen,
+    tourStep
   } = useApp();
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -63,11 +67,23 @@ export const PomodoroTimer: React.FC = () => {
       isFullscreen ? 'fixed inset-0 z-50 bg-[#030a12] flex flex-col justify-center' : ''
     }`}>
       
-      {/* Fullscreen Button */}
-      <div className="flex justify-end mb-3">
+      {/* Header Bar: Strict Focus Lockdown & Fullscreen */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => {
+            Haptics.notification();
+            enableStrictFocus();
+          }}
+          className="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all active:scale-95 shadow-sm cursor-pointer"
+          title="Strict Focus: Fullscreen immersion lockdown, blocks tab switching, alerts on distraction"
+        >
+          <Lock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+          <span>Strict Focus Lockdown</span>
+        </button>
+
         <button
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="p-2.5 rounded-2xl glass-card text-slate-500 hover:text-teal-400 transition-colors"
+          className="p-2 sm:p-2.5 rounded-2xl glass-card text-slate-500 hover:text-teal-400 transition-colors"
           title={isFullscreen ? 'Exit Fullscreen' : '3D Fluid Immersion Mode'}
         >
           {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
@@ -185,10 +201,14 @@ export const PomodoroTimer: React.FC = () => {
 
         <button
           onClick={() => (isTimerRunning ? pauseTimer() : startTimer())}
-          className={`px-8 py-3.5 rounded-2xl text-white font-extrabold text-base flex items-center space-x-2 shadow-xl transition-all active:scale-95 ${
+          className={`px-8 py-3.5 rounded-2xl text-white font-extrabold text-base flex items-center space-x-2 shadow-xl transition-all active:scale-95 cursor-pointer ${
             isTimerRunning
               ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
               : 'liquid-btn'
+          } ${
+            isTourOpen && tourStep === 2 && !isTimerRunning
+              ? 'ring-4 ring-teal-400/90 ring-offset-2 ring-offset-[#020b14] animate-pulse shadow-2xl shadow-teal-400/50'
+              : ''
           }`}
         >
           {isTimerRunning ? (
