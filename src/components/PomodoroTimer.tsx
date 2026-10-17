@@ -35,6 +35,7 @@ export const PomodoroTimer: React.FC = () => {
     pauseTimer,
     resetTimer,
     switchTimerMode,
+    setCustomTimerMinutes,
     addFiveMinutes,
     manualCompleteAndLog,
     enableStrictFocus,
@@ -62,6 +63,15 @@ export const PomodoroTimer: React.FC = () => {
   const availableTopics = topics.filter(t => t.subjectId === timerSelectedSubjectId);
   const currentTopic = topics.find(t => t.id === timerSelectedTopicId);
 
+  const isGatePrep = Boolean(settings.isGatePrep);
+
+  const gateTimerPresets = [
+    { mins: 25, label: '🍅 25m Concept', desc: 'Pomodoro' },
+    { mins: 45, label: '📝 45m PYQ Sprint', desc: '15–20 PYQs' },
+    { mins: 90, label: '🧪 90m Subject Test', desc: '30 Questions' },
+    { mins: 180, label: '🏆 180m Full GATE Mock', desc: '65 Qs • 100 Marks' }
+  ];
+
   return (
     <div className={`max-w-2xl mx-auto px-4 py-6 pb-28 relative z-10 ${
       isFullscreen ? 'fixed inset-0 z-50 bg-[#030a12] flex flex-col justify-center' : ''
@@ -78,7 +88,7 @@ export const PomodoroTimer: React.FC = () => {
           title="Strict Focus: Fullscreen immersion lockdown, blocks tab switching, alerts on distraction"
         >
           <Lock className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
-          <span>Strict Focus Lockdown</span>
+          <span>{isGatePrep ? 'Strict CBT Exam Lockdown' : 'Strict Focus Lockdown'}</span>
         </button>
 
         <button
@@ -91,7 +101,7 @@ export const PomodoroTimer: React.FC = () => {
       </div>
 
       {/* Mode Switcher Tabs (Fluid Pills) */}
-      <div className="flex items-center justify-center space-x-2 mb-8">
+      <div className="flex flex-col items-center space-y-2.5 mb-7">
         <div className="p-1 rounded-2xl glass-panel flex items-center space-x-1 shadow-md">
           <button
             onClick={() => switchTimerMode('work')}
@@ -102,7 +112,7 @@ export const PomodoroTimer: React.FC = () => {
             }`}
           >
             <Waves className="w-3.5 h-3.5" />
-            <span>Focus 25m</span>
+            <span>Focus {settings.pomodoroWorkMinutes}m</span>
           </button>
           <button
             onClick={() => switchTimerMode('break')}
@@ -127,6 +137,33 @@ export const PomodoroTimer: React.FC = () => {
             <span>Break 15m</span>
           </button>
         </div>
+
+        {/* GATE Exam & Sprint Duration Presets (Only in GATE mode) */}
+        {isGatePrep && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {gateTimerPresets.map(preset => {
+              const isSelected = timerMode === 'work' && settings.pomodoroWorkMinutes === preset.mins;
+              return (
+                <button
+                  key={preset.mins}
+                  type="button"
+                  onClick={() => {
+                    Haptics.tap();
+                    setCustomTimerMinutes(preset.mins);
+                  }}
+                  title={preset.desc}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer border ${
+                    isSelected
+                      ? 'bg-teal-500/20 text-teal-600 dark:text-teal-200 border-teal-400/60 shadow-sm scale-105'
+                      : 'bg-white/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-teal-500/20 hover:border-teal-400/40 hover:text-teal-400'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 3D Liquid Sphere Vessel Timer */}

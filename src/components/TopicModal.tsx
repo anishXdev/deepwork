@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
+import { GateTaskCategory, GATE_TASK_CATEGORIES } from '../types';
 import { X, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
 
 export const TopicModal: React.FC = () => {
@@ -9,13 +10,16 @@ export const TopicModal: React.FC = () => {
     closeTopicModal, 
     topicModalDefaultDate, 
     subjects, 
+    settings,
     addTopic,
     openCreateSubjectModal,
     isTourOpen,
     tourStep
   } = useApp();
 
+  const isGatePrep = Boolean(settings.isGatePrep);
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
+  const [category, setCategory] = useState<GateTaskCategory>('pyq');
   const [name, setName] = useState<string>('');
   const [approxHours, setApproxHours] = useState<number>(1.5);
   const [scheduledDate, setScheduledDate] = useState<string>(
@@ -27,15 +31,19 @@ export const TopicModal: React.FC = () => {
 
   if (!isTopicModalOpen) return null;
 
+  const selectedSubject = subjects.find(s => s.id === (subjectId || subjects[0]?.id));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !subjectId) return;
+    const targetSubId = subjectId || subjects[0]?.id;
+    if (!name.trim() || !targetSubId) return;
 
     setIsSubmitting(true);
     try {
       await addTopic({
-        subjectId,
+        subjectId: targetSubId,
         name: name.trim(),
+        category: isGatePrep ? category : undefined,
         approxHours: Number(approxHours) || 1,
         scheduledDate,
         scheduledTime,
@@ -70,8 +78,12 @@ export const TopicModal: React.FC = () => {
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Add Study Topic</h2>
-              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Queue a new topic or task</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                {isGatePrep ? 'Add GATE Study Task' : 'Add Study Topic'}
+              </h2>
+              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">
+                {isGatePrep ? 'Queue a concept, PYQ drill, mock test, or revision' : 'Queue a new topic or task'}
+              </p>
             </div>
           </div>
 
@@ -104,8 +116,37 @@ export const TopicModal: React.FC = () => {
               <div className="p-3 rounded-2xl bg-teal-500/15 border border-teal-400/40 text-teal-300 text-xs flex items-center space-x-2.5 animate-pulse shadow-md shadow-teal-500/10">
                 <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
                 <span className="font-medium leading-snug">
-                  <strong className="text-white font-bold">Step 1 of 3:</strong> Enter what you want to study, choose estimated hours, and tap <strong className="text-teal-300 font-bold">Save Topic</strong>!
+                  <strong className="text-white font-bold">Step 1 of 3:</strong> Enter what you want to study, choose estimated hours, and tap <strong className="text-teal-300 font-bold">Add Topic</strong>!
                 </span>
+              </div>
+            )}
+
+            {/* GATE Task Type Pills (Only in GATE Prep Mode) */}
+            {isGatePrep && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Prep Mode
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(GATE_TASK_CATEGORIES) as GateTaskCategory[]).map(catKey => {
+                    const cat = GATE_TASK_CATEGORIES[catKey];
+                    const isSelected = category === catKey;
+                    return (
+                      <button
+                        key={catKey}
+                        type="button"
+                        onClick={() => setCategory(catKey)}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                          isSelected
+                            ? `${cat.bgClass} shadow-sm scale-105`
+                            : 'bg-slate-100 dark:bg-abyss-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-ocean-900/60 hover:border-teal-500/40'
+                        }`}
+                      >
+                        {cat.emoji} {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
             
@@ -124,19 +165,19 @@ export const TopicModal: React.FC = () => {
                 </button>
               </div>
               <select
-                value={subjectId}
+                value={subjectId || subjects[0]?.id || ''}
                 onChange={e => setSubjectId(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:outline-none focus:border-ocean-500"
               >
                 {subjects.map(sub => (
                   <option key={sub.id} value={sub.id}>
-                    {sub.name}
+                    {sub.name}{isGatePrep && sub.examWeightageMarks ? ` — 🎯 ${sub.examWeightageMarks} Marks` : ''}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Topic Name */}
+            {/* Topic Name + High-Yield GATE Topic Suggestions */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                 Topic Title
@@ -145,11 +186,26 @@ export const TopicModal: React.FC = () => {
                 type="text"
                 required
                 autoFocus
-                placeholder="e.g. Dynamic Programming: Longest Common Subsequence"
+                placeholder={isGatePrep ? "e.g. Dynamic Programming + 25 Last-10-Year PYQs" : "e.g. Dynamic Programming: Longest Common Subsequence"}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-ocean-500"
               />
+              {isGatePrep && selectedSubject?.highYieldTopics && selectedSubject.highYieldTopics.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] font-mono text-slate-400">High-Yield GATE Topics:</span>
+                  {selectedSubject.highYieldTopics.map(hy => (
+                    <button
+                      key={hy}
+                      type="button"
+                      onClick={() => setName(`${hy} (${GATE_TASK_CATEGORIES[category].label})`)}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/25 transition-colors cursor-pointer"
+                    >
+                      + {hy}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Approx hours & When to study */}

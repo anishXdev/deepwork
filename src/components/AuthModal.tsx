@@ -1,20 +1,17 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { GoogleAuthService } from '../services/googleAuth';
-import { StorageService } from '../services/storage';
+import { StorageService, getGateStarterSubjects, getSimpleStarterSubjects } from '../services/storage';
 import { DStudyLogo } from './DStudyLogo';
 import { 
   X, 
-  Sparkles, 
-  Calendar, 
   Cloud, 
-  ShieldCheck, 
   Loader2, 
   User, 
-  ArrowRight,
   Flame,
-  CheckCircle2,
-  Lock
+  Lock,
+  GraduationCap,
+  BookOpen
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
@@ -25,14 +22,18 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen, 
     profile, 
     setProfile,
+    setSubjects,
     setTopics,
     setSessions,
     setStreaks,
+    settings,
+    setStudyMode,
     setIsTourOpen
   } = useApp();
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [selectedGatePrep, setSelectedGatePrep] = useState<boolean>(Boolean(settings.isGatePrep));
 
   if (!isAuthModalOpen) return null;
 
@@ -41,7 +42,8 @@ export const AuthModal: React.FC = () => {
     const isFirstTime = !localStorage.getItem('dstudy_has_authenticated');
     if (isFirstTime) {
       // Clean slate: no fake tasks, no fake streaks for a new user
-      StorageService.resetToCleanSlate();
+      StorageService.resetToCleanSlate(selectedGatePrep);
+      setSubjects(selectedGatePrep ? getGateStarterSubjects('CSE') : getSimpleStarterSubjects());
       setTopics([]);
       setSessions([]);
       setStreaks({
@@ -53,6 +55,7 @@ export const AuthModal: React.FC = () => {
       localStorage.setItem('dstudy_has_authenticated', 'true');
     }
 
+    setStudyMode(selectedGatePrep, settings.gateTargetStream || 'CSE');
     setProfile(newProfile);
     StorageService.saveProfile(newProfile);
     setIsLoading(false);
@@ -110,7 +113,7 @@ export const AuthModal: React.FC = () => {
     const guestProfile = {
       ...profile,
       id: profile.id || 'guest_' + Date.now(),
-      name: 'Focus Scholar',
+      name: selectedGatePrep ? 'GATE Aspirant' : 'Focus Scholar',
       email: 'scholar@dstudy.app',
       googleConnected: false,
       googleCalendarSyncEnabled: false
@@ -121,7 +124,7 @@ export const AuthModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
       <div 
-        className="w-full max-w-md rounded-3xl border border-teal-500/35 bg-[#030a12]/95 backdrop-blur-2xl shadow-2xl p-6 sm:p-8 flex flex-col text-center relative overflow-hidden"
+        className="w-full max-w-md rounded-3xl border border-teal-500/35 bg-[#030a12]/95 backdrop-blur-2xl shadow-2xl p-6 sm:p-7 flex flex-col text-center relative overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Ambient Top Glow */}
@@ -131,6 +134,7 @@ export const AuthModal: React.FC = () => {
         <button
           onClick={() => {
             Haptics.tap();
+            setStudyMode(selectedGatePrep, settings.gateTargetStream || 'CSE');
             setIsAuthModalOpen(false);
           }}
           className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
@@ -140,16 +144,66 @@ export const AuthModal: React.FC = () => {
         </button>
 
         {/* Brand Logo & Name */}
-        <div className="flex flex-col items-center justify-center mt-2 mb-4">
-          <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/30 mb-3 shadow-lg shadow-teal-500/15">
-            <DStudyLogo size={42} showText={false} />
+        <div className="flex flex-col items-center justify-center mt-1 mb-4">
+          <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/30 mb-2.5 shadow-lg shadow-teal-500/15">
+            <DStudyLogo size={38} showText={false} />
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-1.5">
             <span>Sign In / Sign Up</span>
           </h2>
-          <p className="text-xs text-teal-300/80 mt-1 max-w-xs leading-relaxed">
+          <p className="text-xs text-teal-300/80 mt-0.5 max-w-xs leading-relaxed">
             Minimalist Focus, Curriculum Planning & Deep Work Flow
           </p>
+        </div>
+
+        {/* Study Mode Selector: Simple Mode vs GATE Prep Mode */}
+        <div className="mb-4 text-left">
+          <label className="block text-[10px] font-mono uppercase tracking-wider text-teal-300/90 font-bold mb-1.5 text-center">
+            Choose Your Workspace Mode
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                Haptics.tap();
+                setSelectedGatePrep(false);
+              }}
+              className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                !selectedGatePrep
+                  ? 'bg-teal-500/20 border-teal-400 text-white shadow-md shadow-teal-500/10'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center space-x-1.5 mb-1">
+                <BookOpen className={`w-4 h-4 ${!selectedGatePrep ? 'text-teal-400' : 'text-slate-500'}`} />
+                <span className="text-xs font-extrabold">Simple Study</span>
+              </div>
+              <p className="text-[10px] opacity-80 leading-snug">
+                Clean general planner, custom subjects & exam countdown
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                Haptics.tap();
+                setSelectedGatePrep(true);
+              }}
+              className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                selectedGatePrep
+                  ? 'bg-amber-500/20 border-amber-400 text-white shadow-md shadow-amber-500/10'
+                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center space-x-1.5 mb-1">
+                <GraduationCap className={`w-4 h-4 ${selectedGatePrep ? 'text-amber-400' : 'text-slate-500'}`} />
+                <span className="text-xs font-extrabold">GATE Exam Prep</span>
+              </div>
+              <p className="text-[10px] opacity-80 leading-snug">
+                GATE syllabus weightages, PYQ drills & 3h CBT mock timer
+              </p>
+            </button>
+          </div>
         </div>
 
         {/* Error Notification */}
@@ -160,7 +214,7 @@ export const AuthModal: React.FC = () => {
         )}
 
         {/* Primary Action: Google Sign In Button */}
-        <div className="space-y-3 my-2">
+        <div className="space-y-2.5 my-1">
           <button
             onClick={handleGoogleSignIn}
             disabled={isLoading}
@@ -204,12 +258,12 @@ export const AuthModal: React.FC = () => {
             className="w-full py-3 px-4 rounded-2xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-teal-300 font-bold text-xs flex items-center justify-center space-x-2 transition-all active:scale-[0.98] cursor-pointer"
           >
             <User className="w-4 h-4" />
-            <span>Continue as Guest (Start Fresh Account)</span>
+            <span>Continue as Guest ({selectedGatePrep ? 'GATE Mode' : 'Simple Mode'})</span>
           </button>
         </div>
 
         {/* Feature Highlights Grid */}
-        <div className="mt-5 pt-4 border-t border-teal-500/20 grid grid-cols-3 gap-2 text-left">
+        <div className="mt-4 pt-3.5 border-t border-teal-500/20 grid grid-cols-3 gap-2 text-left">
           <div className="p-2 rounded-xl bg-slate-900/60 border border-teal-500/20">
             <Cloud className="w-4 h-4 text-teal-400 mb-1" />
             <span className="block text-[11px] font-bold text-white leading-tight">Instant Cloud Sync</span>
@@ -229,8 +283,8 @@ export const AuthModal: React.FC = () => {
           </div>
         </div>
 
-        <p className="text-[10px] text-slate-500 mt-4">
-          By signing in, you start with a clean slate (0 streaks, your personal tasks) and an interactive guided tour of all features.
+        <p className="text-[10px] text-slate-500 mt-3">
+          You can switch between Simple Study and GATE Prep mode or set your Exam Date anytime from the dashboard.
         </p>
       </div>
     </div>

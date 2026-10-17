@@ -10,9 +10,10 @@ import {
   TaskStatus, 
   CloudSyncStatus,
   TimerMode,
-  AmbientSoundType
+  AmbientSoundType,
+  GATE_STREAM_SYLLABUS
 } from '../types';
-import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE } from '../services/storage';
+import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
 import { GoogleCalendarService } from '../services/googleCalendar';
 import { GoogleAuthService } from '../services/googleAuth';
@@ -50,6 +51,7 @@ interface AppContextType {
   openAuthModal: () => void;
   closeAuthModal: () => void;
 
+  setSubjects: React.Dispatch<React.SetStateAction<Subject[]>>;
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
   setTopics: React.Dispatch<React.SetStateAction<Topic[]>>;
   setSessions: React.Dispatch<React.SetStateAction<StudySession[]>>;
@@ -77,6 +79,7 @@ interface AppContextType {
   pauseTimer: () => void;
   resetTimer: () => void;
   switchTimerMode: (mode: TimerMode) => void;
+  setCustomTimerMinutes: (minutes: number) => void;
   addFiveMinutes: () => void;
   manualCompleteAndLog: () => void;
 
@@ -105,7 +108,9 @@ interface AppContextType {
   setManualStreak: (current: number, longest?: number) => void;
   clearAllPresetData: () => void;
 
-  addSubject: (name: string, color: string, weeklyTargetHours?: number) => Subject;
+  addSubject: (name: string, color: string, weeklyTargetHours?: number, examWeightageMarks?: number, highYieldTopics?: string[]) => Subject;
+  loadGateStreamSyllabus: (streamKey: string, replaceExisting?: boolean) => void;
+  setStudyMode: (isGate: boolean, streamKey?: string) => void;
   deleteSubject: (id: string) => void;
   addTopic: (topicData: Omit<Topic, 'id' | 'completedHours' | 'createdAt' | 'updatedAt'>) => Promise<Topic>;
   updateTopic: (id: string, updates: Partial<Topic>) => void;
@@ -230,6 +235,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsTimerRunning(false);
     setTimerMode(newMode);
     const dur = getModeDuration(newMode);
+    setTimeLeft(dur);
+    sessionStorage.setItem('studypulse_timer_timeleft', dur.toString());
+  };
+
+  const setCustomTimerMinutes = (minutes: number) => {
+    targetEndTimeRef.current = null;
+    sessionStorage.removeItem('studypulse_timer_target');
+    setIsTimerRunning(false);
+    setTimerMode('work');
+    setSettings(prev => ({ ...prev, pomodoroWorkMinutes: minutes }));
+    const dur = minutes * 60;
     setTimeLeft(dur);
     sessionStorage.setItem('studypulse_timer_timeleft', dur.toString());
   };
@@ -496,16 +512,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     CloudSyncService.scheduleDebouncedPush();
   }, [streaks]);
 
-  const addSubject = (name: string, color: string, weeklyTargetHours = 5): Subject => {
+  // Sync default starter subjects with isGatePrep mode when user has 0 topics
+  useEffect(() => {
+    if (topics.length === 0) {
+      const isCurrentlyGateStarter = subjects.length > 0 && subjects.every(s => s.id.startsWith('sub_gate_'));
+      const isCurrentlySimpleStarter =
+        subjects.length === 3 &&
+        subjects[0]?.id === 'sub_1' &&
+        subjects[1]?.id === 'sub_2' &&
+        subjects[2]?.id === 'sub_3';
+
+      if (settings.isGatePrep && isCurrentlySimpleStarter) {
+        setSubjects(getGateStarterSubjects(settings.gateTargetStream || 'CSE'));
+      } else if (!settings.isGatePrep && isCurrentlyGateStarter) {
+        setSubjects(getSimpleStarterSubjects());
+      }
+    }
+  }, [settings.isGatePrep]);
+
+  const setStudyMode = (isGate: boolean, streamKey = 'CSE') => {
+    setSettings(prev => ({
+      ...prev,
+      isGatePrep: isGate,
+      gateTargetStream: isGate ? streamKey : prev.gateTargetStream,
+      gateExamDate: isGate && !prev.gateExamDate ? '2027-02-06' : prev.gateExamDate,
+      weeklyHoursTarget: isGate ? 28 : 20
+    }));
+
+    if (topics.length === 0) {
+      setSubjects(isGate ? getGateStarterSubjects(streamKey) : getSimpleStarterSubjects());
+    } else if (isGate) {
+      loadGateStreamSyllabus(streamKey, false);
+    }
+
+    Notifications.toast(
+      'info',
+      isGate
+        ? `🎓 Switched to GATE ${streamKey} Preparation Mode!`
+        : '📚 Switched to Standard Simple Study Mode!'
+    );
+  };
+
+  const addSubject = (
+    name: string,
+    color: string,
+    weeklyTargetHours = 5,
+    examWeightageMarks?: number,
+    highYieldTopics?: string[]
+  ): Subject => {
     const newSubject: Subject = {
       id: 'sub_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       name: name.trim(),
       color,
       weeklyTargetHours,
+      examWeightageMarks,
+      highYieldTopics,
       createdAt: new Date().toISOString()
     };
     setSubjects(prev => [...prev, newSubject]);
     return newSubject;
+  };
+
+  const loadGateStreamSyllabus = (streamKey: string, replaceExisting = false) => {
+    const stream = GATE_STREAM_SYLLABUS[streamKey];
+    if (!stream) return;
+
+    setSettings(prev => ({ ...prev, isGatePrep: true, gateTargetStream: streamKey }));
+
+    setSubjects(prev => {
+      const base = replaceExisting ? [] : [...prev];
+      const existingNames = new Set(base.map(s => s.name.toLowerCase()));
+      const newSubjects: Subject[] = [];
+
+      stream.subjects.forEach((preset, idx) => {
+        if (!existingNames.has(preset.name.toLowerCase())) {
+          newSubjects.push({
+            id: `sub_gate_${streamKey.toLowerCase()}_${Date.now()}_${idx}`,
+            name: preset.name,
+            color: preset.color,
+            weeklyTargetHours: preset.weeklyTargetHours,
+            examWeightageMarks: preset.examWeightageMarks,
+            highYieldTopics: preset.highYieldTopics,
+            createdAt: new Date().toISOString()
+          });
+        }
+      });
+
+      const merged = [...base, ...newSubjects];
+      Notifications.toast(
+        'success',
+        `🎯 Loaded ${stream.label} syllabus (${merged.length} subjects ready)!`
+      );
+      return merged;
+    });
   };
 
   const deleteSubject = (id: string) => {
@@ -838,6 +937,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCelebrationTask,
         openAuthModal,
         closeAuthModal,
+        setSubjects,
         setProfile,
         setTopics,
         setSessions,
@@ -863,6 +963,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         pauseTimer,
         resetTimer,
         switchTimerMode,
+        setCustomTimerMinutes,
         addFiveMinutes,
         manualCompleteAndLog,
         // Cloud Sync
@@ -886,6 +987,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setManualStreak,
         clearAllPresetData,
         addSubject,
+        loadGateStreamSyllabus,
+        setStudyMode,
         deleteSubject,
         addTopic,
         updateTopic,

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
 import { SmartRecommendationBanner } from './SmartRecommendationBanner';
-import { Topic, Subject } from '../types';
+import { Topic, Subject, GateTaskCategory, GATE_TASK_CATEGORIES } from '../types';
 import { 
   Play, 
   Clock, 
@@ -24,6 +24,7 @@ export const TodayTomorrowView: React.FC = () => {
   const { 
     topics, 
     subjects, 
+    settings,
     toggleTopicCompletion, 
     setActiveFocusTopic, 
     setActiveTab, 
@@ -35,14 +36,17 @@ export const TodayTomorrowView: React.FC = () => {
     addSubject
   } = useApp();
 
+  const isGatePrep = Boolean(settings.isGatePrep);
   const [activeFilter, setActiveFilter] = useState<PendingFilter>('today');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<GateTaskCategory | 'all'>('all');
 
   // Instant Quick-Add Task State
   const [quickTitle, setQuickTitle] = useState('');
   const [quickSubjectId, setQuickSubjectId] = useState(subjects[0]?.id || '');
+  const [quickCategory, setQuickCategory] = useState<GateTaskCategory>('pyq');
   const [quickDate, setQuickDate] = useState<'today' | 'tomorrow'>('today');
-  const [quickHours, setQuickHours] = useState<number>(1);
+  const [quickHours, setQuickHours] = useState<number>(1.5);
   const [isQuickAddingSubject, setIsQuickAddingSubject] = useState(false);
   const [quickNewSubjectName, setQuickNewSubjectName] = useState('');
   const [quickAddSuccess, setQuickAddSuccess] = useState(false);
@@ -69,6 +73,7 @@ export const TodayTomorrowView: React.FC = () => {
     await addTopic({
       name: quickTitle.trim(),
       subjectId: targetSubjectId,
+      category: quickCategory,
       approxHours: quickHours,
       scheduledDate,
       scheduledTime: quickDate === 'today' ? '10:00' : '09:00',
@@ -79,6 +84,14 @@ export const TodayTomorrowView: React.FC = () => {
     setQuickTitle('');
     setQuickAddSuccess(true);
     setTimeout(() => setQuickAddSuccess(false), 2000);
+  };
+
+  const applyGateTemplate = (label: string, cat: GateTaskCategory, hours: number) => {
+    const activeSub = subjects.find(s => s.id === (quickSubjectId || subjects[0]?.id));
+    const subShort = activeSub ? activeSub.name.split('(')[0].split('&')[0].trim() : 'GATE';
+    setQuickTitle(`${subShort}: ${label}`);
+    setQuickCategory(cat);
+    setQuickHours(hours);
   };
 
   const handleQuickCreateSubject = (e: React.FormEvent) => {
@@ -98,7 +111,7 @@ export const TodayTomorrowView: React.FC = () => {
   const tomorrowPendingTopics = topics.filter(t => t.scheduledDate === tomorrowStr && t.status !== 'completed');
   const completedTopics = topics.filter(t => t.status === 'completed');
 
-  // Filter topics based on active tab and optional subject filter
+  // Filter topics based on active tab and optional subject/category filter
   let displayTopics: Topic[] = [];
   if (activeFilter === 'today') {
     displayTopics = todayPendingTopics;
@@ -112,6 +125,10 @@ export const TodayTomorrowView: React.FC = () => {
 
   if (selectedSubjectFilter !== 'all') {
     displayTopics = displayTopics.filter(t => t.subjectId === selectedSubjectFilter);
+  }
+
+  if (selectedCategoryFilter !== 'all') {
+    displayTopics = displayTopics.filter(t => (t.category || 'concept') === selectedCategoryFilter);
   }
 
   const getSubject = (subjectId: string): Subject | undefined => {
@@ -171,7 +188,7 @@ export const TodayTomorrowView: React.FC = () => {
             <div className="relative flex-1">
               <input
                 type="text"
-                placeholder="⚡ Quick add topic or task... (e.g. Read Chapter 4)"
+                placeholder={isGatePrep ? "⚡ Quick add GATE topic, PYQ drill, or mock test..." : "⚡ Quick add topic or task... (e.g. Read Chapter 4)"}
                 value={quickTitle}
                 onChange={e => setQuickTitle(e.target.value)}
                 className="w-full pl-3 pr-20 py-2 rounded-xl bg-white/70 dark:bg-black/40 border border-teal-500/30 text-xs font-semibold text-slate-800 dark:text-slate-100 placeholder-teal-600/50 dark:placeholder-teal-400/40 focus:outline-none focus:border-teal-400"
@@ -193,8 +210,68 @@ export const TodayTomorrowView: React.FC = () => {
             </button>
           </div>
 
+          {/* 1-Click GATE Quick-Add Templates & Category Pills (Only in GATE Prep Mode) */}
+          {isGatePrep && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+              {/* GATE Task Category Selector Pills */}
+              <div className="flex flex-wrap items-center gap-1">
+                {(Object.keys(GATE_TASK_CATEGORIES) as GateTaskCategory[]).map(catKey => {
+                  const cat = GATE_TASK_CATEGORIES[catKey];
+                  const isSelected = quickCategory === catKey;
+                  return (
+                    <button
+                      key={catKey}
+                      type="button"
+                      onClick={() => setQuickCategory(catKey)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                        isSelected
+                          ? `${cat.bgClass} shadow-sm scale-105`
+                          : 'bg-white/40 dark:bg-black/20 text-slate-500 dark:text-slate-400 border-transparent hover:border-teal-500/30'
+                      }`}
+                    >
+                      {cat.emoji} {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 1-Click GATE Quick Templates */}
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[10px] font-mono text-slate-400 mr-0.5 hidden sm:inline">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => applyGateTemplate('Solve 25 Last-10-Yr PYQs', 'pyq', 1.5)}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/25 transition-colors cursor-pointer"
+                >
+                  + 25 PYQs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyGateTemplate('Subject-Wise Test + Mistake Analysis', 'mock', 1.5)}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/25 transition-colors cursor-pointer"
+                >
+                  + Subject Mock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyGateTemplate('Full-Length 65-Q GATE Mock Test', 'mock', 3)}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/25 transition-colors cursor-pointer"
+                >
+                  + Full 3h Mock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyGateTemplate('Short Notes & Formula Revision', 'revision', 1)}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/25 transition-colors cursor-pointer"
+                >
+                  + Formula Rev
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Quick Selectors: Subject, Timing, Hours */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+          <div className={`flex flex-wrap items-center justify-between gap-2 pt-1 text-xs ${isGatePrep ? 'border-t border-teal-500/15' : ''}`}>
             <div className="flex flex-wrap items-center gap-1.5">
               {/* Subject selector */}
               {isQuickAddingSubject ? (
@@ -245,7 +322,7 @@ export const TodayTomorrowView: React.FC = () => {
                   >
                     {subjects.map(s => (
                       <option key={s.id} value={s.id}>
-                        {s.name}
+                        {s.name}{isGatePrep && s.examWeightageMarks ? ` (${s.examWeightageMarks}M)` : ''}
                       </option>
                     ))}
                     <option value="__new__">+ New Subject...</option>
@@ -277,7 +354,7 @@ export const TodayTomorrowView: React.FC = () => {
 
               {/* Hour Pills */}
               <div className="flex items-center space-x-1">
-                {[0.5, 1, 2, 3].map(h => (
+                {[0.5, 1, 1.5, 2, 3].map(h => (
                   <button
                     key={h}
                     type="button"
@@ -376,9 +453,24 @@ export const TodayTomorrowView: React.FC = () => {
           </button>
         </div>
 
-        {/* Optional Subject Filter Dropdown */}
-        {subjects.length > 0 && (
-          <div className="flex items-center space-x-2">
+        {/* Optional Category & Subject Filter Dropdowns */}
+        <div className="flex flex-wrap items-center gap-2">
+          {isGatePrep && (
+            <select
+              value={selectedCategoryFilter}
+              onChange={e => setSelectedCategoryFilter(e.target.value as GateTaskCategory | 'all')}
+              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-ocean-500 font-bold"
+            >
+              <option value="all">🎯 All Prep Types</option>
+              {(Object.keys(GATE_TASK_CATEGORIES) as GateTaskCategory[]).map(catKey => (
+                <option key={catKey} value={catKey}>
+                  {GATE_TASK_CATEGORIES[catKey].emoji} {GATE_TASK_CATEGORIES[catKey].label}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {subjects.length > 0 && (
             <select
               value={selectedSubjectFilter}
               onChange={e => setSelectedSubjectFilter(e.target.value)}
@@ -391,8 +483,8 @@ export const TodayTomorrowView: React.FC = () => {
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Main Study Topics List */}
@@ -408,7 +500,7 @@ export const TodayTomorrowView: React.FC = () => {
             {activeFilter === 'completed' && 'No completed topics yet.'}
           </h3>
           <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm max-w-sm mx-auto mb-5 leading-relaxed">
-            {activeFilter === 'today' && 'Add a new topic or plan ahead for tomorrow.'}
+            {activeFilter === 'today' && (isGatePrep ? 'Queue a PYQ sprint, concept study, or mock test above.' : 'Add a new topic or plan ahead for tomorrow.')}
             {activeFilter === 'tomorrow' && 'Schedule topics for tomorrow to hit the ground running.'}
             {activeFilter === 'all' && 'Add your curriculum topics to begin studying.'}
             {activeFilter === 'completed' && 'Complete study sessions to fill your achievements.'}
@@ -437,6 +529,7 @@ export const TodayTomorrowView: React.FC = () => {
             const progressPercent = topic.approxHours > 0 
               ? Math.min(100, Math.round((topic.completedHours / topic.approxHours) * 100)) 
               : 0;
+            const catMeta = GATE_TASK_CATEGORIES[topic.category || 'concept'];
 
             return (
               <div
@@ -471,6 +564,13 @@ export const TodayTomorrowView: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       {/* Top Badges */}
                       <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                        {isGatePrep && catMeta && (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${catMeta.bgClass}`}>
+                            <span>{catMeta.emoji}</span>
+                            <span>{catMeta.label}</span>
+                          </span>
+                        )}
+
                         {subject && (
                           <span 
                             className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border font-sans"
@@ -485,6 +585,7 @@ export const TodayTomorrowView: React.FC = () => {
                               style={{ backgroundColor: subject.color }} 
                             />
                             {subject.name}
+                            {isGatePrep && subject.examWeightageMarks ? ` (${subject.examWeightageMarks}M)` : ''}
                           </span>
                         )}
 

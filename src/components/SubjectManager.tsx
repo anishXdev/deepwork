@@ -1,33 +1,35 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Topic } from '../types';
+import { AnalyticsService } from '../services/analytics';
+import { Topic, SUBJECT_PALETTE, GATE_STREAM_SYLLABUS, GATE_TASK_CATEGORIES } from '../types';
 import { 
   BookOpen, 
   Plus, 
   Trash2, 
-  Clock, 
-  Calendar, 
   Play, 
-  CalendarClock, 
   ChevronDown, 
   ChevronRight,
   ExternalLink,
-  Check
+  Check,
+  GraduationCap,
+  Sparkles
 } from 'lucide-react';
-import { SUBJECT_PALETTE } from '../types';
 
 export const SubjectManager: React.FC = () => {
   const { 
     subjects, 
     topics, 
     sessions, 
+    settings,
     addSubject, 
     deleteSubject, 
     openAddTopicModal, 
     openRescheduleModal, 
     setActiveFocusTopic, 
     setActiveTab,
-    deleteTopic
+    deleteTopic,
+    addTopic,
+    loadGateStreamSyllabus
   } = useApp();
 
   const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(subjects[0]?.id || null);
@@ -35,6 +37,7 @@ export const SubjectManager: React.FC = () => {
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectColor, setNewSubjectColor] = useState(SUBJECT_PALETTE[0].hex);
   const [newSubjectWeeklyTarget, setNewSubjectWeeklyTarget] = useState(5);
+  const [queuedTopicFlash, setQueuedTopicFlash] = useState<string | null>(null);
 
   const handleCreateSubject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +47,23 @@ export const SubjectManager: React.FC = () => {
     setNewSubjectName('');
     setIsCreatingSubject(false);
     setExpandedSubjectId(created.id);
+  };
+
+  const handleQuickQueueHighYield = async (subjectId: string, topicTitle: string, isPyq: boolean) => {
+    const todayStr = AnalyticsService.getTodayDateString();
+    const fullTitle = isPyq ? `${topicTitle} — 25 PYQ Drill` : `${topicTitle} — Concept & Notes`;
+    await addTopic({
+      subjectId,
+      name: fullTitle,
+      category: isPyq ? 'pyq' : 'concept',
+      approxHours: 1.5,
+      scheduledDate: todayStr,
+      scheduledTime: '10:00',
+      status: 'todo',
+      notes: 'High-yield GATE syllabus topic'
+    });
+    setQueuedTopicFlash(`${subjectId}:${topicTitle}`);
+    setTimeout(() => setQueuedTopicFlash(null), 1800);
   };
 
   const getSubjectHours = (subjectId: string) => {
@@ -57,29 +77,81 @@ export const SubjectManager: React.FC = () => {
     setActiveTab('timer');
   };
 
+  const isGatePrep = Boolean(settings.isGatePrep);
+  const totalSyllabusMarks = subjects.reduce((acc, s) => acc + (s.examWeightageMarks || 0), 0);
+
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-28 space-y-6">
       
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-ocean-600 dark:text-aqua-400" />
-            <span>Curriculum Domains</span>
+            <span>{isGatePrep ? 'GATE Syllabus & Weightages' : 'Curriculum Domains'}</span>
           </h1>
           <p className="text-xs text-ocean-700/80 dark:text-ocean-300/80 mt-0.5">
-            Manage your study subjects, target hours, and nested topics.
+            {isGatePrep
+              ? `Track official GATE subjects, mark weightages${totalSyllabusMarks > 0 ? ` (${totalSyllabusMarks}/100 Marks mapped)` : ''}, and high-yield topics.`
+              : 'Manage your study subjects, target hours, and nested topics.'}
           </p>
         </div>
 
         <button
           onClick={() => setIsCreatingSubject(true)}
-          className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
+          className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Subject</span>
+          <span>{isGatePrep ? '+ Custom Subject' : '+ Subject'}</span>
         </button>
       </div>
+
+      {/* 1-Click Official GATE Stream Syllabus Preset Bar (Only in GATE Prep Mode) */}
+      {isGatePrep && (
+        <div className="glass-card rounded-2xl p-3.5 sm:p-4 border border-teal-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-500/30">
+              <GraduationCap className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                Official GATE Stream Syllabus Presets
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Load complete subject weightages (100 Marks) & high-yield topics in 1 click
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {Object.entries(GATE_STREAM_SYLLABUS).map(([streamKey, streamData]) => {
+              const isActiveStream = (settings.gateTargetStream || 'CSE') === streamKey;
+              return (
+                <button
+                  key={streamKey}
+                  type="button"
+                  onClick={() => {
+                    if (topics.length > 0) {
+                      if (confirm(`Switch to ${streamData.label} syllabus? Click OK to replace default subjects, or Cancel.`)) {
+                        loadGateStreamSyllabus(streamKey, true);
+                      }
+                    } else {
+                      loadGateStreamSyllabus(streamKey, true);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    isActiveStream
+                      ? 'bg-teal-500 text-white border-teal-400 shadow-sm'
+                      : 'bg-white/70 dark:bg-slate-900/70 text-slate-700 dark:text-slate-300 border-teal-500/25 hover:border-teal-400'
+                  }`}
+                >
+                  🎓 {streamData.label.replace('GATE ', '')}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Create Subject Card */}
       {isCreatingSubject && (
@@ -106,14 +178,14 @@ export const SubjectManager: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder="e.g. Distributed Systems, Machine Learning..."
+                placeholder="e.g. Compiler Design, Discrete Mathematics..."
                 value={newSubjectName}
                 onChange={e => setNewSubjectName(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-ocean-500 font-medium"
               />
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className="text-[10px] text-slate-400">Quick suggestions:</span>
-                {['DBMS', 'Machine Learning', 'Mathematics', 'Computer Networks', 'Operating Systems', 'System Design'].map(name => (
+                {['DBMS', 'Compiler Design', 'Engineering Mathematics', 'Computer Networks', 'Operating Systems', 'General Aptitude'].map(name => (
                   <button
                     key={name}
                     type="button"
@@ -195,13 +267,13 @@ export const SubjectManager: React.FC = () => {
           <BookOpen className="w-10 h-10 text-ocean-400 mx-auto mb-3" />
           <h3 className="text-slate-800 dark:text-slate-200 font-bold mb-1">No subjects created yet</h3>
           <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">
-            Add your subjects to organize topics, hours, and schedules.
+            Load an official GATE syllabus above or create your own subject.
           </p>
           <button
-            onClick={() => setIsCreatingSubject(true)}
+            onClick={() => loadGateStreamSyllabus('CSE', true)}
             className="px-4 py-2 rounded-xl liquid-btn text-white text-xs font-bold"
           >
-            + Create First Subject
+            🎓 Load GATE CS & IT Syllabus
           </button>
         </div>
       ) : (
@@ -228,22 +300,27 @@ export const SubjectManager: React.FC = () => {
                       style={{ backgroundColor: subject.color }}
                     />
                     <div className="min-w-0">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
                           {subject.name}
                         </h3>
+                        {isGatePrep && subject.examWeightageMarks && (
+                          <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            🎯 {subject.examWeightageMarks} Marks
+                          </span>
+                        )}
                         <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
-                          {subjectTopics.length} topics
+                          {subjectTopics.length} tasks
                         </span>
                       </div>
                       <div className="flex items-center space-x-2.5 text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
                         <span>⏱️ <strong className="text-ocean-600 dark:text-aqua-400">{hoursInvested}h</strong> invested</span>
                         <span>•</span>
-                        <span>✓ {completedTopicsCount}/{subjectTopics.length}</span>
+                        <span>✓ {completedTopicsCount}/{subjectTopics.length} done</span>
                         {subject.weeklyTargetHours && (
                           <>
                             <span>•</span>
-                            <span>🎯 {subject.weeklyTargetHours}h/wk</span>
+                            <span>📅 {subject.weeklyTargetHours}h/wk goal</span>
                           </>
                         )}
                       </div>
@@ -259,7 +336,7 @@ export const SubjectManager: React.FC = () => {
                       className="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-abyss-950 hover:bg-ocean-500/10 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-ocean-200/50 dark:border-ocean-900/60 transition-colors"
                     >
                       <Plus className="w-3 h-3" />
-                      <span>Topic</span>
+                      <span>Task</span>
                     </button>
 
                     <button
@@ -287,48 +364,99 @@ export const SubjectManager: React.FC = () => {
 
                 {/* Expanded Topics Container */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t border-ocean-200/40 dark:border-ocean-900/50 bg-slate-50/40 dark:bg-abyss-950/40">
-                    <div className="flex items-center justify-between mb-3 pt-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80">
-                        Topics
-                      </span>
-                      <button
-                        onClick={() => openAddTopicModal()}
-                        className="text-xs font-bold text-ocean-600 dark:text-aqua-400 hover:underline flex items-center gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>+ Add Topic</span>
-                      </button>
-                    </div>
+                  <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-2 border-t border-ocean-200/40 dark:border-ocean-900/50 bg-slate-50/40 dark:bg-abyss-950/40 space-y-4">
+                    
+                    {/* High-Yield GATE Topics 1-Click Queue Chips (Only in GATE mode) */}
+                    {isGatePrep && subject.highYieldTopics && subject.highYieldTopics.length > 0 && (
+                      <div className="p-3 rounded-xl bg-white/60 dark:bg-slate-900/60 border border-teal-500/20">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-teal-600 dark:text-teal-300 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            <span>High-Yield GATE Topics (Click to Queue for Today)</span>
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {subject.highYieldTopics.map(hy => {
+                            const isFlashed = queuedTopicFlash === `${subject.id}:${hy}`;
+                            return (
+                              <div key={hy} className="inline-flex items-center rounded-lg bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 overflow-hidden text-[11px]">
+                                <span className="px-2 py-1 font-semibold text-slate-700 dark:text-slate-200">
+                                  {hy}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickQueueHighYield(subject.id, hy, false)}
+                                  title="Queue Concept Study for Today"
+                                  className="px-1.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-700 dark:text-cyan-300 font-bold border-l border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                                >
+                                  +📖
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickQueueHighYield(subject.id, hy, true)}
+                                  title="Queue 25-PYQ Drill for Today"
+                                  className="px-1.5 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 font-bold border-l border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                                >
+                                  {isFlashed ? '✓ Queued' : '+📝 PYQ'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
-                    {subjectTopics.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic py-2">
-                        No topics under this subject yet. Click "+ Add Topic" to plan what to study.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {subjectTopics.map(topic => (
-                          <div
-                            key={topic.id}
-                            className="p-3 rounded-xl bg-white/70 dark:bg-abyss-card/80 border border-ocean-200/40 dark:border-ocean-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center space-x-2">
-                                <span className={`w-2 h-2 rounded-full ${topic.status === 'completed' ? 'bg-emerald-500' : 'bg-ocean-500'}`} />
-                                <span className={`text-xs sm:text-sm font-semibold ${topic.status === 'completed' ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>
-                                  {topic.name}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                                <span className="flex items-center">
-                                  ⏱️ {topic.approxHours}h (Done: {topic.completedHours}h)
-                                </span>
-                                <span>•</span>
-                                <span className="flex items-center">
-                                  📅 {topic.scheduledDate} {topic.scheduledTime ? `@ ${topic.scheduledTime}` : ''}
-                                </span>
-                              </div>
-                            </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80">
+                          Queued & Completed Tasks ({subjectTopics.length})
+                        </span>
+                        <button
+                          onClick={() => openAddTopicModal()}
+                          className="text-xs font-bold text-ocean-600 dark:text-aqua-400 hover:underline flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Custom Task</span>
+                        </button>
+                      </div>
+
+                      {subjectTopics.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic py-2">
+                          {isGatePrep
+                            ? 'No tasks queued for this subject yet. Tap any High-Yield topic above (+📖 or +📝 PYQ) to queue it for today!'
+                            : 'No tasks queued for this subject yet. Click "+ Custom Task" to add one.'}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {subjectTopics.map(topic => {
+                            const catMeta = GATE_TASK_CATEGORIES[topic.category || 'concept'];
+                            return (
+                              <div
+                                key={topic.id}
+                                className="p-3 rounded-xl bg-white/70 dark:bg-abyss-card/80 border border-ocean-200/40 dark:border-ocean-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${topic.status === 'completed' ? 'bg-emerald-500' : 'bg-ocean-500'}`} />
+                                    {isGatePrep && catMeta && (
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${catMeta.bgClass}`}>
+                                        {catMeta.emoji} {catMeta.label}
+                                      </span>
+                                    )}
+                                    <span className={`text-xs sm:text-sm font-semibold ${topic.status === 'completed' ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>
+                                      {topic.name}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                    <span className="flex items-center">
+                                      ⏱️ {topic.approxHours}h (Done: {topic.completedHours}h)
+                                    </span>
+                                    <span>•</span>
+                                    <span className="flex items-center">
+                                      📅 {topic.scheduledDate} {topic.scheduledTime ? `@ ${topic.scheduledTime}` : ''}
+                                    </span>
+                                  </div>
+                                </div>
 
                             <div className="flex items-center space-x-1.5 self-end sm:self-center">
                               {topic.gcalLink && (
@@ -363,9 +491,11 @@ export const SubjectManager: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData } from '../types';
+import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, GATE_STREAM_SYLLABUS } from '../types';
 
 const STORAGE_KEYS = {
   SUBJECTS: 'studypulse_subjects',
@@ -21,50 +21,65 @@ export const DEFAULT_SETTINGS: UserSettings = {
   soundEnabled: true,
   ambientSound: 'none',
   weekStartsOnMonday: true,
-  theme: 'dark'
+  theme: 'dark',
+  isGatePrep: false,
+  examName: '',
+  gateExamDate: '',
+  gateTargetStream: 'CSE',
+  gateTargetAir: 'AIR < 100'
 };
 
 export const DEFAULT_PROFILE: UserProfile = {
   id: 'user_default',
   name: 'Focus Scholar',
-  email: 'learner@example.com',
+  email: 'scholar@dstudy.app',
   googleConnected: false,
   googleCalendarSyncEnabled: true,
   syncKey: ''
 };
 
-// Seed realistic starter data if app is opened for the first time
-export function getInitialStarterData() {
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-  const subjects: Subject[] = [
+export function getSimpleStarterSubjects(): Subject[] {
+  return [
     {
       id: 'sub_1',
-      name: 'Computer Architecture',
-      color: '#0d9488', // Ocean Teal
+      name: 'Core Subjects',
+      color: '#0d9488',
       weeklyTargetHours: 8,
       createdAt: new Date().toISOString()
     },
     {
       id: 'sub_2',
-      name: 'Algorithms & Data Structures',
-      color: '#38bdf8', // Sky
-      weeklyTargetHours: 7,
+      name: 'Problem Solving & Practice',
+      color: '#06b6d4',
+      weeklyTargetHours: 6,
       createdAt: new Date().toISOString()
     },
     {
       id: 'sub_3',
-      name: 'Database Systems',
-      color: '#10b981', // Emerald
-      weeklyTargetHours: 5,
+      name: 'Revision & Notes',
+      color: '#8b5cf6',
+      weeklyTargetHours: 6,
       createdAt: new Date().toISOString()
     }
   ];
+}
+
+export function getGateStarterSubjects(streamKey = 'CSE'): Subject[] {
+  const stream = GATE_STREAM_SYLLABUS[streamKey] || GATE_STREAM_SYLLABUS.CSE;
+  return stream.subjects.map((preset, idx) => ({
+    id: `sub_gate_${idx + 1}`,
+    name: preset.name,
+    color: preset.color,
+    weeklyTargetHours: preset.weeklyTargetHours,
+    examWeightageMarks: preset.examWeightageMarks,
+    highYieldTopics: preset.highYieldTopics,
+    createdAt: new Date().toISOString()
+  }));
+}
+
+// Seed starter subjects if app is opened for the first time
+export function getInitialStarterData(isGatePrep = false) {
+  const subjects: Subject[] = isGatePrep ? getGateStarterSubjects('CSE') : getSimpleStarterSubjects();
 
   const topics: Topic[] = [];
   const sessions: StudySession[] = [];
@@ -83,7 +98,7 @@ export const StorageService = {
   ensureInitialized() {
     const isInit = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
     if (!isInit) {
-      const init = getInitialStarterData();
+      const init = getInitialStarterData(false);
       this.saveSubjects(init.subjects);
       this.saveTopics(init.topics);
       this.saveSessions(init.sessions);
@@ -92,7 +107,9 @@ export const StorageService = {
     }
   },
 
-  resetToCleanSlate() {
+  resetToCleanSlate(isGatePrep = false) {
+    const init = getInitialStarterData(isGatePrep);
+    this.saveSubjects(init.subjects);
     this.saveTopics([]);
     this.saveSessions([]);
     this.saveStreaks({

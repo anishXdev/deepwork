@@ -240,32 +240,6 @@ export const Navbar: React.FC = () => {
               <CloudOff className="w-4 h-4" />
             )}
           </button>
-
-          {/* Quick Add Subject Symbol Button (Desktop/Tablet) */}
-          <button
-            onClick={() => {
-              Haptics.tap();
-              openCreateSubjectModal();
-            }}
-            className="hidden sm:flex items-center space-x-1 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-200/80 dark:bg-abyss-card/80 hover:bg-ocean-500/10 dark:hover:bg-ocean-950/50 text-slate-700 dark:text-slate-300 text-xs font-medium border border-ocean-200/50 dark:border-ocean-900/60 transition-colors"
-            title="Add Subject"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-ocean-600 dark:text-aqua-400" />
-            <span className="hidden lg:inline">+ Subject</span>
-          </button>
-
-          {/* Quick Add Topic Button (Desktop/Tablet) */}
-          <button
-            onClick={() => {
-              Haptics.tap();
-              openAddTopicModal();
-            }}
-            className="hidden sm:flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
-            title="Add Topic"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[3]" />
-            <span>Topic</span>
-          </button>
         </div>
       </div>
     </header>

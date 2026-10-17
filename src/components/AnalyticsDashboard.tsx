@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
+import { GateTaskCategory, GATE_TASK_CATEGORIES } from '../types';
 import { 
   BarChart3, 
   Flame, 
@@ -16,7 +17,8 @@ import {
   CalendarRange,
   X,
   CalendarPlus,
-  BookOpen
+  BookOpen,
+  GraduationCap
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
@@ -377,12 +379,57 @@ export const AnalyticsDashboard: React.FC = () => {
 
         </div>
 
+        {/* GATE Prep Pillars Breakdown (Only in GATE mode) */}
+        {settings.isGatePrep && (
+          <div className="glass-card rounded-2xl p-5 border border-teal-500/25 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-teal-500/20 pb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-300 flex items-center gap-1.5">
+                <GraduationCap className="w-4 h-4 text-teal-500" />
+                <span>GATE Prep Pillar Balance (Concept • PYQs • Mocks • Revision)</span>
+              </span>
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                🎯 Target: {settings.gateTargetStream ? `GATE ${settings.gateTargetStream}` : 'GATE'} • {settings.gateTargetAir || 'AIR < 100'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {(Object.keys(GATE_TASK_CATEGORIES) as GateTaskCategory[]).map(catKey => {
+                const cat = GATE_TASK_CATEGORIES[catKey];
+                const catTopics = topics.filter(t => (t.category || 'concept') === catKey);
+                const doneCount = catTopics.filter(t => t.status === 'completed').length;
+                const hoursLogged = Math.round(
+                  catTopics.reduce((acc, t) => acc + (t.completedHours || (t.status === 'completed' ? t.approxHours : 0)), 0) * 10
+                ) / 10;
+
+                return (
+                  <div
+                    key={catKey}
+                    className="p-3 rounded-xl bg-white/70 dark:bg-abyss-card/70 border border-ocean-200/40 dark:border-ocean-900/50 flex flex-col justify-between"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.bgClass}`}>
+                        {cat.emoji} {cat.label}
+                      </span>
+                    </div>
+                    <div className="text-lg sm:text-xl font-black font-mono text-slate-900 dark:text-slate-100">
+                      {hoursLogged}<span className="text-[10px] font-normal text-slate-400 ml-0.5">hrs</span>
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-0.5">
+                      ✓ {doneCount}/{catTopics.length} tasks
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Subject Distribution Spectrum Graph */}
         <div className="glass-card rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-ocean-700/80 dark:text-ocean-300/80 flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-ocean-600 dark:text-aqua-400" />
-              <span>Subject Spectrum Distribution</span>
+              <span>{settings.isGatePrep ? 'GATE Subject Weightage vs Study Spectrum' : 'Subject Distribution Spectrum'}</span>
             </span>
             <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
               {subjects.length} Subjects
@@ -406,17 +453,25 @@ export const AnalyticsDashboard: React.FC = () => {
 
           {/* Symbol Legend items */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-            {subjectBreakdown.map(item => (
-              <div key={item.subjectId} className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 dark:bg-abyss-card/60 border border-ocean-200/40 dark:border-ocean-900/50 text-xs">
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.subjectName}</span>
+            {subjectBreakdown.map(item => {
+              const subObj = subjects.find(s => s.id === item.subjectId);
+              return (
+                <div key={item.subjectId} className="flex items-center justify-between p-2.5 rounded-xl bg-white/70 dark:bg-abyss-card/60 border border-ocean-200/40 dark:border-ocean-900/50 text-xs">
+                  <div className="flex items-center space-x-2 truncate">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{item.subjectName}</span>
+                    {settings.isGatePrep && subObj?.examWeightageMarks && (
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/25 shrink-0">
+                        {subObj.examWeightageMarks}M
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold text-slate-600 dark:text-slate-300 ml-2 shrink-0">
+                    {item.hours}h <span className="text-[10px] text-slate-400">({item.percentage}%)</span>
+                  </span>
                 </div>
-                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 ml-2">
-                  {item.hours}h <span className="text-[10px] text-slate-400">({item.percentage}%)</span>
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
