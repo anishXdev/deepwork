@@ -78,7 +78,7 @@ export const TopicModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
+            <div className="p-2 rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
@@ -102,7 +102,7 @@ export const TopicModal: React.FC = () => {
 
         {subjects.length === 0 ? (
           <div className="p-4 rounded-xl text-xs space-y-2"
-            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#b45309' }}>
+            style={{ background: 'var(--warn-bg)', border: '1px solid var(--warn-border)', color: 'var(--warn)' }}>
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>You don't have any subjects yet. Create your first subject to schedule topics!</span>
@@ -120,7 +120,7 @@ export const TopicModal: React.FC = () => {
             {/* Tour Banner */}
             {isTourOpen && tourStep === 1 && (
               <div className="p-3 rounded-xl text-xs flex items-center gap-2.5 animate-pulse"
-                style={{ background: 'rgba(180,83,9,0.1)', border: '1px solid rgba(180,83,9,0.25)', color: 'var(--accent)' }}>
+                style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}>
                 <Sparkles className="w-4 h-4 shrink-0" />
                 <span className="font-medium leading-snug">
                   <strong style={{ color: 'var(--text-primary)' }}>Step 1 of 3:</strong> Enter what you want to study, choose estimated hours, and tap <strong>Add Topic</strong>!
@@ -204,7 +204,7 @@ export const TopicModal: React.FC = () => {
                       type="button"
                       onClick={() => setName(`${hy} (${GATE_TASK_CATEGORIES[category].label})`)}
                       className="text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer"
-                      style={{ background: 'rgba(180,83,9,0.08)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}
+                      style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}
                     >
                       + {hy}
                     </button>
@@ -268,7 +268,7 @@ export const TopicModal: React.FC = () => {
 
             {/* Google Calendar hint */}
             <div className="p-3 rounded-xl text-[11px] flex items-center justify-between font-semibold"
-              style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.15)', color: 'var(--accent)' }}>
+              style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}>
               <span>📅 Auto-schedules event on Google Calendar</span>
               <span style={{ color: '#10b981' }}>Ready</span>
             </div>

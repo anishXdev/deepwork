@@ -37,7 +37,7 @@ export const CreateSubjectModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
+            <div className="p-2 rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
               <BookOpen className="w-5 h-5" />
             </div>
             <div>

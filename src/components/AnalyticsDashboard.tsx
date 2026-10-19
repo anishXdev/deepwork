@@ -129,20 +129,20 @@ export const AnalyticsDashboard: React.FC = () => {
     s.startTime?.startsWith(selectedDate)
   ) : [];
 
-  // Heatmap color helpers — warm amber scale instead of teal
+  // Heatmap color helpers — clean blue activity scale
   const getHeatCell30 = (hours: number) => {
-    if (hours > 3.5) return 'rgba(180,83,9,0.9)';
-    if (hours > 2) return 'rgba(180,83,9,0.65)';
-    if (hours > 1) return 'rgba(217,119,6,0.5)';
-    if (hours > 0) return 'rgba(245,158,11,0.3)';
+    if (hours > 3.5) return 'var(--accent)';
+    if (hours > 2) return 'rgba(12, 102, 228, 0.7)';
+    if (hours > 1) return 'rgba(12, 102, 228, 0.45)';
+    if (hours > 0) return 'rgba(12, 102, 228, 0.2)';
     return 'var(--bg-card-alt)';
   };
 
   const getHeatCellYearly = (hours: number) => {
-    if (hours > 4) return 'rgba(180,83,9,0.9)';
-    if (hours > 2.5) return 'rgba(180,83,9,0.65)';
-    if (hours > 1) return 'rgba(217,119,6,0.5)';
-    if (hours > 0) return 'rgba(245,158,11,0.3)';
+    if (hours > 4) return 'var(--accent)';
+    if (hours > 2.5) return 'rgba(12, 102, 228, 0.7)';
+    if (hours > 1) return 'rgba(12, 102, 228, 0.45)';
+    if (hours > 0) return 'rgba(12, 102, 228, 0.2)';
     return 'var(--bg-card-alt)';
   };
 
@@ -153,11 +153,11 @@ export const AnalyticsDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
+            style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
             <BarChart3 className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)', fontFamily: 'Georgia, serif' }}>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
               Analytics & Pacing
             </h1>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Visual pacing, study metrics & activity heatmap</p>
@@ -442,7 +442,7 @@ export const AnalyticsDashboard: React.FC = () => {
                   <span className="font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{item.subjectName}</span>
                   {settings.isGatePrep && subObj?.examWeightageMarks && (
                     <span className="text-[9px] font-mono font-bold px-1.5 rounded shrink-0"
-                      style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
+                      style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
                       {subObj.examWeightageMarks}M
                     </span>
                   )}
@@ -497,10 +497,10 @@ export const AnalyticsDashboard: React.FC = () => {
           <div className="flex items-center gap-1.5 text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
             <span>0h</span>
             <span className="w-2.5 h-2.5 rounded" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }} />
-            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(245,158,11,0.3)' }} />
-            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(217,119,6,0.5)' }} />
-            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(180,83,9,0.65)' }} />
-            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(180,83,9,0.9)' }} />
+            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(12, 102, 228, 0.2)' }} />
+            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(12, 102, 228, 0.45)' }} />
+            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(12, 102, 228, 0.7)' }} />
+            <span className="w-2.5 h-2.5 rounded" style={{ background: 'var(--accent)' }} />
             <span>4h+</span>
           </div>
         </div>
@@ -664,7 +664,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <div className="flex items-center justify-between pb-3 mb-4" style={{ borderBottom: '1px solid var(--border)' }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
+                  style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
@@ -791,7 +791,7 @@ export const AnalyticsDashboard: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-2 font-mono shrink-0">
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-bold"
-                              style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
+                              style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
                               {session.mode === 'pomodoro' ? 'Pomodoro' : session.mode}
                             </span>
                             <span className="font-bold text-xs text-emerald-500">{mins}m</span>
@@ -817,7 +817,7 @@ export const AnalyticsDashboard: React.FC = () => {
                   openAddTopicModal(selectedDate);
                 }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                style={{ background: 'rgba(180,83,9,0.08)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}
+                style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}
               >
                 <CalendarPlus className="w-3.5 h-3.5" />
                 <span>+ Add Topic for this Date</span>

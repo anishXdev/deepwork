@@ -2,81 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Tokens ─────────────────────────────────────────────────── */
+/* ── Trello & Atlassian Design System Tokens ─────────────────── */
 :root {
   color-scheme: light;
 
-  /* Paper tones */
-  --bg-app:       #FAF7F2;
-  --bg-card:      #FFFFFF;
-  --bg-card-alt:  #F5F0E8;
-  --bg-input:     #F5F0E8;
-  --bg-panel:     #FFFFFF;
+  /* Trello Canvas & Surfaces */
+  --bg-app:         #F1F2F4;       /* Classic Trello board canvas */
+  --bg-list:        #EBECF0;       /* Trello column list background */
+  --bg-list-hover:  #E2E4E9;
+  --bg-card:        #FFFFFF;       /* Crisp white cards */
+  --bg-card-hover:  #F7F8F9;
+  --bg-input:       #FFFFFF;
+  --bg-panel:       #FFFFFF;
+  --bg-subtle:      #E9ECEF;
 
-  /* Ink */
-  --text-primary:   #1C1917;
-  --text-secondary: #57534E;
-  --text-muted:     #A8A29E;
-  --text-inverse:   #FAF7F2;
+  /* Typography - Crisp Slate / Navy */
+  --text-primary:   #172B4D;       /* Atlassian Charcoal Navy */
+  --text-secondary: #44546F;       /* Mid slate */
+  --text-muted:     #626F86;       /* Muted slate */
+  --text-inverse:   #FFFFFF;
 
   /* Borders */
-  --border:       #E7E0D5;
-  --border-focus: #C2A97E;
+  --border:         #DFE1E6;       /* Clean subtle card border */
+  --border-subtle:  #EBECF0;
+  --border-focus:   #0C66E4;
 
-  /* Accent — warm amber/ochre */
-  --accent:       #B45309;
-  --accent-soft:  #FEF3C7;
-  --accent-hover: #92400E;
+  /* Trello Electric Blue Accent */
+  --accent:         #0C66E4;       /* Trello / Atlassian Blue */
+  --accent-hover:   #0055CC;
+  --accent-soft:    #E9F2FF;
+  --accent-border:  #85B8FF;
 
-  /* Status */
-  --success:      #15803D;
-  --success-bg:   #F0FDF4;
-  --warn:         #B45309;
-  --danger:       #DC2626;
-  --danger-bg:    #FEF2F2;
+  /* Semantic Status Colors */
+  --success:        #1F845A;
+  --success-bg:     #DCFFF1;
+  --success-border: #7EE2B8;
 
-  /* Shadow */
-  --shadow-sm:    0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
-  --shadow-md:    0 4px 12px rgba(28, 25, 23, 0.08), 0 2px 4px rgba(28, 25, 23, 0.04);
-  --shadow-lg:    0 10px 30px rgba(28, 25, 23, 0.10), 0 4px 8px rgba(28, 25, 23, 0.05);
+  --warn:           #C27800;
+  --warn-bg:        #FFF7D6;
+  --warn-border:    #F5CD47;
+
+  --danger:         #CA3521;
+  --danger-bg:      #FFEDEB;
+  --danger-border:  #FD9891;
+
+  --purple:         #6E5DC6;
+  --purple-bg:      #F3F0FF;
+
+  /* Trello Card Shadow */
+  --shadow-xs:      0 1px 1px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.2);
+  --shadow-sm:      0 1px 3px rgba(9, 30, 66, 0.15), 0 0 1px rgba(9, 30, 66, 0.2);
+  --shadow-md:      0 3px 6px rgba(9, 30, 66, 0.15), 0 0 1px rgba(9, 30, 66, 0.25);
+  --shadow-lg:      0 8px 16px rgba(9, 30, 66, 0.18), 0 0 1px rgba(9, 30, 66, 0.25);
 }
 
 .dark {
   color-scheme: dark;
 
-  /* Warm charcoal — not cold blue */
-  --bg-app:       #1A1714;
-  --bg-card:      #231F1B;
-  --bg-card-alt:  #2C2722;
-  --bg-input:     #2C2722;
-  --bg-panel:     #231F1B;
+  /* Trello Dark Mode Surfaces */
+  --bg-app:         #1D2125;       /* Dark canvas */
+  --bg-list:        #161A1D;       /* Dark column list */
+  --bg-list-hover:  #1B2024;
+  --bg-card:        #22272B;       /* Dark card surface */
+  --bg-card-hover:  #282E33;
+  --bg-input:       #161A1D;
+  --bg-panel:       #1D2125;
+  --bg-subtle:      #282E33;
 
-  /* Ink reversed */
-  --text-primary:   #F5EFE6;
-  --text-secondary: #A89880;
-  --text-muted:     #6B5E52;
-  --text-inverse:   #1A1714;
+  /* Typography */
+  --text-primary:   #E6EDF3;
+  --text-secondary: #9FADBC;
+  --text-muted:     #738496;
+  --text-inverse:   #1D2125;
 
   /* Borders */
-  --border:       #3A332B;
-  --border-focus: #C2A97E;
+  --border:         #2C333A;
+  --border-subtle:  #22272B;
+  --border-focus:   #579DFF;
 
-  /* Accent — warm amber keeps */
-  --accent:       #D97706;
-  --accent-soft:  #292011;
-  --accent-hover: #F59E0B;
+  /* Trello Blue in Dark Mode */
+  --accent:         #579DFF;
+  --accent-hover:   #85B8FF;
+  --accent-soft:    #1C2B41;
+  --accent-border:  #28456C;
 
   /* Status */
-  --success:      #4ADE80;
-  --success-bg:   #0D2818;
-  --warn:         #FBBF24;
-  --danger:       #F87171;
-  --danger-bg:    #2D1010;
+  --success:        #4BCE97;
+  --success-bg:     #1C3329;
+  --success-border: #216E4E;
 
-  /* Shadow */
-  --shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.30), 0 1px 2px rgba(0, 0, 0, 0.20);
-  --shadow-md:    0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.20);
-  --shadow-lg:    0 10px 30px rgba(0, 0, 0, 0.40), 0 4px 8px rgba(0, 0, 0, 0.20);
+  --warn:           #F5CD47;
+  --warn-bg:        #332E1B;
+  --warn-border:    #7F5F01;
+
+  --danger:         #F87168;
+  --danger-bg:      #381F1D;
+  --danger-border:  #AE2A19;
+
+  --purple:         #9F8FEF;
+  --purple-bg:      #2B2440;
+
+  /* Shadows */
+  --shadow-xs:      0 1px 1px rgba(0, 0, 0, 0.4);
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md:      0 4px 8px rgba(0, 0, 0, 0.6);
+  --shadow-lg:      0 10px 24px rgba(0, 0, 0, 0.7);
 }
 
 /* ── Base ───────────────────────────────────────────────────── */
@@ -84,370 +114,185 @@
   box-sizing: border-box;
 }
 
-html {
-  -webkit-text-size-adjust: 100%;
-}
-
 body {
   margin: 0;
   padding: 0;
   background-color: var(--bg-app);
   color: var(--text-primary);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
-  user-select: none;
-  transition: background-color 0.25s ease, color 0.25s ease;
   min-height: 100vh;
 }
 
-/* ── Typography ─────────────────────────────────────────────── */
-.font-serif {
-  font-family: Georgia, 'Times New Roman', serif;
+/* ── Trello Kanban Elements ─────────────────────────────────── */
+.trello-board {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 24px;
+  scrollbar-width: thin;
 }
 
-.text-display {
-  font-family: Georgia, serif;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+.trello-column {
+  background: var(--bg-list);
+  border-radius: 12px;
+  width: 310px;
+  min-width: 280px;
+  max-width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 170px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-xs);
 }
 
-/* ── Scrollbar ──────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 99px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+.trello-card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  user-select: none;
 }
 
-/* ── Cards & Surfaces ───────────────────────────────────────── */
+.trello-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border-focus);
+}
+
+.trello-card:active {
+  transform: scale(0.99);
+}
+
+/* ── UI Utility Classes ─────────────────────────────────────── */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-sm);
-  position: relative;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.card-hover:hover {
-  border-color: var(--border-focus);
-  box-shadow: var(--shadow-md);
-}
-
-.card-alt {
-  background: var(--bg-card-alt);
-  border: 1px solid var(--border);
   border-radius: 10px;
+  box-shadow: var(--shadow-xs);
 }
 
-.paper-texture {
-  background-color: var(--bg-app);
-  /* Subtle grain overlay */
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-}
-
-/* ── Buttons ────────────────────────────────────────────────── */
 .btn-primary {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  background: var(--text-primary);
-  color: var(--text-inverse);
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--accent);
+  color: #FFFFFF;
   border: 1px solid transparent;
-  border-radius: 8px;
-  font-size: 0.8125rem;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-  white-space: nowrap;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
-.btn-primary:hover { opacity: 0.88; }
-.btn-primary:active { transform: translateY(1px); }
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
 
 .btn-secondary {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  color: var(--text-secondary);
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  color: var(--text-primary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.8125rem;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
-.btn-secondary:hover {
-  background: var(--bg-card-alt);
-  border-color: var(--border-focus);
-  color: var(--text-primary);
-}
-.btn-secondary:active { transform: translateY(1px); }
 
-.btn-accent {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  white-space: nowrap;
-}
-.btn-accent:hover {
-  background: color-mix(in srgb, var(--accent) 15%, var(--bg-card));
+.btn-secondary:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-focus);
 }
 
 .btn-ghost {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
+  justify-content: center;
+  padding: 6px 8px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border: none;
   border-radius: 6px;
-  font-size: 0.8125rem;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
+
 .btn-ghost:hover {
-  background: var(--bg-card-alt);
+  background: var(--bg-subtle);
   color: var(--text-primary);
 }
 
-/* ── Inputs ─────────────────────────────────────────────────── */
 .input-base {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 7px 11px;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: 13px;
   font-family: inherit;
-  outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.input-base::placeholder { color: var(--text-muted); }
-.input-base:focus {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: none;
 }
 
-/* ── Pills / Tags ───────────────────────────────────────────── */
-.pill {
+.input-base:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* ── Trello Label Badges ────────────────────────────────────── */
+.trello-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 99px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ── Backward Compatibility Helpers ─────────────────────────── */
+.glass-card, .glass-panel {
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  color: var(--text-secondary);
-  background: var(--bg-card-alt);
-  white-space: nowrap;
+  box-shadow: var(--shadow-xs);
+  border-radius: 10px;
 }
 
-.pill-accent {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--accent);
-}
-
-/* ── Navigation ─────────────────────────────────────────────── */
-.nav-tab {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: 7px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
-}
-.nav-tab:hover {
-  background: var(--bg-card-alt);
-  color: var(--text-primary);
-}
-.nav-tab.active {
-  background: var(--text-primary);
-  color: var(--text-inverse);
+.liquid-btn {
+  background: var(--accent);
+  color: #FFFFFF;
+  border-radius: 6px;
   font-weight: 600;
 }
 
-/* ── Task / Topic Items ─────────────────────────────────────── */
-.task-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.12s ease;
-  cursor: default;
-}
-.task-row:last-child { border-bottom: none; }
-.task-row:hover { background: var(--bg-card-alt); }
-.task-row.completed { opacity: 0.55; }
-
-.task-checkbox {
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 5px;
-  border: 2px solid var(--border);
-  flex-shrink: 0;
-  margin-top: 2px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  background: var(--bg-card);
-}
-.task-checkbox:hover { border-color: var(--accent); }
-.task-checkbox.checked {
-  background: var(--success);
-  border-color: var(--success);
+.water-caustic-bg {
+  display: none !important;
 }
 
-/* ── Section Headers ────────────────────────────────────────── */
-.section-label {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-/* ── Animations ─────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes popIn {
-  0%   { opacity: 0; transform: scale(0.92); }
-  60%  { transform: scale(1.02); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
-@keyframes strikeThrough {
-  from { width: 0; }
-  to   { width: 100%; }
-}
-
-.animate-fade-in  { animation: fadeIn  0.25s ease both; }
-.animate-slide-up { animation: slideUp 0.3s ease both; }
-.animate-pop-in   { animation: popIn   0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-
-/* skeleton shimmer */
-.shimmer {
-  background: linear-gradient(90deg, var(--bg-card-alt) 25%, var(--border) 50%, var(--bg-card-alt) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-}
-
-/* ── Misc ───────────────────────────────────────────────────── */
-.divider {
-  height: 1px;
-  background: var(--border);
-  width: 100%;
-  margin: 0.75rem 0;
-}
-
-/* Tooltip */
-.tooltip {
-  position: relative;
-}
-.tooltip::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--text-primary);
-  color: var(--text-inverse);
-  font-size: 0.6875rem;
-  padding: 3px 8px;
-  border-radius: 5px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
-}
-.tooltip:hover::after { opacity: 1; }
-
-/* Focus ring */
-*:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-/* Selection */
-::selection {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  color: var(--text-primary);
-}
-
-/* Subtle paper pattern for light mode background */
-body:not(.dark) {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
-}
-
-/* Liquid-btn kept for timer but restyled */
-.liquid-btn {
-  background: var(--text-primary);
-  color: var(--text-inverse);
-  border: none;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-}
-.liquid-btn:hover { opacity: 0.85; }
-.liquid-btn:active { transform: translateY(1px); }
-
-/* Glass overrides — now just card */
-.glass-panel { background: var(--bg-panel); border-bottom: 1px solid var(--border); }
-.glass-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm); }
-
-/* Override old water animation — noop */
-.water-caustic-bg { display: none; }
-.animate-liquid-wave-1,
-.animate-liquid-wave-2 { animation: none; }
-.liquid-sphere {
-  border-radius: 50%;
-  overflow: hidden;
-  background: var(--bg-card-alt);
-  border: 2px solid var(--border);
-}
-
-/* Scrollbar in modal */
-.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }

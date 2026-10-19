@@ -172,7 +172,7 @@ export const SmartRecommendationBanner: React.FC = () => {
               display: 'flex', alignItems: 'center', gap: '4px',
               padding: '6px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
               border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s',
-              background: isGatePrep ? 'rgba(180,83,9,0.12)' : 'var(--bg-card)',
+              background: isGatePrep ? 'var(--accent-soft)' : 'var(--bg-card)',
               color: isGatePrep ? 'var(--accent)' : 'var(--text-secondary)',
             }}
           >

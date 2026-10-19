@@ -85,7 +85,7 @@ export const SubjectManager: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)', fontFamily: 'Georgia, serif' }}>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <BookOpen className="w-5 h-5" style={{ color: 'var(--accent)' }} />
             <span>{isGatePrep ? 'GATE Syllabus & Weightages' : 'Subjects'}</span>
           </h1>
@@ -109,7 +109,7 @@ export const SubjectManager: React.FC = () => {
       {isGatePrep && (
         <div className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)' }}>
+            <div className="p-2 rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
               <GraduationCap className="w-4 h-4" />
             </div>
             <div>
@@ -183,7 +183,7 @@ export const SubjectManager: React.FC = () => {
                     type="button"
                     onClick={() => setNewSubjectName(name)}
                     className="text-[10px] px-2 py-0.5 rounded-md transition-colors"
-                    style={{ background: 'rgba(180,83,9,0.08)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}
+                    style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}
                   >
                     + {name}
                   </button>
@@ -296,7 +296,7 @@ export const SubjectManager: React.FC = () => {
                           {subject.name}
                         </h3>
                         {isGatePrep && subject.examWeightageMarks && (
-                          <span className="pill text-[10px]" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.25)' }}>
+                          <span className="pill text-[10px]" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
                             🎯 {subject.examWeightageMarks} Marks
                           </span>
                         )}
@@ -375,7 +375,7 @@ export const SubjectManager: React.FC = () => {
                                   onClick={() => handleQuickQueueHighYield(subject.id, hy, false)}
                                   title="Queue Concept Study for Today"
                                   className="px-1.5 py-1 font-bold transition-colors cursor-pointer"
-                                  style={{ borderLeft: '1px solid var(--border)', color: 'var(--accent)', background: 'rgba(180,83,9,0.07)' }}
+                                  style={{ borderLeft: '1px solid var(--border)', color: 'var(--accent)', background: 'var(--accent-soft)' }}
                                 >
                                   +📖
                                 </button>

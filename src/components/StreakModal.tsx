@@ -73,7 +73,7 @@ export const StreakModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <Flame className="w-5 h-5 fill-white" />
           </div>
           <div>
-            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'Georgia, serif' }}>
+            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
               Streak & Preset Controls
             </h3>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Manage consistency streaks and starter presets</p>
@@ -82,17 +82,17 @@ export const StreakModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* Streak Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
-            <div className="flex items-center justify-center gap-1 text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#f59e0b' }}>
-              <Flame className="w-3.5 h-3.5 fill-amber-500" />
+          <div className="p-4 rounded-xl text-center" style={{ background: 'var(--warn-bg)', border: '1px solid var(--warn-border)' }}>
+            <div className="flex items-center justify-center gap-1 text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--warn)' }}>
+              <Flame className="w-3.5 h-3.5 fill-current" />
               <span>Current</span>
             </div>
-            <div className="text-3xl font-black font-mono" style={{ color: '#d97706' }}>
+            <div className="text-3xl font-black font-mono" style={{ color: 'var(--warn)' }}>
               {streaks.currentStreak}<span className="text-sm font-normal ml-1" style={{ color: 'var(--text-muted)' }}>days</span>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl text-center" style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.2)' }}>
+          <div className="p-4 rounded-xl text-center" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)' }}>
             <div className="flex items-center justify-center gap-1 text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent)' }}>
               <Trophy className="w-3.5 h-3.5" />
               <span>Longest</span>

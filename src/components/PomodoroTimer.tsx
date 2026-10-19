@@ -165,8 +165,8 @@ export const PomodoroTimer: React.FC = () => {
                   title={preset.desc}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
                   style={{
-                    border: '1px solid var(--border)',
-                    background: isSelected ? 'rgba(180,83,9,0.12)' : 'var(--bg-card)',
+                    border: isSelected ? '1px solid var(--accent-border)' : '1px solid var(--border)',
+                    background: isSelected ? 'var(--accent-soft)' : 'var(--bg-card)',
                     color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
                     transform: isSelected ? 'scale(1.05)' : 'scale(1)',
                   }}
@@ -233,8 +233,8 @@ export const PomodoroTimer: React.FC = () => {
             isTourOpen && tourStep === 2 && !isTimerRunning ? 'ring-2 ring-offset-2 animate-pulse' : ''
           }`}
           style={{
-            background: isTimerRunning ? '#b45309' : 'var(--accent)',
-            boxShadow: '0 4px 14px rgba(180,83,9,0.3)',
+            background: isTimerRunning ? 'var(--warn)' : 'var(--accent)',
+            boxShadow: '0 4px 14px rgba(12, 102, 228, 0.25)',
           }}
         >
           {isTimerRunning ? (

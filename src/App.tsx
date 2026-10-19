@@ -18,20 +18,16 @@ import { ToastContainer } from './components/ToastContainer';
 import { MobileFab } from './components/MobileFab';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Haptics } from './utils/haptics';
 
 const MainContent: React.FC = () => {
   const { activeTab, isStreakModalOpen, closeStreakModal } = useApp();
 
   return (
-    <main className="min-h-screen relative text-slate-900 dark:text-slate-100 selection:bg-ocean-500/30 selection:text-ocean-700 dark:selection:text-aqua-200 transition-colors">
-      {/* 3D Dynamic Water Caustics & Liquid Glow Background */}
-      <div className="water-caustic-bg" aria-hidden="true" />
-
-      <div className="relative z-10 min-h-screen flex flex-col">
+    <main className="min-h-screen text-slate-900 dark:text-slate-100 transition-colors" style={{ backgroundColor: 'var(--bg-app)' }}>
+      <div className="min-h-screen flex flex-col">
         <Navbar />
 
-        <div className="flex-1 pt-2 pb-28 sm:pb-16">
+        <div className="flex-1">
           {activeTab === 'study' && <TodayTomorrowView />}
           {activeTab === 'subjects' && <SubjectManager />}
           {activeTab === 'timer' && <PomodoroTimer />}
@@ -41,10 +37,10 @@ const MainContent: React.FC = () => {
         {/* Global Floating Action Button for Mobile */}
         <MobileFab />
 
-        {/* Mobile Bottom Navigation Bar (Independent viewport-anchored) */}
+        {/* Mobile Bottom Navigation Bar */}
         <MobileBottomNav />
 
-        {/* Global Modals & Overlays */}
+        {/* Global Modals */}
         <TopicModal />
         <RescheduleModal />
         <GoogleSyncModal />

@@ -61,7 +61,7 @@ export const MobileFab: React.FC = () => {
               <span>{label}</span>
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)' }}
+                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               >
                 <Icon className="w-4 h-4" />
               </div>
@@ -79,7 +79,7 @@ export const MobileFab: React.FC = () => {
           width: '52px',
           height: '52px',
           background: 'var(--accent)',
-          boxShadow: '0 4px 14px rgba(180,83,9,0.35)',
+          boxShadow: '0 4px 14px rgba(12, 102, 228, 0.35)',
           transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
         }}
       >

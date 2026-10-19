@@ -142,14 +142,14 @@ export const AuthModal: React.FC = () => {
 
         {/* Brand */}
         <div className="flex flex-col items-center justify-center mt-1 mb-5">
-          <div className="p-3 rounded-xl mb-3" style={{ background: 'rgba(180,83,9,0.1)', border: '1px solid rgba(180,83,9,0.2)' }}>
+          <div className="p-3 rounded-xl mb-3" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)' }}>
             <DStudyLogo size={36} showText={false} />
           </div>
-          <h2 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text-primary)', fontFamily: 'Georgia, serif' }}>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             Sign In / Sign Up
           </h2>
           <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            Minimalist Focus, Curriculum Planning & Deep Work Flow
+            Focus, Curriculum Planning & Deep Work Flow
           </p>
         </div>
 
@@ -164,7 +164,7 @@ export const AuthModal: React.FC = () => {
               onClick={() => { Haptics.tap(); setSelectedGatePrep(false); }}
               className="p-3 rounded-xl border text-left transition-all cursor-pointer"
               style={{
-                background: !selectedGatePrep ? 'rgba(180,83,9,0.08)' : 'var(--bg-card-alt)',
+                background: !selectedGatePrep ? 'var(--accent-soft)' : 'var(--bg-card-alt)',
                 border: !selectedGatePrep ? '1px solid var(--accent)' : '1px solid var(--border)',
                 color: 'var(--text-primary)',
               }}
@@ -183,7 +183,7 @@ export const AuthModal: React.FC = () => {
               onClick={() => { Haptics.tap(); setSelectedGatePrep(true); }}
               className="p-3 rounded-xl border text-left transition-all cursor-pointer"
               style={{
-                background: selectedGatePrep ? 'rgba(180,83,9,0.08)' : 'var(--bg-card-alt)',
+                background: selectedGatePrep ? 'var(--accent-soft)' : 'var(--bg-card-alt)',
                 border: selectedGatePrep ? '1px solid var(--accent)' : '1px solid var(--border)',
                 color: 'var(--text-primary)',
               }}
@@ -237,7 +237,7 @@ export const AuthModal: React.FC = () => {
             onClick={handleGuestSignIn}
             disabled={isLoading}
             className="w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-            style={{ background: 'rgba(180,83,9,0.08)', border: '1px solid rgba(180,83,9,0.25)', color: 'var(--accent)' }}
+            style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}
           >
             <User className="w-4 h-4" />
             <span>Continue as Guest ({selectedGatePrep ? 'GATE Mode' : 'Simple Mode'})</span>

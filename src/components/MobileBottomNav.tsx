@@ -1,16 +1,16 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { CalendarDays, BookOpen, Timer, BarChart3 } from 'lucide-react';
+import { LayoutGrid, BookOpen, Timer, BarChart3 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
 export const MobileBottomNav: React.FC = () => {
   const { activeTab, setActiveTab, isTimerRunning, timeLeft } = useApp();
 
   const navItems = [
-    { id: 'study',     label: 'Today',     icon: CalendarDays },
-    { id: 'subjects',  label: 'Subjects',  icon: BookOpen     },
-    { id: 'timer',     label: 'Focus',     icon: Timer        },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3    },
+    { id: 'study',     label: 'Board',     icon: LayoutGrid },
+    { id: 'subjects',  label: 'Subjects',  icon: BookOpen   },
+    { id: 'timer',     label: 'Focus',     icon: Timer      },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3  },
   ] as const;
 
   const formatTimerShort = (seconds: number) => {
@@ -54,9 +54,9 @@ export const MobileBottomNav: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               padding: '5px 10px',
-              borderRadius: '10px',
+              borderRadius: '8px',
               border: 'none',
-              background: isActive ? 'var(--bg-card-alt)' : 'transparent',
+              background: isActive ? 'var(--accent-soft)' : 'transparent',
               cursor: 'pointer',
               gap: '2px',
               transition: 'background 0.15s ease',
@@ -64,22 +64,6 @@ export const MobileBottomNav: React.FC = () => {
               position: 'relative',
             }}
           >
-            {/* Active underline dot */}
-            {isActive && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: '20px',
-                  height: '2px',
-                  borderRadius: '0 0 2px 2px',
-                  background: 'var(--accent)',
-                }}
-              />
-            )}
-
             <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Icon
                 style={{
@@ -89,7 +73,6 @@ export const MobileBottomNav: React.FC = () => {
                   transition: 'color 0.15s ease',
                 }}
               />
-              {/* Timer running dot */}
               {item.id === 'timer' && isTimerRunning && (
                 <span
                   style={{
@@ -108,12 +91,11 @@ export const MobileBottomNav: React.FC = () => {
 
             <span
               style={{
-                fontSize: '10px',
+                fontSize: '11px',
                 fontWeight: isActive ? 600 : 400,
-                color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
+                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
                 letterSpacing: '0.01em',
                 transition: 'color 0.15s ease',
-                fontVariantNumeric: 'tabular-nums',
               }}
             >
               {showTimer ? formatTimerShort(timeLeft) : item.label}
