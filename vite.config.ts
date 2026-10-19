@@ -58,25 +58,29 @@ export default defineConfig(({ mode }) => {
           const devSyncStore = new Map();
           const mongoUri = env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
           let devMongoClient: any = null;
-          let mongoFailed = false;
+          let lastMongoAttempt = 0;
 
           const getDevCollection = async () => {
-            if (mongoFailed) return null;
-            if (!devMongoClient) {
+            if (devMongoClient) {
               try {
-                const { MongoClient } = await import('mongodb');
-                devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 1000, connectTimeoutMS: 1000 });
-                await devMongoClient.connect();
-                console.log('[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.user_data)');
-              } catch (e: any) {
-                mongoFailed = true;
-                console.warn('[StudyPulse Dev] MongoDB unavailable, using fast in-memory store:', e?.message);
-                return null;
+                return devMongoClient.db('studypulse').collection('user_data');
+              } catch {
+                devMongoClient = null;
               }
             }
+            // Allow retry every 10 seconds if it failed previously
+            if (Date.now() - lastMongoAttempt < 10000) return null;
+            lastMongoAttempt = Date.now();
+
             try {
+              const { MongoClient } = await import('mongodb');
+              devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 7000, connectTimeoutMS: 7000 });
+              await devMongoClient.connect();
+              console.log('[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.user_data)');
               return devMongoClient.db('studypulse').collection('user_data');
-            } catch {
+            } catch (e: any) {
+              devMongoClient = null;
+              console.warn('[StudyPulse Dev] MongoDB connect attempt failed:', e?.message);
               return null;
             }
           };
@@ -96,6 +100,9 @@ export default defineConfig(({ mode }) => {
             const url = new URL(req.url || '', 'http://localhost');
             const key = url.searchParams.get('key');
             const status = url.searchParams.get('status');
+            const users = url.searchParams.get('users');
+            const lookupEmail = url.searchParams.get('lookupEmail');
+            const boardCode = url.searchParams.get('boardCode');
 
             if (status === '1') {
               try {
@@ -117,6 +124,129 @@ export default defineConfig(({ mode }) => {
               }
               res.statusCode = 200;
               res.end(JSON.stringify({ connected: false, error: 'MongoDB Atlas unavailable in current network', fallbackMode: true }));
+              return;
+            }
+
+            // 1. Registered Users Directory (MongoDB Atlas)
+            if (users === '1') {
+              try {
+                const col = await getDevCollection();
+                if (col) {
+                  const docs = await col.find({
+                    'data.profile.email': { $exists: true, $ne: '' }
+                  }, { projection: { _id: 1, 'data.profile': 1 } }).toArray();
+
+                  const userList: any[] = [];
+                  const seen = new Set<string>();
+                  docs.forEach((d: any) => {
+                    const p = d.data?.profile;
+                    if (p && p.email && p.email.includes('@') && !seen.has(p.email.toLowerCase())) {
+                      seen.add(p.email.toLowerCase());
+                      userList.push({
+                        id: p.id || d._id,
+                        name: p.name || p.email.split('@')[0],
+                        email: p.email,
+                        avatar: p.avatarUrl || p.avatar || '',
+                        googleConnected: Boolean(p.googleConnected)
+                      });
+                    }
+                  });
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({ users: userList }));
+                  return;
+                }
+              } catch (err: any) {
+                console.warn('[StudyPulse Dev] Users list error:', err?.message);
+              }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ users: [] }));
+              return;
+            }
+
+            // 2. Email lookup (MongoDB Atlas)
+            if (lookupEmail) {
+              let rawEmail = String(lookupEmail).trim().toLowerCase();
+              if (rawEmail.endsWith('@gamil.com')) {
+                rawEmail = rawEmail.replace('@gamil.com', '@gmail.com');
+              }
+              try {
+                const col = await getDevCollection();
+                if (col) {
+                  const doc = await col.findOne({
+                    $or: [
+                      { _id: `user_${rawEmail.replace(/[@.]/g, '_')}` },
+                      { 'data.profile.email': { $regex: new RegExp(`^${rawEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+                    ]
+                  }, { projection: { _id: 1, 'data.profile': 1 } });
+
+                  if (doc && doc.data?.profile) {
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({
+                      found: true,
+                      user: {
+                        id: doc.data.profile.id || doc._id,
+                        name: doc.data.profile.name || rawEmail.split('@')[0],
+                        email: doc.data.profile.email || rawEmail,
+                        avatar: doc.data.profile.avatarUrl || doc.data.profile.avatar || ''
+                      }
+                    }));
+                    return;
+                  }
+                }
+              } catch (err: any) {
+                console.warn('[StudyPulse Dev] Email lookup error:', err?.message);
+              }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ found: false }));
+              return;
+            }
+
+            // 3. Board Invite Code Lookup
+            if (boardCode) {
+              const rawCode = String(boardCode).trim().toUpperCase();
+              const cleanLower = rawCode.toLowerCase();
+              const bareSuffix = cleanLower.replace(/^dw-/, '');
+              try {
+                const col = await getDevCollection();
+                if (col) {
+                  let doc = await col.findOne({ _id: `invite_${rawCode}` });
+                  if (doc && doc.board) {
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({ found: true, board: doc.board, inviter: doc.inviter || 'Teammate' }));
+                    return;
+                  }
+
+                  doc = await col.findOne({
+                    $or: [
+                      { 'data.boards.inviteCode': rawCode },
+                      { 'data.boards.id': cleanLower },
+                      { 'data.boards.id': `board_${bareSuffix}` },
+                      { 'data.boards.name': { $regex: new RegExp(`^${bareSuffix}$`, 'i') } }
+                    ]
+                  });
+
+                  if (doc && doc.data?.boards && Array.isArray(doc.data.boards)) {
+                    const board = doc.data.boards.find((b: any) =>
+                      b.inviteCode?.toUpperCase() === rawCode ||
+                      b.id?.toLowerCase() === cleanLower ||
+                      b.id?.toLowerCase() === `board_${bareSuffix}`
+                    );
+                    if (board) {
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({
+                        found: true,
+                        board,
+                        inviter: doc.data?.profile?.name || doc.data?.profile?.email || 'Teammate'
+                      }));
+                      return;
+                    }
+                  }
+                }
+              } catch (err: any) {
+                console.warn('[StudyPulse Dev] Board code lookup error:', err?.message);
+              }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ found: false, message: `No board found matching invite code "${rawCode}"` }));
               return;
             }
 

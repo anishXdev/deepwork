@@ -22,6 +22,7 @@ import { AuthModal } from './components/AuthModal';
 import { InteractiveTourCoach } from './components/InteractiveTourCoach';
 import { TaskCelebrationOverlay } from './components/TaskCelebrationOverlay';
 import { StrictFocusOverlay } from './components/StrictFocusOverlay';
+import { JoinBoardModal } from './components/JoinBoardModal';
 import { ToastContainer } from './components/ToastContainer';
 import { MobileFab } from './components/MobileFab';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -71,6 +72,7 @@ const MainContent: React.FC = () => {
         <TemplatesModal />
         <McpModal />
         <NotificationCenterModal />
+        <JoinBoardModal />
         <TeamCollaborationRoom />
         <IncomingCallModal />
         <ToastContainer />

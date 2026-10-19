@@ -89,6 +89,14 @@ export function getDefaultTags(): Tag[] {
   return [];
 }
 
+export function generateBoardInviteCode(boardId: string): string {
+  const clean = (boardId || '').replace(/^board_/, '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
+  if (clean && clean.length >= 3) {
+    return `DW-${clean}`;
+  }
+  return `DW-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+}
+
 export function getDefaultBoards(): StudyBoard[] {
   return [
     {
@@ -98,6 +106,7 @@ export function getDefaultBoards(): StudyBoard[] {
       color: '#0C66E4',
       icon: '⚡',
       isDefault: true,
+      inviteCode: 'DW-MAIN',
       members: [],
       createdAt: new Date().toISOString(),
     }
@@ -493,9 +502,90 @@ export const StorageService = {
 
   findUserByEmail(email: string): UserProfile | undefined {
     if (!email) return undefined;
-    const normalized = email.trim().toLowerCase();
+    let normalized = email.trim().toLowerCase();
+    if (normalized.endsWith('@gamil.com')) {
+      normalized = normalized.replace('@gamil.com', '@gmail.com');
+    }
     const users = this.getRegisteredUsers();
     return users.find(u => u.email.trim().toLowerCase() === normalized);
+  },
+
+  /**
+   * Fetches all registered users from MongoDB Atlas and synchronizes local directory
+   */
+  async syncRegisteredUsersFromCloud(): Promise<UserProfile[]> {
+    try {
+      const res = await fetch('/api/sync?users=1');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.users)) {
+          const currentList = this.getRegisteredUsers();
+          const map = new Map<string, UserProfile>();
+          currentList.forEach(u => {
+            if (u && u.email) map.set(u.email.toLowerCase(), u);
+          });
+          data.users.forEach((u: any) => {
+            if (u && u.email) {
+              const existing = map.get(u.email.toLowerCase());
+              map.set(u.email.toLowerCase(), {
+                id: u.id || existing?.id || 'usr_' + Math.random().toString(36).substring(2, 6),
+                name: u.name || existing?.name || u.email.split('@')[0],
+                email: u.email,
+                avatar: u.avatar || existing?.avatar || '',
+                avatarUrl: u.avatar || existing?.avatarUrl || '',
+                googleConnected: Boolean(u.googleConnected ?? existing?.googleConnected),
+                googleCalendarSyncEnabled: true,
+                syncKey: ''
+              });
+            }
+          });
+          const merged = Array.from(map.values());
+          localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(merged));
+          return merged;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to sync registered users from cloud:', e);
+    }
+    return this.getRegisteredUsers();
+  },
+
+  /**
+   * Performs an instant remote lookup on MongoDB Atlas for a user email
+   */
+  async lookupUserRemote(email: string): Promise<UserProfile | null> {
+    if (!email) return null;
+    let normalized = email.trim().toLowerCase();
+    if (normalized.endsWith('@gamil.com')) {
+      normalized = normalized.replace('@gamil.com', '@gmail.com');
+    }
+
+    const local = this.findUserByEmail(normalized);
+    if (local) return local;
+
+    try {
+      const res = await fetch(`/api/sync?lookupEmail=${encodeURIComponent(normalized)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.found && data.user) {
+          const user: UserProfile = {
+            id: data.user.id || 'usr_' + Date.now(),
+            name: data.user.name || normalized.split('@')[0],
+            email: data.user.email || normalized,
+            avatar: data.user.avatar || '',
+            avatarUrl: data.user.avatar || '',
+            googleConnected: true,
+            googleCalendarSyncEnabled: true,
+            syncKey: ''
+          };
+          this.registerUser(user);
+          return user;
+        }
+      }
+    } catch (e) {
+      console.warn('Remote user lookup failed:', e);
+    }
+    return null;
   },
 
   /* ── Real Telemetry Event Logging ─────────────────────────── */
@@ -572,6 +662,7 @@ export const StorageService = {
               return {
                 ...b,
                 color: b.color || '#0C66E4',
+                inviteCode: b.inviteCode || generateBoardInviteCode(b.id),
                 members
               };
             });

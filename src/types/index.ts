@@ -129,6 +129,7 @@ export interface StudyBoard {
   color?: string;
   icon?: string;
   isDefault?: boolean;
+  inviteCode?: string; // 6-8 char invite code, e.g. DW-DEFAULT or DW-8M2P4X
   members: BoardMember[];
   createdAt: string;
 }

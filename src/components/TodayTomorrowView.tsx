@@ -28,7 +28,8 @@ import {
   Video,
   MessageSquare,
   AtSign,
-  Search
+  Search,
+  Key
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { CreateBoardModal } from './CreateBoardModal';
@@ -62,6 +63,7 @@ export const TodayTomorrowView: React.FC = () => {
     delegateTopic,
     setIsTemplatesModalOpen,
     setIsTeamRoomOpen,
+    setIsJoinBoardModalOpen,
     activeCall,
     sendCollabNotification,
     profile
@@ -408,7 +410,7 @@ export const TodayTomorrowView: React.FC = () => {
                   )}
                 </div>
 
-                <div className="pt-1.5 border-t" style={{ borderColor: 'var(--border)' }}>
+                <div className="pt-1.5 border-t space-y-1" style={{ borderColor: 'var(--border)' }}>
                   <button
                     onClick={() => {
                       setIsBoardDropdownOpen(false);
@@ -418,6 +420,16 @@ export const TodayTomorrowView: React.FC = () => {
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Create New Board</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsBoardDropdownOpen(false);
+                      setIsJoinBoardModalOpen(true);
+                    }}
+                    className="w-full py-1.5 px-2 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5 justify-center cursor-pointer"
+                  >
+                    <Key className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Join with Invite Code</span>
                   </button>
                 </div>
               </div>
@@ -451,6 +463,20 @@ export const TodayTomorrowView: React.FC = () => {
             >
               <UserPlus className="w-3.5 h-3.5 text-blue-600" />
               <span className="hidden sm:inline">Collaborate</span>
+            </button>
+
+            <button
+              onClick={() => setIsJoinBoardModalOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)'
+              }}
+              title="Enter a board invite code to join another board"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">Join Code</span>
             </button>
 
             <button

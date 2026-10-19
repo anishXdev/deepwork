@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Users, UserPlus, Copy, Check, Trash2, X, AlertCircle, CheckCircle2, Search } from 'lucide-react';
+import { Users, UserPlus, Copy, Check, Trash2, X, AlertCircle, CheckCircle2, Key, Loader2, Sparkles } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
-import { StorageService } from '../services/storage';
+import { StorageService, generateBoardInviteCode } from '../services/storage';
 import { UserProfile } from '../types';
 
 interface CollaborationModalProps {
@@ -18,50 +18,114 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [validationError, setValidationError] = useState<string>('');
+  const [infoMessage, setInfoMessage] = useState<string>('');
   const [matchedUser, setMatchedUser] = useState<UserProfile | null>(null);
+  const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+
+  const normalizeEmail = (val: string) => {
+    let clean = (val || '').trim().toLowerCase();
+    if (clean.endsWith('@gamil.com')) {
+      clean = clean.replace('@gamil.com', '@gmail.com');
+    }
+    return clean;
+  };
 
   useEffect(() => {
     if (isOpen) {
-      const users = StorageService.getRegisteredUsers();
-      setRegisteredUsers(users);
+      // 1. Initial immediate local directory
+      const localUsers = StorageService.getRegisteredUsers();
+      setRegisteredUsers(localUsers);
       setInviteEmail('');
       setInviteName('');
       setValidationError('');
+      setInfoMessage('');
       setMatchedUser(null);
+      setIsSearchingRemote(false);
+
+      // 2. Fetch and merge latest registered users across MongoDB Atlas
+      StorageService.syncRegisteredUsersFromCloud().then(cloudUsers => {
+        if (cloudUsers && cloudUsers.length > 0) {
+          setRegisteredUsers(cloudUsers);
+        }
+      });
     }
   }, [isOpen]);
 
   if (!isOpen || !activeBoard) return null;
 
   const members = activeBoard.members || [];
+  const inviteCode = activeBoard.inviteCode || generateBoardInviteCode(activeBoard.id);
 
-  const handleEmailChange = (val: string) => {
+  const handleEmailChange = async (val: string) => {
     setInviteEmail(val);
-    const trimmed = val.trim().toLowerCase();
+    setInfoMessage('');
+    const normalized = normalizeEmail(val);
 
-    if (!trimmed) {
+    if (!normalized) {
       setValidationError('');
       setMatchedUser(null);
       return;
     }
 
-    const found = registeredUsers.find(u => u.email.toLowerCase() === trimmed);
+    // Check if typo was corrected
+    if (val.trim().toLowerCase().endsWith('@gamil.com')) {
+      setInfoMessage('Auto-correcting "@gamil.com" to "@gmail.com"');
+    }
+
+    // 1. Check local registered list
+    const found = registeredUsers.find(u => normalizeEmail(u.email) === normalized);
     if (found) {
-      // Check if already in board
-      const isAlreadyMember = members.some(m => m.email.toLowerCase() === trimmed);
+      const isAlreadyMember = members.some(m => normalizeEmail(m.email) === normalized);
       if (isAlreadyMember) {
-        setValidationError(`"${found.name || trimmed}" is already a member of this board.`);
+        setValidationError(`"${found.name || normalized}" is already a member of this board.`);
         setMatchedUser(null);
       } else {
         setValidationError('');
         setMatchedUser(found);
         setInviteName(found.name || '');
       }
+      return;
+    }
+
+    // 2. If it contains @ and domain, trigger live cloud lookup in MongoDB Atlas
+    if (normalized.includes('@') && normalized.includes('.')) {
+      setIsSearchingRemote(true);
+      try {
+        const remoteUser = await StorageService.lookupUserRemote(normalized);
+        setIsSearchingRemote(false);
+        if (remoteUser) {
+          const isAlreadyMember = members.some(m => normalizeEmail(m.email) === normalizeEmail(remoteUser.email));
+          if (isAlreadyMember) {
+            setValidationError(`"${remoteUser.name || remoteUser.email}" is already a member of this board.`);
+            setMatchedUser(null);
+          } else {
+            setValidationError('');
+            setMatchedUser(remoteUser);
+            setInviteName(remoteUser.name || '');
+            setRegisteredUsers(prev => {
+              if (!prev.some(u => normalizeEmail(u.email) === normalizeEmail(remoteUser.email))) {
+                return [...prev, remoteUser];
+              }
+              return prev;
+            });
+          }
+          return;
+        }
+      } catch {
+        setIsSearchingRemote(false);
+      }
+    }
+
+    // 3. Fallback: email not found in cloud directory yet
+    setMatchedUser(null);
+    if (normalized.includes('@') && normalized.includes('.')) {
+      setValidationError('');
+      setInfoMessage('User not found in directory. You can still send an invite or share the Board Code below.');
     } else {
-      setMatchedUser(null);
-      setValidationError('No existing Deepwork user found with this email. Invites can only be sent to registered users.');
+      setValidationError('');
     }
   };
 
@@ -70,31 +134,34 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
     setInviteName(user.name || '');
     setMatchedUser(user);
     setValidationError('');
+    setInfoMessage('');
   };
 
-  const handleInvite = (e: React.FormEvent) => {
+  const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
 
-    const trimmed = inviteEmail.trim().toLowerCase();
-    const existing = StorageService.findUserByEmail(trimmed);
+    const normalized = normalizeEmail(inviteEmail);
 
-    if (!existing) {
-      setValidationError('No existing Deepwork user found with this email. Collaboration invites can only be sent to existing users.');
-      Haptics.warning();
-      return;
-    }
-
-    if (members.some(m => m.email.toLowerCase() === trimmed)) {
+    if (members.some(m => normalizeEmail(m.email) === normalized)) {
       setValidationError('This user is already a collaborator on this board.');
       Haptics.warning();
       return;
     }
 
+    // Retrieve or remote-lookup user
+    let targetUser = matchedUser;
+    if (!targetUser) {
+      targetUser = await StorageService.lookupUserRemote(normalized) || StorageService.findUserByEmail(normalized) || null;
+    }
+
+    const finalEmail = targetUser ? targetUser.email : (normalized.includes('@') ? normalized : inviteEmail.trim());
+    const finalName = targetUser?.name || inviteName.trim() || finalEmail.split('@')[0];
+
     Haptics.success();
     addBoardMember(activeBoard.id, {
-      name: existing.name || inviteName.trim() || existing.email,
-      email: existing.email,
+      name: finalName,
+      email: finalEmail,
       role: inviteRole,
     });
 
@@ -110,15 +177,24 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
       senderColor: '#0C66E4'
     });
 
-    Notifications.toast('success', `👥 Invite sent to existing user "${existing.name || existing.email}"!`);
+    Notifications.toast('success', `👥 Collaboration invite sent to "${finalName}" (${finalEmail})!`);
     setInviteName('');
     setInviteEmail('');
     setMatchedUser(null);
     setValidationError('');
+    setInfoMessage('');
+  };
+
+  const handleCopyInviteCode = () => {
+    navigator.clipboard.writeText(inviteCode);
+    setCopiedCode(true);
+    Haptics.notification();
+    Notifications.toast('success', `🔑 Board Invite Code "${inviteCode}" copied to clipboard!`);
+    setTimeout(() => setCopiedCode(false), 2500);
   };
 
   const handleCopyInviteLink = () => {
-    const inviteUrl = `${window.location.origin}/?joinBoard=${encodeURIComponent(activeBoard.id)}&boardName=${encodeURIComponent(activeBoard.name)}&inviter=${encodeURIComponent(profile.name || profile.email || 'Team Lead')}`;
+    const inviteUrl = `${window.location.origin}/?joinBoard=${encodeURIComponent(activeBoard.id)}&code=${encodeURIComponent(inviteCode)}&boardName=${encodeURIComponent(activeBoard.name)}&inviter=${encodeURIComponent(profile.name || profile.email || 'Team Lead')}`;
     navigator.clipboard.writeText(inviteUrl);
     setCopiedLink(true);
     Haptics.notification();
@@ -127,11 +203,11 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
   };
 
   // Candidates among registered users not yet added (strictly exclude current logged-in user!)
-  const myEmail = (profile.email || '').trim().toLowerCase();
+  const myEmail = normalizeEmail(profile.email || '');
   const availableRegisteredUsers = registeredUsers.filter(
     u => u.email && 
-         u.email.trim().toLowerCase() !== myEmail &&
-         !members.some(m => m.email.trim().toLowerCase() === u.email.trim().toLowerCase())
+         normalizeEmail(u.email) !== myEmail &&
+         !members.some(m => normalizeEmail(m.email) === normalizeEmail(u.email))
   );
 
   return (
@@ -163,42 +239,71 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        {/* Shareable Link Box */}
-        <div className="p-3 rounded-xl flex items-center justify-between gap-2" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direct Invite Link</p>
-            <p className="text-xs truncate text-slate-500 font-mono">
-              {window.location.origin}/?joinBoard={activeBoard.id.substring(0, 8)}...
-            </p>
+        {/* Board Invite Code Box */}
+        <div className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                <Key className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Board Invite Code</p>
+                <p className="text-[11px] text-slate-500">Teammates can enter this code in Board Menu → Join with Code</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-xs font-black tracking-widest px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-all">
+                {inviteCode}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyInviteCode}
+                className="btn-secondary text-xs px-2.5 py-1 flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                title="Copy Invite Code"
+              >
+                {copiedCode ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-600 font-bold text-[11px]">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span className="text-[11px]">Copy Code</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleCopyInviteLink}
-            className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-          >
-            {copiedLink ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-600 font-bold">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy Link</span>
-              </>
-            )}
-          </button>
+
+          {/* Shareable Direct Link */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] text-slate-400 truncate">
+                Direct link: <span className="font-mono text-slate-500">{window.location.origin}/?code={inviteCode}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyInviteLink}
+              className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer shrink-0"
+            >
+              {copiedLink ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+              <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Invite Member Form: Only Existing Users */}
+        {/* Invite Member Form: User Directory Lookup */}
         <form onSubmit={handleInvite} className="p-3.5 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
               <UserPlus className="w-3.5 h-3.5 text-blue-600" />
-              <span>Invite Existing Deepwork User</span>
+              <span>Invite Deepwork User</span>
             </div>
             <span className="text-[10px] font-semibold text-slate-400 bg-slate-500/10 px-2 py-0.5 rounded-md">
-              Email Lookup Only
+              Live Cloud Lookup
             </span>
           </div>
 
@@ -207,21 +312,31 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
               <input
                 type="email"
                 required
-                placeholder="Enter existing user's registered email..."
+                placeholder="Enter user's registered email (e.g. anish4d@gmail.com)..."
                 value={inviteEmail}
                 onChange={e => handleEmailChange(e.target.value)}
                 className="input-base text-xs py-2 w-full pr-8"
               />
-              {matchedUser && (
+              {isSearchingRemote && (
+                <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2" />
+              )}
+              {!isSearchingRemote && matchedUser && (
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-2.5 top-1/2 -translate-y-1/2" />
               )}
             </div>
 
-            {/* Validation Feedback */}
+            {/* Validation & Match Feedback */}
             {matchedUser && (
               <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                 <span>Verified user: <strong>{matchedUser.name}</strong> ({matchedUser.email})</span>
+              </div>
+            )}
+
+            {infoMessage && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-blue-500 dark:text-blue-400 leading-snug">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>{infoMessage}</span>
               </div>
             )}
 
@@ -247,9 +362,9 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                     onClick={() => handleSelectQuickUser(u)}
                     className="px-2 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all hover:scale-[1.02] cursor-pointer"
                     style={{
-                      background: inviteEmail.toLowerCase() === u.email.toLowerCase() ? 'var(--accent-soft)' : 'var(--bg-card)',
-                      borderColor: inviteEmail.toLowerCase() === u.email.toLowerCase() ? 'var(--accent)' : 'var(--border)',
-                      color: inviteEmail.toLowerCase() === u.email.toLowerCase() ? 'var(--accent)' : 'var(--text-primary)'
+                      background: normalizeEmail(inviteEmail) === normalizeEmail(u.email) ? 'var(--accent-soft)' : 'var(--bg-card)',
+                      borderColor: normalizeEmail(inviteEmail) === normalizeEmail(u.email) ? 'var(--accent)' : 'var(--border)',
+                      color: normalizeEmail(inviteEmail) === normalizeEmail(u.email) ? 'var(--accent)' : 'var(--text-primary)'
                     }}
                   >
                     <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
@@ -278,7 +393,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
 
             <button
               type="submit"
-              disabled={!matchedUser || Boolean(validationError)}
+              disabled={!inviteEmail.trim() || Boolean(validationError)}
               className="btn-primary text-xs px-3.5 py-1.5 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />

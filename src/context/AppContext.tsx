@@ -23,7 +23,7 @@ import {
   ActiveCallState,
   IncomingCall
 } from '../types';
-import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects } from '../services/storage';
+import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects, generateBoardInviteCode } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
 import { GoogleCalendarService } from '../services/googleCalendar';
 import { GoogleAuthService } from '../services/googleAuth';
@@ -129,6 +129,9 @@ interface AppContextType {
   addBoardMember: (boardId: string, member: { name: string; email: string; role?: 'editor' | 'viewer' }) => void;
   removeBoardMember: (boardId: string, memberId: string) => void;
   delegateTopic: (topicId: string, member: BoardMember | null) => void;
+  joinBoardByCode: (code: string) => Promise<{ success: boolean; message: string; board?: StudyBoard }>;
+  isJoinBoardModalOpen: boolean;
+  setIsJoinBoardModalOpen: (open: boolean) => void;
 
   // Collaboration Notifications & Interactive Invites
   notifications: CollabNotification[];
@@ -213,6 +216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
+  const [isJoinBoardModalOpen, setIsJoinBoardModalOpen] = useState(false);
 
   // Collaboration Notifications State
   const [notifications, setNotifications] = useState<CollabNotification[]>(() => StorageService.getNotifications());
@@ -519,13 +523,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [profile.email, profile.name]);
 
-  // Handle direct invite link navigation (?joinBoard=...&boardName=...&inviter=...)
+  // Handle direct invite link navigation (?joinBoard=... or ?joinCode=... or ?code=...)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const joinBoardId = params.get('joinBoard');
       const joinBoardName = params.get('boardName');
       const inviter = params.get('inviter');
+      const joinCode = params.get('joinCode') || params.get('code');
+
+      if (joinCode) {
+        joinBoardByCode(joinCode);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('joinCode');
+        url.searchParams.delete('code');
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+        return;
+      }
 
       if (joinBoardId) {
         setBoards(prev => {
@@ -551,6 +565,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             description: `Shared workspace invited by ${inviter ? decodeURIComponent(inviter) : 'team member'}`,
             color: '#8B5CF6',
             icon: '🚀',
+            inviteCode: generateBoardInviteCode(joinBoardId),
             members: [
               {
                 id: profile.id || 'member_' + Date.now(),
@@ -588,14 +603,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0];
 
+  const joinBoardByCode = async (code: string): Promise<{ success: boolean; message: string; board?: StudyBoard }> => {
+    const rawCode = (code || '').trim().toUpperCase();
+    if (!rawCode) {
+      return { success: false, message: 'Please enter a valid invite code' };
+    }
+
+    // 1. Check local boards
+    const local = boards.find(b =>
+      b.inviteCode?.toUpperCase() === rawCode ||
+      b.id.toUpperCase() === rawCode ||
+      b.id.toUpperCase() === `BOARD_${rawCode.replace(/^DW-/, '')}`
+    );
+
+    if (local) {
+      setActiveBoardIdState(local.id);
+      StorageService.saveActiveBoardId(local.id);
+      sound.playCompletionChime();
+      Notifications.toast('success', `Switched to "${local.name}"!`);
+      return { success: true, message: `Switched to "${local.name}"`, board: local };
+    }
+
+    // 2. Query remote MongoDB Atlas
+    try {
+      const res = await fetch(`/api/sync?boardCode=${encodeURIComponent(rawCode)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.found && data.board) {
+          const remoteBoard: StudyBoard = data.board;
+          const userMember: BoardMember = {
+            id: profile.id || 'member_' + Date.now(),
+            name: profile.name || 'Collaborator',
+            email: profile.email || '',
+            color: '#10B981',
+            role: 'editor'
+          };
+
+          const members = Array.isArray(remoteBoard.members) ? [...remoteBoard.members] : [];
+          if (profile.email && !members.some(m => m.email.toLowerCase() === profile.email.toLowerCase())) {
+            members.push(userMember);
+          }
+
+          const boardToAdd: StudyBoard = {
+            ...remoteBoard,
+            inviteCode: remoteBoard.inviteCode || rawCode,
+            members
+          };
+
+          setBoards(prev => {
+            const exists = prev.some(b => b.id === boardToAdd.id);
+            if (exists) {
+              return prev.map(b => b.id === boardToAdd.id ? boardToAdd : b);
+            }
+            return [...prev, boardToAdd];
+          });
+
+          setActiveBoardIdState(boardToAdd.id);
+          StorageService.saveActiveBoardId(boardToAdd.id);
+          sound.playCompletionChime();
+          Haptics.success();
+          Notifications.toast('success', `🎉 Joined "${boardToAdd.name}" invited by ${data.inviter || 'team'}!`);
+          CloudSyncService.pushToCloudImmediate();
+          return { success: true, message: `Successfully joined "${boardToAdd.name}"`, board: boardToAdd };
+        } else {
+          return { success: false, message: data.message || `No board found with code "${rawCode}"` };
+        }
+      }
+    } catch (e: any) {
+      return { success: false, message: 'Could not connect to cloud: ' + e?.message };
+    }
+
+    return { success: false, message: `No board found with code "${rawCode}"` };
+  };
+
   const createBoard = (name: string, description = '', color = '#0C66E4', icon = '📋'): StudyBoard => {
+    const id = 'board_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newBoard: StudyBoard = {
-      id: 'board_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id,
       name: name.trim(),
       description: description.trim(),
       color,
       icon,
       isDefault: false,
+      inviteCode: generateBoardInviteCode(id),
       members: [
         { id: profile.id || 'member_me', name: `${profile.name || 'You'} (Owner)`, email: profile.email || '', color, role: 'owner' },
       ],
@@ -1558,6 +1648,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addBoardMember,
         removeBoardMember,
         delegateTopic,
+        joinBoardByCode,
+        isJoinBoardModalOpen,
+        setIsJoinBoardModalOpen,
         // Collaboration Notifications
         notifications,
         unreadNotificationsCount,
