@@ -16,37 +16,43 @@ export const ToastContainer: React.FC = () => {
   return (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none select-none">
       {toasts.map(toast => {
-        let borderClass = 'border-teal-500/30';
-        let bgClass = 'bg-[#030a12]/90';
+        let borderColor = 'var(--border)';
+        let accentColor = 'var(--accent)';
         let Icon = Info;
-        let iconColor = 'text-teal-400';
 
         if (toast.type === 'success') {
-          borderClass = 'border-emerald-500/40';
-          iconColor = 'text-emerald-400';
+          borderColor = 'rgba(16,185,129,0.4)';
+          accentColor = '#10b981';
           Icon = CheckCircle2;
         } else if (toast.type === 'warning') {
-          borderClass = 'border-amber-500/40';
-          iconColor = 'text-amber-400';
+          borderColor = 'rgba(245,158,11,0.4)';
+          accentColor = '#f59e0b';
           Icon = AlertTriangle;
         } else if (toast.type === 'error') {
-          borderClass = 'border-rose-500/40';
-          iconColor = 'text-rose-400';
+          borderColor = 'rgba(239,68,68,0.4)';
+          accentColor = '#ef4444';
           Icon = AlertCircle;
         }
 
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center justify-between gap-3 p-3 rounded-2xl ${bgClass} ${borderClass} border shadow-2xl backdrop-blur-xl text-xs text-white animate-in slide-in-from-top-2 fade-in`}
+            className="pointer-events-auto flex items-center justify-between gap-3 p-3 rounded-xl text-xs animate-in slide-in-from-top-2 fade-in"
+            style={{
+              background: 'var(--bg-card)',
+              border: `1px solid ${borderColor}`,
+              boxShadow: 'var(--shadow-md)',
+              color: 'var(--text-primary)',
+            }}
           >
-            <div className="flex items-center space-x-2.5 min-w-0">
-              <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Icon className="w-4 h-4 shrink-0" style={{ color: accentColor }} />
               <p className="truncate font-medium">{toast.message}</p>
             </div>
             <button
               onClick={() => Notifications.dismissToast(toast.id)}
-              className="text-slate-400 hover:text-white p-0.5 rounded transition-colors"
+              className="p-0.5 rounded transition-colors"
+              style={{ color: 'var(--text-muted)' }}
             >
               <X className="w-3.5 h-3.5" />
             </button>

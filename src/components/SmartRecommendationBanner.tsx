@@ -35,33 +35,13 @@ export const SmartRecommendationBanner: React.FC = () => {
   const getStatusBadge = () => {
     switch (recommendation.status) {
       case 'achieved':
-        return {
-          icon: CheckCircle2,
-          color: 'text-emerald-500 dark:text-emerald-400',
-          bg: 'bg-emerald-500/10 border-emerald-500/20',
-          symbol: '🎉 Done'
-        };
+        return { color: '#10b981', symbol: '✓ Done' };
       case 'ahead':
-        return {
-          icon: TrendingUp,
-          color: 'text-sky-500 dark:text-sky-400',
-          bg: 'bg-sky-500/10 border-sky-500/20',
-          symbol: '🚀 Ahead'
-        };
+        return { color: '#3b82f6', symbol: '↑ Ahead' };
       case 'behind':
-        return {
-          icon: Target,
-          color: 'text-amber-500 dark:text-amber-400',
-          bg: 'bg-amber-500/10 border-amber-500/20',
-          symbol: '⚡ Boost'
-        };
+        return { color: '#f59e0b', symbol: '⚡ Boost' };
       default:
-        return {
-          icon: Sparkles,
-          color: 'text-ocean-600 dark:text-aqua-400',
-          bg: 'bg-ocean-500/10 border-ocean-500/20',
-          symbol: '✨ On Track'
-        };
+        return { color: 'var(--accent)', symbol: '· On Track' };
     }
   };
 
@@ -72,116 +52,129 @@ export const SmartRecommendationBanner: React.FC = () => {
   );
 
   return (
-    <div className="glass-card rounded-2xl p-4 sm:p-5 border border-ocean-300/30 dark:border-ocean-900/60 mb-6 relative overflow-hidden transition-colors">
+    <div style={{
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      borderRadius: '16px',
+      padding: '16px 20px',
+      marginBottom: '24px',
+    }}>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        
-        {/* Left: Exam Countdown & Pacing Metrics */}
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-          
-          {/* Metric 1: Exam Date Countdown (Works for both Simple Mode & GATE Mode) */}
-          <div 
+
+        {/* Left: Metrics */}
+        <div className="flex flex-wrap items-center gap-5 sm:gap-7">
+
+          {/* Exam Countdown */}
+          <div
             onClick={() => setIsEditingExamConfig(!isEditingExamConfig)}
-            className="flex items-center space-x-2.5 cursor-pointer group"
-            title="Click to set Exam Date, see days left, or toggle GATE Prep Mode"
+            className="flex items-center gap-2.5 cursor-pointer group"
+            title="Click to configure exam date or toggle GATE mode"
           >
-            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 shadow-sm ${
-              isGatePrep
-                ? 'bg-amber-500/15 border-amber-500/30 text-amber-500'
-                : 'bg-teal-500/15 border-teal-500/30 text-teal-500'
-            }`}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: isGatePrep ? 'rgba(180,83,9,0.12)' : 'rgba(180,83,9,0.08)',
+              border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--accent)', flexShrink: 0
+            }}>
               {daysUntilExam !== null ? <Award className="w-4 h-4" /> : <CalendarPlus className="w-4 h-4" />}
             </div>
             <div>
-              <div className={`text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5 ${
-                isGatePrep ? 'text-amber-600 dark:text-amber-400' : 'text-teal-600 dark:text-teal-400'
-              }`}>
+              <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {isGatePrep ? (
                   <>
                     <span>GATE {targetStream}</span>
-                    <span className="px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] font-mono text-amber-600 dark:text-amber-300">
-                      {targetAir}
-                    </span>
+                    <span style={{ padding: '0 5px', borderRadius: '4px', background: 'rgba(180,83,9,0.12)', border: '1px solid rgba(180,83,9,0.25)', fontSize: '9px', fontFamily: 'monospace' }}>{targetAir}</span>
                   </>
                 ) : (
                   <span>{daysUntilExam !== null ? customExamName : 'Exam Countdown'}</span>
                 )}
-                <Settings2 className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+                <Settings2 className="w-2.5 h-2.5" style={{ opacity: 0.6 }} />
               </div>
-
               {daysUntilExam !== null ? (
-                <div className="text-base sm:text-lg font-extrabold font-mono text-slate-800 dark:text-slate-100">
-                  {daysUntilExam}<span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">days left</span>
+                <div style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                  {daysUntilExam}<span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)', marginLeft: '3px' }}>days left</span>
                 </div>
               ) : (
-                <div className="text-xs sm:text-sm font-bold text-teal-600 dark:text-teal-300 group-hover:underline flex items-center gap-1 mt-0.5">
-                  <span>+ Set Exam Date</span>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }} className="group-hover:underline flex items-center gap-1 mt-0.5">
+                  + Set Exam Date
                 </div>
               )}
             </div>
           </div>
 
-          {/* Metric 2: Daily Pace Gauge */}
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-ocean-500/10 border border-ocean-500/20 flex items-center justify-center text-ocean-600 dark:text-aqua-400 flex-shrink-0">
-              <Zap className="w-4 h-4 fill-ocean-500" />
+          {/* Daily Pace */}
+          <div className="flex items-center gap-2.5">
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: 'rgba(180,83,9,0.08)', border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--accent)', flexShrink: 0
+            }}>
+              <Zap className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-ocean-700/80 dark:text-ocean-300/80 flex items-center gap-1">
+              <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span>Daily Pace</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${badge.bg} ${badge.color}`}>
-                  {badge.symbol}
-                </span>
+                <span style={{ fontSize: '10px', fontFamily: 'monospace', padding: '0 5px', borderRadius: '4px', background: 'rgba(180,83,9,0.1)', color: badge.color, border: `1px solid ${badge.color}33` }}>{badge.symbol}</span>
               </div>
-              <div className="text-base sm:text-lg font-extrabold font-mono text-slate-800 dark:text-slate-100">
-                {recommendation.recommendedDailyHours}<span className="text-xs font-normal text-slate-500 dark:text-slate-400">h / day</span>
+              <div style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                {recommendation.recommendedDailyHours}<span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)' }}>h / day</span>
               </div>
             </div>
           </div>
 
-          {/* Metric 3: Weekly Progress */}
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 flex-shrink-0">
+          {/* Weekly Progress */}
+          <div className="flex items-center gap-2.5">
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: 'rgba(16,185,129,0.08)', border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#10b981', flexShrink: 0
+            }}>
               <Target className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-ocean-700/80 dark:text-ocean-300/80">
-                Week Target
-              </div>
-              <div className="text-base sm:text-lg font-extrabold font-mono text-slate-800 dark:text-slate-100">
-                {recommendation.hoursStudiedThisWeek}<span className="text-xs text-slate-400">/{recommendation.weeklyTarget}h</span>
-                <span className="text-xs text-ocean-600 dark:text-aqua-400 ml-1.5 font-sans font-semibold">({percentComplete}%)</span>
+              <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Week Target</div>
+              <div style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                {recommendation.hoursStudiedThisWeek}<span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>/{recommendation.weeklyTarget}h</span>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', marginLeft: '6px', fontFamily: 'sans-serif' }}>({percentComplete}%)</span>
               </div>
             </div>
           </div>
 
-          {/* Metric 4: Remaining */}
-          <div className="hidden sm:flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-aqua-500/10 border border-aqua-500/20 flex items-center justify-center text-aqua-600 dark:text-aqua-400 flex-shrink-0">
+          {/* Remaining */}
+          <div className="hidden sm:flex items-center gap-2.5">
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '10px',
+              background: 'rgba(180,83,9,0.06)', border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--accent)', flexShrink: 0
+            }}>
               <CalendarDays className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-ocean-700/80 dark:text-ocean-300/80">
-                Week Left
-              </div>
-              <div className="text-base sm:text-lg font-extrabold font-mono text-slate-800 dark:text-slate-100">
-                {recommendation.hoursRemaining}h <span className="text-xs font-normal text-slate-500 dark:text-slate-400">({recommendation.daysRemainingInWeek}d)</span>
+              <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Week Left</div>
+              <div style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                {recommendation.hoursRemaining}h <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)' }}>({recommendation.daysRemainingInWeek}d)</span>
               </div>
             </div>
           </div>
-
         </div>
 
-        {/* Right Actions: Mode Toggle Pill & Graph View */}
+        {/* Right Actions */}
         <div className="flex items-center gap-2 self-end lg:self-center">
           <button
             type="button"
             onClick={() => setStudyMode(!isGatePrep, targetStream)}
             title={isGatePrep ? 'Switch to Simple Study Mode' : 'Preparing for GATE? Enable GATE Prep Mode'}
-            className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              isGatePrep
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-300 hover:bg-amber-500/25'
-                : 'bg-white/60 dark:bg-abyss-card/60 border-ocean-200/50 dark:border-ocean-900/60 text-slate-600 dark:text-slate-400 hover:text-teal-400'
-            }`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              padding: '6px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
+              border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s',
+              background: isGatePrep ? 'rgba(180,83,9,0.12)' : 'var(--bg-card)',
+              color: isGatePrep ? 'var(--accent)' : 'var(--text-secondary)',
+            }}
           >
             <GraduationCap className="w-3.5 h-3.5" />
             <span>{isGatePrep ? 'GATE Mode: ON' : 'GATE Prep?'}</span>
@@ -189,42 +182,48 @@ export const SmartRecommendationBanner: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('analytics')}
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-white/80 dark:bg-abyss-card/80 hover:bg-ocean-500/10 dark:hover:bg-ocean-950/50 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-ocean-200/50 dark:border-ocean-900/60 transition-colors cursor-pointer"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              padding: '6px 12px', borderRadius: '10px', fontSize: '11px', fontWeight: 600,
+              border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s',
+              background: 'var(--bg-card)', color: 'var(--text-secondary)',
+            }}
           >
             <span>📊 {isGatePrep ? 'GATE Insights' : 'Insights'}</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
-
       </div>
 
-      {/* Inline Exam Date & Study Mode Configuration Drawer */}
+      {/* Inline Config Drawer */}
       {isEditingExamConfig && (
-        <div className="mt-4 pt-3.5 border-t border-teal-500/20 space-y-3 text-xs animate-in fade-in">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-slate-700 dark:text-teal-200">
+        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--border)', fontSize: '12px' }}>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)' }}>
               📅 Exam Countdown & Mode Settings
             </span>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setStudyMode(false)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
-                  !isGatePrep
-                    ? 'bg-teal-500 text-white'
-                    : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
+                style={{
+                  padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                  background: !isGatePrep ? 'var(--accent)' : 'var(--bg-card-alt)',
+                  color: !isGatePrep ? '#fff' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
               >
                 📚 Simple Mode
               </button>
               <button
                 type="button"
                 onClick={() => setStudyMode(true, targetStream)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
-                  isGatePrep
-                    ? 'bg-amber-500 text-slate-950'
-                    : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
+                style={{
+                  padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                  background: isGatePrep ? 'var(--accent)' : 'var(--bg-card-alt)',
+                  color: isGatePrep ? '#fff' : 'var(--text-secondary)',
+                  border: '1px solid var(--border)',
+                }}
               >
                 🎓 GATE Exam Mode
               </button>
@@ -233,21 +232,21 @@ export const SmartRecommendationBanner: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+              <label className="block mb-1" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
                 Date of Exam
               </label>
               <input
                 type="date"
                 value={examDateStr}
                 onChange={e => updateSettings({ gateExamDate: e.target.value })}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-abyss-950 border border-teal-500/30 font-mono text-slate-800 dark:text-slate-100"
+                className="input-base w-full"
               />
             </div>
 
             {isGatePrep ? (
               <>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block mb-1" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
                     GATE Stream & Syllabus
                   </label>
                   <select
@@ -257,7 +256,7 @@ export const SmartRecommendationBanner: React.FC = () => {
                       updateSettings({ gateTargetStream: newStream });
                       loadGateStreamSyllabus(newStream, false);
                     }}
-                    className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-abyss-950 border border-teal-500/30 font-bold text-slate-800 dark:text-slate-100"
+                    className="input-base w-full"
                   >
                     {Object.entries(GATE_STREAM_SYLLABUS).map(([key, val]) => (
                       <option key={key} value={key}>{val.label}</option>
@@ -266,7 +265,7 @@ export const SmartRecommendationBanner: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                  <label className="block mb-1" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
                     Target Rank / Score
                   </label>
                   <input
@@ -274,13 +273,13 @@ export const SmartRecommendationBanner: React.FC = () => {
                     placeholder="e.g. AIR < 100"
                     value={targetAir}
                     onChange={e => updateSettings({ gateTargetAir: e.target.value })}
-                    className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-abyss-950 border border-teal-500/30 font-bold text-slate-800 dark:text-slate-100"
+                    className="input-base w-full"
                   />
                 </div>
               </>
             ) : (
               <div className="sm:col-span-2">
-                <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                <label className="block mb-1" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
                   Exam Name (Optional)
                 </label>
                 <input
@@ -288,16 +287,16 @@ export const SmartRecommendationBanner: React.FC = () => {
                   placeholder="e.g. Semester Finals, CAT, Placement Prep..."
                   value={settings.examName || ''}
                   onChange={e => updateSettings({ examName: e.target.value })}
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-abyss-950 border border-teal-500/30 font-semibold text-slate-800 dark:text-slate-100"
+                  className="input-base w-full"
                 />
               </div>
             )}
 
-            <div className="flex items-end gap-2">
+            <div className="flex items-end">
               <button
                 type="button"
                 onClick={() => setIsEditingExamConfig(false)}
-                className="w-full py-1.5 px-3 rounded-xl liquid-btn text-white font-bold text-xs cursor-pointer"
+                className="btn-primary w-full"
               >
                 Done
               </button>
@@ -306,11 +305,16 @@ export const SmartRecommendationBanner: React.FC = () => {
         </div>
       )}
 
-      {/* Slim visual gradient progress track */}
-      <div className="mt-3.5 w-full bg-slate-200/80 dark:bg-abyss-950 rounded-full h-1.5 overflow-hidden border border-ocean-300/40 dark:border-ocean-900/60">
-        <div 
-          className="h-full bg-gradient-to-r from-ocean-500 via-aqua-400 to-emerald-400 rounded-full transition-all duration-500"
-          style={{ width: `${percentComplete}%` }}
+      {/* Weekly Progress Bar */}
+      <div style={{ marginTop: '14px', width: '100%', height: '4px', borderRadius: '9999px', background: 'var(--bg-card-alt)', overflow: 'hidden' }}>
+        <div
+          style={{
+            height: '100%',
+            width: `${percentComplete}%`,
+            background: 'var(--accent)',
+            borderRadius: '9999px',
+            transition: 'width 0.5s ease',
+          }}
         />
       </div>
     </div>

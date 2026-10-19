@@ -15,45 +15,49 @@ export const CreateSubjectModal: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-
     addSubject(name.trim(), color, weeklyTargetHours);
     setName('');
     closeCreateSubjectModal();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div 
-        className="glass-panel w-full sm:max-w-md max-sm:rounded-t-3xl sm:rounded-2xl border border-ocean-200/50 dark:border-ocean-900/60 shadow-2xl p-6 space-y-5 max-sm:max-h-[90vh] overflow-y-auto"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div
+        className="w-full sm:max-w-md max-sm:rounded-t-2xl sm:rounded-2xl p-6 space-y-5 max-sm:max-h-[90vh] overflow-y-auto"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-md)',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Mobile Pull Handle Pill */}
-        <div className="sm:hidden w-12 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-2" />
+        {/* Mobile handle */}
+        <div className="sm:hidden w-12 h-1.5 rounded-full mx-auto mb-2" style={{ background: 'var(--border)' }} />
 
-        <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-ocean-500/10 text-ocean-600 dark:text-aqua-400 border border-ocean-500/20">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Add Subject</h2>
-              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Create a study domain</p>
+              <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Add Subject</h2>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Create a study domain</p>
             </div>
           </div>
 
           <button
             onClick={closeCreateSubjectModal}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-ocean-500/10 transition-colors"
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)', background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              Subject Name
-            </label>
+            <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Subject Name</label>
             <input
               type="text"
               required
@@ -61,14 +65,12 @@ export const CreateSubjectModal: React.FC = () => {
               placeholder="e.g. Distributed Systems, Organic Chemistry..."
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-ocean-500"
+              className="input-base w-full"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              Weekly Target (Hours)
-            </label>
+            <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Weekly Target (Hours)</label>
             <input
               type="number"
               min="0.5"
@@ -76,32 +78,31 @@ export const CreateSubjectModal: React.FC = () => {
               step="0.5"
               value={weeklyTargetHours}
               onChange={e => setWeeklyTargetHours(parseFloat(e.target.value) || 1)}
-              className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold focus:outline-none focus:border-ocean-500"
+              className="input-base w-full font-mono"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                Color Tag (20 Palette Options)
-              </label>
-              <span className="text-[11px] font-mono text-ocean-600 dark:text-aqua-300 font-bold">
+              <label className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Color Tag (20 Palette Options)</label>
+              <span className="text-[11px] font-mono font-bold" style={{ color: 'var(--accent)' }}>
                 {SUBJECT_PALETTE.find(p => p.hex === color)?.name || color}
               </span>
             </div>
-            <div className="grid grid-cols-10 gap-2 p-2.5 rounded-xl bg-white/50 dark:bg-black/30 border border-ocean-200/40 dark:border-ocean-900/50">
+            <div className="grid grid-cols-10 gap-2 p-2.5 rounded-xl" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
               {SUBJECT_PALETTE.map(c => (
                 <button
                   key={c.hex}
                   type="button"
                   title={c.name}
                   onClick={() => setColor(c.hex)}
-                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all ${
-                    color === c.hex 
-                      ? 'scale-125 ring-2 ring-white shadow-lg' 
-                      : 'hover:scale-110 opacity-75 hover:opacity-100'
-                  }`}
-                  style={{ backgroundColor: c.hex }}
+                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all"
+                  style={{
+                    backgroundColor: c.hex,
+                    transform: color === c.hex ? 'scale(1.25)' : 'scale(1)',
+                    boxShadow: color === c.hex ? `0 0 0 2px var(--bg-card), 0 0 0 3.5px ${c.hex}` : 'none',
+                    opacity: color === c.hex ? 1 : 0.7,
+                  }}
                 >
                   {color === c.hex && <Check className="w-3.5 h-3.5 text-white stroke-[3] drop-shadow-md" />}
                 </button>
@@ -109,18 +110,15 @@ export const CreateSubjectModal: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-end space-x-3 pt-3">
+          <div className="flex items-center justify-end gap-3 pt-3">
             <button
               type="button"
               onClick={closeCreateSubjectModal}
-              className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
+              className="btn-secondary"
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all active:scale-95"
-            >
+            <button type="submit" className="btn-primary active:scale-95 transition-all">
               Create Subject
             </button>
           </div>

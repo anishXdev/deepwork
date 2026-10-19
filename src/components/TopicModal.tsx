@@ -5,11 +5,11 @@ import { GateTaskCategory, GATE_TASK_CATEGORIES } from '../types';
 import { X, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
 
 export const TopicModal: React.FC = () => {
-  const { 
-    isTopicModalOpen, 
-    closeTopicModal, 
-    topicModalDefaultDate, 
-    subjects, 
+  const {
+    isTopicModalOpen,
+    closeTopicModal,
+    topicModalDefaultDate,
+    subjects,
     settings,
     addTopic,
     openCreateSubjectModal,
@@ -51,7 +51,6 @@ export const TopicModal: React.FC = () => {
         notes: notes.trim()
       });
 
-      // Reset form & close
       setName('');
       setNotes('');
       closeTopicModal();
@@ -63,25 +62,30 @@ export const TopicModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div 
-        className="glass-panel w-full sm:max-w-lg max-sm:rounded-t-3xl sm:rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5 max-sm:max-h-[90vh] overflow-y-auto"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div
+        className="w-full sm:max-w-lg max-sm:rounded-t-2xl sm:rounded-2xl p-6 space-y-5 max-sm:max-h-[90vh] overflow-y-auto"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-md)',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Mobile Pull Handle Pill */}
-        <div className="sm:hidden w-12 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-2" />
+        {/* Mobile pull handle */}
+        <div className="sm:hidden w-12 h-1.5 rounded-full mx-auto mb-2" style={{ background: 'var(--border)' }} />
 
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-ocean-500/10 text-ocean-600 dark:text-aqua-400 border border-ocean-500/20">
+        <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
                 {isGatePrep ? 'Add GATE Study Task' : 'Add Study Topic'}
               </h2>
-              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {isGatePrep ? 'Queue a concept, PYQ drill, mock test, or revision' : 'Queue a new topic or task'}
               </p>
             </div>
@@ -89,44 +93,45 @@ export const TopicModal: React.FC = () => {
 
           <button
             onClick={closeTopicModal}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-ocean-500/10 transition-colors"
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)', background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {subjects.length === 0 ? (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs space-y-2">
-            <div className="flex items-center space-x-2">
+          <div className="p-4 rounded-xl text-xs space-y-2"
+            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#b45309' }}>
+            <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>You don't have any subjects yet. Create your first subject to schedule topics!</span>
             </div>
             <button
               type="button"
               onClick={openCreateSubjectModal}
-              className="px-3 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold"
+              className="btn-primary text-xs"
             >
               + Create Subject
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Step 1 Guided Action Highlight Banner */}
+            {/* Tour Banner */}
             {isTourOpen && tourStep === 1 && (
-              <div className="p-3 rounded-2xl bg-teal-500/15 border border-teal-400/40 text-teal-300 text-xs flex items-center space-x-2.5 animate-pulse shadow-md shadow-teal-500/10">
-                <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
+              <div className="p-3 rounded-xl text-xs flex items-center gap-2.5 animate-pulse"
+                style={{ background: 'rgba(180,83,9,0.1)', border: '1px solid rgba(180,83,9,0.25)', color: 'var(--accent)' }}>
+                <Sparkles className="w-4 h-4 shrink-0" />
                 <span className="font-medium leading-snug">
-                  <strong className="text-white font-bold">Step 1 of 3:</strong> Enter what you want to study, choose estimated hours, and tap <strong className="text-teal-300 font-bold">Add Topic</strong>!
+                  <strong style={{ color: 'var(--text-primary)' }}>Step 1 of 3:</strong> Enter what you want to study, choose estimated hours, and tap <strong>Add Topic</strong>!
                 </span>
               </div>
             )}
 
-            {/* GATE Task Type Pills (Only in GATE Prep Mode) */}
+            {/* GATE Task Type Pills */}
             {isGatePrep && (
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Prep Mode
-                </label>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Prep Mode</label>
                 <div className="flex flex-wrap gap-1.5">
                   {(Object.keys(GATE_TASK_CATEGORIES) as GateTaskCategory[]).map(catKey => {
                     const cat = GATE_TASK_CATEGORIES[catKey];
@@ -136,11 +141,13 @@ export const TopicModal: React.FC = () => {
                         key={catKey}
                         type="button"
                         onClick={() => setCategory(catKey)}
-                        className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                          isSelected
-                            ? `${cat.bgClass} shadow-sm scale-105`
-                            : 'bg-slate-100 dark:bg-abyss-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-ocean-900/60 hover:border-teal-500/40'
-                        }`}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                        style={{
+                          border: '1px solid var(--border)',
+                          background: isSelected ? 'var(--accent)' : 'var(--bg-card-alt)',
+                          color: isSelected ? '#fff' : 'var(--text-secondary)',
+                          transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                        }}
                       >
                         {cat.emoji} {cat.label}
                       </button>
@@ -149,25 +156,24 @@ export const TopicModal: React.FC = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Subject Selector */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Subject
-                </label>
+                <label className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Subject</label>
                 <button
                   type="button"
                   onClick={openCreateSubjectModal}
-                  className="text-xs text-ocean-600 dark:text-aqua-400 hover:underline font-bold flex items-center gap-1"
+                  className="text-xs font-bold hover:underline"
+                  style={{ color: 'var(--accent)' }}
                 >
-                  <span>+ New Subject</span>
+                  + New Subject
                 </button>
               </div>
               <select
                 value={subjectId || subjects[0]?.id || ''}
                 onChange={e => setSubjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:outline-none focus:border-ocean-500"
+                className="input-base w-full"
               >
                 {subjects.map(sub => (
                   <option key={sub.id} value={sub.id}>
@@ -177,29 +183,28 @@ export const TopicModal: React.FC = () => {
               </select>
             </div>
 
-            {/* Topic Name + High-Yield GATE Topic Suggestions */}
+            {/* Topic Name */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Topic Title
-              </label>
+              <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Topic Title</label>
               <input
                 type="text"
                 required
                 autoFocus
-                placeholder={isGatePrep ? "e.g. Dynamic Programming + 25 Last-10-Year PYQs" : "e.g. Dynamic Programming: Longest Common Subsequence"}
+                placeholder={isGatePrep ? 'e.g. Dynamic Programming + 25 Last-10-Year PYQs' : 'e.g. Dynamic Programming: Longest Common Subsequence'}
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs font-medium focus:outline-none focus:border-ocean-500"
+                className="input-base w-full"
               />
               {isGatePrep && selectedSubject?.highYieldTopics && selectedSubject.highYieldTopics.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span className="text-[10px] font-mono text-slate-400">High-Yield GATE Topics:</span>
+                  <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>High-Yield GATE Topics:</span>
                   {selectedSubject.highYieldTopics.map(hy => (
                     <button
                       key={hy}
                       type="button"
                       onClick={() => setName(`${hy} (${GATE_TASK_CATEGORIES[category].label})`)}
-                      className="text-[10px] px-2 py-0.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/25 transition-colors cursor-pointer"
+                      className="text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                      style={{ background: 'rgba(180,83,9,0.08)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}
                     >
                       + {hy}
                     </button>
@@ -208,12 +213,10 @@ export const TopicModal: React.FC = () => {
               )}
             </div>
 
-            {/* Approx hours & When to study */}
+            {/* Hours & Scheduling */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Approx Hours
-                </label>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Approx Hours</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -223,73 +226,66 @@ export const TopicModal: React.FC = () => {
                     required
                     value={approxHours}
                     onChange={e => setApproxHours(parseFloat(e.target.value) || 0.5)}
-                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono font-bold focus:outline-none focus:border-ocean-500"
+                    className="input-base w-full font-mono"
                   />
-                  <span className="absolute right-3 top-2 text-xs text-slate-400 pointer-events-none">
-                    hrs
-                  </span>
+                  <span className="absolute right-3 top-2 text-xs pointer-events-none" style={{ color: 'var(--text-muted)' }}>hrs</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  When (Date)
-                </label>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>When (Date)</label>
                 <input
                   type="date"
                   required
                   value={scheduledDate}
                   onChange={e => setScheduledDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-ocean-500"
+                  className="input-base w-full font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Time (Optional)
-                </label>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Time (Optional)</label>
                 <input
                   type="time"
                   value={scheduledTime}
                   onChange={e => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 text-xs font-mono focus:outline-none focus:border-ocean-500"
+                  className="input-base w-full font-mono"
                 />
               </div>
             </div>
 
             {/* Notes */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Notes (Optional)
-              </label>
+              <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>Notes (Optional)</label>
               <textarea
                 rows={2}
                 placeholder="Key concepts, references..."
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-abyss-950 border border-ocean-200 dark:border-ocean-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-xs focus:outline-none focus:border-ocean-500"
+                className="input-base w-full"
               />
             </div>
 
-            {/* Google Calendar Notification */}
-            <div className="p-3 rounded-xl bg-ocean-500/10 border border-ocean-500/20 text-[11px] text-ocean-700 dark:text-aqua-300 flex items-center justify-between font-semibold">
+            {/* Google Calendar hint */}
+            <div className="p-3 rounded-xl text-[11px] flex items-center justify-between font-semibold"
+              style={{ background: 'rgba(180,83,9,0.06)', border: '1px solid rgba(180,83,9,0.15)', color: 'var(--accent)' }}>
               <span>📅 Auto-schedules event on Google Calendar</span>
-              <span className="text-emerald-500">Ready</span>
+              <span style={{ color: '#10b981' }}>Ready</span>
             </div>
 
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-end space-x-3 pt-2">
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={closeTopicModal}
-                className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
+                className="btn-secondary"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all disabled:opacity-50"
+                className="btn-primary disabled:opacity-50"
               >
                 {isSubmitting ? 'Scheduling...' : 'Add Topic'}
               </button>

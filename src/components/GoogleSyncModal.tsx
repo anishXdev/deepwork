@@ -4,15 +4,15 @@ import { GoogleAuthService } from '../services/googleAuth';
 import { StorageService } from '../services/storage';
 import { CloudSyncService } from '../services/cloudSync';
 import { UserProfile } from '../types';
-import { 
-  X, 
-  Cloud, 
-  Smartphone, 
-  Globe, 
-  Calendar, 
-  Check, 
-  Download, 
-  Upload, 
+import {
+  X,
+  Cloud,
+  Smartphone,
+  Globe,
+  Calendar,
+  Check,
+  Download,
+  Upload,
   AlertCircle,
   Sparkles,
   Copy,
@@ -22,10 +22,10 @@ import {
 import { Haptics } from '../utils/haptics';
 
 export const GoogleSyncModal: React.FC = () => {
-  const { 
-    isSyncModalOpen, 
-    setIsSyncModalOpen, 
-    profile, 
+  const {
+    isSyncModalOpen,
+    setIsSyncModalOpen,
+    profile,
     updateProfile,
     syncKey,
     updateSyncKey,
@@ -42,7 +42,6 @@ export const GoogleSyncModal: React.FC = () => {
   const [pairSuccess, setPairSuccess] = useState(false);
   const [mongoStatus, setMongoStatus] = useState<{ connected: boolean; cluster?: string; database?: string } | null>(null);
 
-  // Pre-load Google Identity Services and check MongoDB connection on open
   useEffect(() => {
     if (isSyncModalOpen) {
       GoogleAuthService.loadGoogleScript().catch(err => {
@@ -139,133 +138,121 @@ export const GoogleSyncModal: React.FC = () => {
     reader.readAsText(file);
   };
 
+  const tabBtnStyle = (active: boolean) => ({
+    flex: 1,
+    padding: '6px 12px',
+    borderRadius: '8px',
+    fontWeight: 700,
+    fontSize: '12px',
+    transition: 'all 0.15s',
+    background: active ? 'var(--bg-card)' : 'transparent',
+    color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+    border: active ? '1px solid var(--border)' : '1px solid transparent',
+    boxShadow: active ? 'var(--shadow-sm)' : 'none',
+    cursor: 'pointer',
+  } as React.CSSProperties);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div 
-        className="glass-panel w-full sm:max-w-lg max-sm:rounded-t-3xl sm:rounded-2xl border border-slate-300 dark:border-slate-700/80 shadow-2xl p-6 space-y-5 max-sm:max-h-[88vh] overflow-y-auto"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div
+        className="w-full sm:max-w-lg max-sm:rounded-t-2xl sm:rounded-2xl p-6 space-y-5 max-sm:max-h-[88vh] overflow-y-auto"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-md)',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Mobile Pull Handle Pill */}
-        <div className="sm:hidden w-12 h-1.5 bg-slate-400/30 rounded-full mx-auto mb-2" />
+        {/* Mobile handle */}
+        <div className="sm:hidden w-12 h-1.5 rounded-full mx-auto mb-2" style={{ background: 'var(--border)' }} />
 
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-ocean-200/50 dark:border-ocean-900/50 pb-3">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-ocean-500/10 text-ocean-500 dark:text-aqua-400 border border-ocean-500/20">
+        <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl" style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
               <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Cloud Sync & Data</h2>
-              <p className="text-xs text-ocean-700/80 dark:text-ocean-300/70">Cross-device real-time synchronization</p>
+              <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Cloud Sync & Data</h2>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Cross-device real-time synchronization</p>
             </div>
           </div>
 
           <button
             onClick={() => setIsSyncModalOpen(false)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-ocean-500/10 transition-colors"
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--text-muted)', background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Sub tabs (Android tab removed) */}
-        <div className="flex space-x-1 p-1 rounded-xl bg-slate-200/70 dark:bg-abyss-900/80 border border-ocean-300/30 dark:border-ocean-900/60 text-xs">
-          <button
-            onClick={() => {
-              Haptics.tap();
-              setActiveSubTab('devicesync');
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
-              activeSubTab === 'devicesync' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            Device Sync
-          </button>
-          <button
-            onClick={() => {
-              Haptics.tap();
-              setActiveSubTab('account');
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
-              activeSubTab === 'account' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            Google
-          </button>
-          <button
-            onClick={() => {
-              Haptics.tap();
-              setActiveSubTab('backup');
-            }}
-            className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${
-              activeSubTab === 'backup' ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            Backup
-          </button>
+        {/* Sub-tabs */}
+        <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+          {(['devicesync', 'account', 'backup'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => { Haptics.tap(); setActiveSubTab(tab); }}
+              style={tabBtnStyle(activeSubTab === tab)}
+            >
+              {tab === 'devicesync' ? 'Device Sync' : tab === 'account' ? 'Google' : 'Backup'}
+            </button>
+          ))}
         </div>
 
-        {/* Inline error / notice alert */}
+        {/* Error */}
         {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-start space-x-2.5 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p>{errorMessage}</p>
-            </div>
+          <div className="p-3.5 rounded-xl text-xs flex items-start gap-2.5 animate-in fade-in"
+            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', color: '#b45309' }}>
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
+            <p>{errorMessage}</p>
           </div>
         )}
 
-        {/* Tab 1: Universal Device Sync */}
+        {/* Tab 1: Device Sync */}
         {activeSubTab === 'devicesync' && (
           <div className="space-y-4">
-            {/* Cloud Sync Live Connection Card */}
-            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+            {/* Status card */}
+            <div className="p-3.5 rounded-xl flex items-center justify-between"
+              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
                   <Cloud className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                      Cloud Sync
-                    </span>
+                    <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Cloud Sync</span>
                   </div>
-                  <p className="text-[11px] text-emerald-800 dark:text-emerald-300/90 mt-0.5 font-medium">
-                    Automatic real-time data sync active
-                  </p>
+                  <p className="text-[11px] font-medium mt-0.5" style={{ color: '#10b981' }}>Automatic real-time data sync active</p>
                 </div>
               </div>
-
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/30">
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
                 Connected
               </span>
             </div>
 
-            {/* Device Sync Key Card */}
-            <div className="p-4 rounded-2xl bg-ocean-500/10 dark:bg-ocean-950/40 border border-ocean-300/40 dark:border-ocean-800/60 space-y-3">
+            {/* Sync Key */}
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    Your Device Sync Key
-                  </span>
-                </div>
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Your Device Sync Key</span>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${cloudSyncStatus === 'synced' ? 'bg-emerald-400 animate-pulse' : cloudSyncStatus === 'syncing' ? 'bg-amber-400 animate-spin' : 'bg-slate-400'}`} />
-                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
                     {cloudSyncStatus === 'syncing' ? 'Syncing...' : cloudSyncStatus === 'synced' ? 'Synced' : 'Ready'}
                   </span>
                 </div>
               </div>
 
-              {/* Sync Key Display */}
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-abyss-card border border-ocean-200 dark:border-ocean-800">
-                <span className="font-mono text-base font-black text-ocean-700 dark:text-aqua-300 tracking-wider flex-1 select-all px-2">
+              <div className="flex items-center gap-2 p-2.5 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                <span className="font-mono text-base font-black tracking-wider flex-1 select-all px-2" style={{ color: 'var(--accent)' }}>
                   {syncKey}
                 </span>
                 <button
                   onClick={handleCopyKey}
-                  className="px-3 py-1.5 rounded-lg bg-ocean-500/10 hover:bg-ocean-500/20 text-ocean-600 dark:text-aqua-400 text-xs font-semibold flex items-center gap-1 transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                  style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}
                 >
                   {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
@@ -273,16 +260,13 @@ export const GoogleSyncModal: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   {lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Real-time sync active'}
                 </span>
                 <button
-                  onClick={async () => {
-                    Haptics.tap();
-                    await syncWithCloudNow();
-                  }}
+                  onClick={async () => { Haptics.tap(); await syncWithCloudNow(); }}
                   disabled={cloudSyncStatus === 'syncing'}
-                  className="px-3.5 py-1.5 rounded-xl liquid-btn text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 disabled:opacity-50 shadow-md"
+                  className="btn-primary flex items-center gap-1.5 active:scale-95 disabled:opacity-50 text-xs py-1.5 px-3"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${cloudSyncStatus === 'syncing' ? 'animate-spin' : ''}`} />
                   <span>Sync</span>
@@ -290,14 +274,14 @@ export const GoogleSyncModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Pair with Phone or another Browser */}
-            <form onSubmit={handlePairDevice} className="p-4 rounded-2xl bg-slate-100/70 dark:bg-abyss-900/60 border border-ocean-200/40 dark:border-ocean-900/60 space-y-3">
+            {/* Pair Another Device */}
+            <form onSubmit={handlePairDevice} className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
               <div>
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-aqua-400" />
+                <h4 className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
+                  <Smartphone className="w-4 h-4" style={{ color: 'var(--accent)' }} />
                   Pair Another Device
                 </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
                   Enter your phone or laptop&apos;s key below to link both devices immediately.
                 </p>
               </div>
@@ -307,20 +291,21 @@ export const GoogleSyncModal: React.FC = () => {
                   type="text"
                   placeholder="e.g. PULSE-ABCD12"
                   value={inputSyncKey}
-                  onChange={(e) => setInputSyncKey(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-abyss-card border border-ocean-200 dark:border-ocean-800 text-xs font-mono uppercase text-slate-800 dark:text-slate-200 focus:outline-none focus:border-aqua-400"
+                  onChange={e => setInputSyncKey(e.target.value)}
+                  className="input-base flex-1 font-mono uppercase"
                 />
                 <button
                   type="submit"
                   disabled={!inputSyncKey.trim()}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-ocean-600 to-aqua-500 hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold transition-all shrink-0"
+                  className="btn-primary disabled:opacity-40 text-xs shrink-0"
                 >
                   Pair & Pull
                 </button>
               </div>
 
               {pairSuccess && (
-                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium flex items-center gap-1.5 animate-in fade-in">
+                <div className="p-2 rounded-lg text-xs font-medium flex items-center gap-1.5 animate-in fade-in"
+                  style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981' }}>
                   <Check className="w-3.5 h-3.5" />
                   <span>Devices successfully paired! Data synced.</span>
                 </div>
@@ -329,17 +314,18 @@ export const GoogleSyncModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 2: Clean Google Account & Calendar (Zero Backend OAuth Visible) */}
+        {/* Tab 2: Google Account */}
         {activeSubTab === 'account' && (
           <div className="space-y-4">
             {profile.googleConnected ? (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-3">
-                <div className="flex items-center space-x-3">
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                <div className="flex items-center gap-3">
                   {profile.avatarUrl ? (
                     <img
                       src={profile.avatarUrl}
                       alt={profile.name}
-                      className="w-10 h-10 rounded-full border border-emerald-500/30 object-cover"
+                      className="w-10 h-10 rounded-full object-cover"
+                      style={{ border: '1px solid rgba(16,185,129,0.3)' }}
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold">
@@ -347,47 +333,44 @@ export const GoogleSyncModal: React.FC = () => {
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center space-x-2">
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
-                        {profile.name}
-                      </h4>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">
-                        Connected
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{profile.name}</h4>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                        style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>Connected</span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{profile.email}</p>
+                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{profile.email}</p>
                   </div>
                   <button
                     onClick={handleSignOut}
-                    className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-300 dark:border-slate-700"
+                    className="btn-secondary text-xs"
                   >
                     Disconnect
                   </button>
                 </div>
 
-                <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid rgba(16,185,129,0.15)' }}>
+                  <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                      Auto-Schedule to Google Calendar
-                    </span>
+                    <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Auto-Schedule to Google Calendar</span>
                   </div>
                   <input
                     type="checkbox"
                     checked={profile.googleCalendarSyncEnabled}
                     onChange={e => updateProfile({ googleCalendarSyncEnabled: e.target.checked })}
-                    className="w-4 h-4 accent-ocean-600 rounded"
+                    className="w-4 h-4 rounded"
+                    style={{ accentColor: 'var(--accent)' }}
                   />
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-slate-100/80 dark:bg-abyss-900/60 border border-ocean-200/40 dark:border-ocean-900/60 text-center space-y-3">
-                <div className="w-10 h-10 rounded-full bg-ocean-500/10 text-ocean-600 dark:text-aqua-400 flex items-center justify-center mx-auto border border-ocean-500/20">
+              <div className="p-4 rounded-xl text-center space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto"
+                  style={{ background: 'rgba(180,83,9,0.1)', color: 'var(--accent)', border: '1px solid rgba(180,83,9,0.2)' }}>
                   <Globe className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-200">Sign In with Google</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
+                  <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Sign In with Google</h4>
+                  <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: 'var(--text-muted)' }}>
                     Sync tasks across all your devices and schedule sessions into Google Calendar.
                   </p>
                 </div>
@@ -395,7 +378,7 @@ export const GoogleSyncModal: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-center gap-2 pt-1">
                   <button
                     onClick={handleDemoSignIn}
-                    className="px-4 py-2 rounded-xl liquid-btn text-white text-xs font-bold transition-all flex items-center justify-center space-x-1.5"
+                    className="btn-primary flex items-center justify-center gap-1.5 text-xs"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>Instant Demo Account</span>
@@ -403,7 +386,7 @@ export const GoogleSyncModal: React.FC = () => {
                   <button
                     onClick={handleGoogleRealSignIn}
                     disabled={isAuthenticating}
-                    className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-300 dark:border-slate-700 transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50"
+                    className="btn-secondary flex items-center justify-center gap-1.5 text-xs disabled:opacity-50"
                   >
                     <span>{isAuthenticating ? 'Connecting...' : 'Sign in with Google'}</span>
                   </button>
@@ -413,43 +396,46 @@ export const GoogleSyncModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 3: Backup & Restore */}
+        {/* Tab 3: Backup */}
         {activeSubTab === 'backup' && (
           <div className="space-y-4">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
               Transfer your subjects, topics, and completed sessions between devices anytime with one-click JSON backup.
             </p>
 
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={handleExportData}
-                className="p-4 rounded-xl bg-slate-100 dark:bg-abyss-900/80 hover:bg-ocean-500/10 dark:hover:bg-ocean-950/50 border border-ocean-200/40 dark:border-ocean-900/60 text-center space-y-2 transition-colors group"
+                className="p-4 rounded-xl text-center space-y-2 transition-colors group"
+                style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
               >
-                <Download className="w-6 h-6 text-ocean-600 dark:text-aqua-400 mx-auto group-hover:scale-110 transition-transform" />
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Export Backup</div>
-                <div className="text-[11px] text-slate-400">Download .json data</div>
+                <Download className="w-6 h-6 mx-auto group-hover:scale-110 transition-transform" style={{ color: 'var(--accent)' }} />
+                <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Export Backup</div>
+                <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Download .json data</div>
               </button>
 
-              <label className="p-4 rounded-xl bg-slate-100 dark:bg-abyss-900/80 hover:bg-ocean-500/10 dark:hover:bg-ocean-950/50 border border-ocean-200/40 dark:border-ocean-900/60 text-center space-y-2 transition-colors cursor-pointer group">
+              <label
+                className="p-4 rounded-xl text-center space-y-2 transition-colors cursor-pointer group"
+                style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+              >
                 <Upload className="w-6 h-6 text-emerald-500 mx-auto group-hover:scale-110 transition-transform" />
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Import Backup</div>
-                <div className="text-[11px] text-slate-400">Restore from .json file</div>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportData}
-                  className="hidden"
-                />
+                <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Import Backup</div>
+                <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Restore from .json file</div>
+                <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
               </label>
             </div>
           </div>
         )}
 
         {/* Footer */}
-        <div className="pt-2 border-t border-ocean-200/40 dark:border-ocean-900/50 flex justify-end">
+        <div className="pt-2 flex justify-end" style={{ borderTop: '1px solid var(--border)' }}>
           <button
             onClick={() => setIsSyncModalOpen(false)}
-            className="px-4 py-2 rounded-xl bg-slate-200/80 dark:bg-abyss-card hover:bg-slate-300 dark:hover:bg-abyss-card/80 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+            className="btn-secondary text-xs"
           >
             Close
           </button>

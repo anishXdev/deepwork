@@ -1,35 +1,33 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  CalendarDays, 
-  BookOpen, 
-  Timer, 
-  BarChart3, 
-  Plus, 
-  Flame, 
-  Cloud, 
+import {
+  CalendarDays,
+  BookOpen,
+  Timer,
+  BarChart3,
+  Flame,
+  Cloud,
   CloudOff,
   Sun,
   Moon,
   RefreshCw,
   LogIn,
   UserCheck,
-  Bell
+  Bell,
+  BellOff,
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { DStudyLogo } from './DStudyLogo';
 import { Notifications } from '../services/notifications';
 
 export const Navbar: React.FC = () => {
-  const { 
-    activeTab, 
-    setActiveTab, 
-    openAddTopicModal, 
-    openCreateSubjectModal,
+  const {
+    activeTab,
+    setActiveTab,
     openStreakModal,
     openAuthModal,
-    streaks, 
-    profile, 
+    streaks,
+    profile,
     setIsSyncModalOpen,
     cloudSyncStatus,
     syncKey,
@@ -37,18 +35,19 @@ export const Navbar: React.FC = () => {
     toggleTheme,
     isTimerRunning,
     timeLeft,
-    timerMode
   } = useApp();
 
   const isDark = settings.theme === 'dark';
-  const [notifPerm, setNotifPerm] = React.useState<'granted' | 'denied' | 'default' | 'unsupported'>(() => Notifications.getPermission());
+  const [notifPerm, setNotifPerm] = React.useState<'granted' | 'denied' | 'default' | 'unsupported'>(
+    () => Notifications.getPermission()
+  );
 
   const handleToggleNotifications = async () => {
     Haptics.tap();
     const perm = await Notifications.requestPermission();
     setNotifPerm(perm);
     if (perm === 'granted') {
-      Notifications.toast('info', '🔔 Notifications enabled for sessions, breaks & streaks!');
+      Notifications.toast('info', '🔔 Notifications enabled!');
     } else if (perm === 'denied') {
       Notifications.toast('warning', '⚠️ Notifications blocked by browser.');
     }
@@ -61,188 +60,233 @@ export const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    { id: 'study', label: 'Study', icon: CalendarDays },
-    { id: 'subjects', label: 'Curriculum', icon: BookOpen },
-    { id: 'timer', label: 'Focus', icon: Timer },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'study',     label: 'Today',      icon: CalendarDays },
+    { id: 'subjects',  label: 'Subjects',   icon: BookOpen     },
+    { id: 'timer',     label: 'Focus',      icon: Timer        },
+    { id: 'analytics', label: 'Analytics',  icon: BarChart3    },
   ] as const;
 
   return (
-    <header className="sticky top-0 z-40 w-full glass-panel px-3 sm:px-6 py-2.5 transition-colors">
-      <div className="max-w-6xl mx-auto flex items-center justify-between">
-        
-        {/* Brand Logo & Name (dstudy) */}
-        <div 
-          onClick={() => {
-            Haptics.tap();
-            setActiveTab('study');
+    <header
+      style={{
+        background: 'var(--bg-panel)',
+        borderBottom: '1px solid var(--border)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 40,
+        width: '100%',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '1100px',
+          margin: '0 auto',
+          padding: '0 1.25rem',
+          height: '52px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+        }}
+      >
+        {/* ── Brand ──────────────────────────────────── */}
+        <button
+          onClick={() => { Haptics.tap(); setActiveTab('study'); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '0.25rem 0',
+            flexShrink: 0,
           }}
-          className="flex items-center cursor-pointer group select-none"
         >
-          <DStudyLogo size={28} showText={true} />
-        </div>
+          <DStudyLogo size={22} showText={true} />
+        </button>
 
-        {/* Desktop Navigation Tabs (Clean & Symbol-focused) */}
-        <nav className="hidden md:flex items-center space-x-1 p-1 rounded-xl bg-slate-200/60 dark:bg-abyss-900/60 border border-ocean-200/40 dark:border-ocean-900/50">
+        {/* ── Desktop Nav ─────────────────────────────── */}
+        <nav
+          className="hidden md:flex"
+          style={{
+            display: 'none',
+            alignItems: 'center',
+            gap: '2px',
+            padding: '3px',
+            background: 'var(--bg-card-alt)',
+            border: '1px solid var(--border)',
+            borderRadius: '9px',
+          }}
+        >
           {navItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
-                onClick={() => {
-                  Haptics.tap();
-                  setActiveTab(item.id);
-                }}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-ocean-600 to-aqua-500 text-white shadow-sm shadow-ocean-600/30'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-ocean-700 dark:hover:text-aqua-300 hover:bg-ocean-500/10'
-                }`}
-                title={item.label}
+                className="nav-tab"
+                style={isActive ? {
+                  background: 'var(--text-primary)',
+                  color: 'var(--text-inverse)',
+                  fontWeight: 600,
+                } : {}}
+                onClick={() => { Haptics.tap(); setActiveTab(item.id); }}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : ''}`} />
-                <span>{item.label}</span>
+                <Icon
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    flexShrink: 0,
+                    ...(item.id === 'timer' && isTimerRunning && !isActive ? {
+                      color: 'var(--accent)',
+                    } : {}),
+                  }}
+                />
+                <span>
+                  {item.id === 'timer' && isTimerRunning && !isActive
+                    ? formatTimerShort(timeLeft)
+                    : item.label}
+                </span>
+                {item.id === 'timer' && isTimerRunning && !isActive && (
+                  <span
+                    style={{
+                      width: '5px',
+                      height: '5px',
+                      borderRadius: '50%',
+                      background: 'var(--accent)',
+                      flexShrink: 0,
+                      animation: 'pulseSoft 1.5s ease-in-out infinite',
+                    }}
+                  />
+                )}
               </button>
             );
           })}
         </nav>
 
-        {/* Quick Actions, Streak, Theme Toggle & Sync */}
-        <div className="flex items-center space-x-1.5 sm:space-x-2">
-          
-          {/* Active Focus Mini-Timer Pill (shown when running and navigating away from Focus tab) */}
-          {activeTab !== 'timer' && isTimerRunning && (
-            <button
-              onClick={() => {
-                Haptics.tap();
-                setActiveTab('timer');
-              }}
-              title="Focus timer is running! Click to jump to Focus vessel"
-              className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-teal-500/20 border border-teal-400/50 text-teal-600 dark:text-teal-300 text-xs font-mono font-bold animate-pulse hover:bg-teal-500/30 transition-all cursor-pointer shadow-md shadow-teal-500/20 active:scale-95"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-ping" />
-              <span>{formatTimerShort(timeLeft)}</span>
-            </button>
-          )}
+        {/* ── Right Controls ──────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
 
-          {/* Clickable Streak Badge with Fire Symbol & Longest Badge */}
-          <button 
-            onClick={() => {
-              Haptics.tap();
-              openStreakModal();
+          {/* Streak badge */}
+          <button
+            onClick={() => { Haptics.tap(); openStreakModal(); }}
+            title={`Streak: ${streaks.currentStreak} days`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
+              background: streaks.currentStreak > 0 ? 'rgba(180,83,9,0.08)' : 'var(--bg-card-alt)',
+              border: `1px solid ${streaks.currentStreak > 0 ? 'rgba(180,83,9,0.2)' : 'var(--border)'}`,
+              borderRadius: '99px',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: streaks.currentStreak > 0 ? 'var(--accent)' : 'var(--text-muted)',
+              transition: 'background 0.15s',
             }}
-            title={`Current Streak: ${streaks.currentStreak}d • Longest: ${streaks.longestStreak}d (Click to manage/restore)`}
-            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 dark:text-amber-400 text-xs font-bold transition-transform active:scale-95 cursor-pointer select-none"
           >
-            <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500 animate-pulse" />
-            <span className="font-mono">{streaks.currentStreak}d</span>
-            {streaks.longestStreak > 0 && (
-              <span className="hidden sm:inline-block text-[10px] text-amber-600/80 dark:text-amber-300/80 font-normal pl-1 border-l border-amber-500/30">
-                🏆 {streaks.longestStreak}d
-              </span>
-            )}
+            <Flame style={{ width: '13px', height: '13px' }} />
+            <span style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+              {streaks.currentStreak}d
+            </span>
           </button>
 
-          {/* Sign In / Account Pill */}
+          {/* Sign In / Account */}
           <button
-            onClick={() => {
-              Haptics.tap();
-              openAuthModal();
+            onClick={() => { Haptics.tap(); openAuthModal(); }}
+            title={profile.googleConnected ? `${profile.email}` : 'Sign in'}
+            className="btn-secondary"
+            style={{
+              padding: '4px 12px',
+              fontSize: '0.75rem',
+              borderRadius: '99px',
+              ...(profile.googleConnected ? {
+                background: 'var(--bg-card-alt)',
+                color: 'var(--text-secondary)',
+              } : {}),
             }}
-            title={profile.googleConnected ? `Signed in as ${profile.email}` : "Sign In / Sign Up with Google"}
-            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer ${
-              profile.googleConnected
-                ? 'bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/40 text-teal-600 dark:text-teal-300'
-                : 'bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 shadow-sm'
-            }`}
           >
             {profile.googleConnected ? (
               <>
-                <UserCheck className="w-3.5 h-3.5 text-teal-400" />
-                <span className="hidden sm:inline font-sans truncate max-w-[80px]">{profile.name?.split(' ')[0] || 'Account'}</span>
+                <UserCheck style={{ width: '13px', height: '13px' }} />
+                <span className="hidden sm:inline">
+                  {profile.name?.split(' ')[0] || 'Account'}
+                </span>
               </>
             ) : (
               <>
-                <LogIn className="w-3.5 h-3.5 text-slate-800" />
-                <span className="font-sans">Sign In</span>
+                <LogIn style={{ width: '13px', height: '13px' }} />
+                <span>Sign in</span>
               </>
             )}
           </button>
 
-          {/* Browser Notifications Bell Toggle */}
+          {/* Notification bell */}
           <button
             onClick={handleToggleNotifications}
-            title={
-              notifPerm === 'granted'
-                ? 'Notifications enabled (Alerts for completed sessions & breaks)'
-                : notifPerm === 'denied'
-                ? 'Notifications blocked by browser. Click to retry.'
-                : 'Click to enable study & break alerts'
+            title={notifPerm === 'granted' ? 'Notifications on' : 'Enable notifications'}
+            className="btn-ghost"
+            style={{
+              padding: '5px',
+              color: notifPerm === 'granted' ? 'var(--accent)' : 'var(--text-muted)',
+            }}
+          >
+            {notifPerm === 'granted'
+              ? <Bell style={{ width: '16px', height: '16px' }} />
+              : <BellOff style={{ width: '16px', height: '16px' }} />
             }
-            className={`p-1.5 sm:p-2 rounded-xl border transition-all active:scale-95 relative ${
-              notifPerm === 'granted'
-                ? 'border-teal-500/40 bg-teal-500/10 text-teal-500 dark:text-teal-300'
-                : 'border-ocean-200/50 dark:border-ocean-900/60 bg-white/80 dark:bg-abyss-card/80 text-slate-500 dark:text-slate-400 hover:text-teal-500'
-            }`}
-          >
-            <Bell className="w-4 h-4" />
-            {notifPerm === 'granted' && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-teal-400 shadow-sm" />
-            )}
-            {notifPerm === 'denied' && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500 shadow-sm" />
-            )}
           </button>
 
-          {/* Dark / Light Theme Toggle */}
+          {/* Theme toggle */}
           <button
-            onClick={() => {
-              Haptics.tap();
-              toggleTheme();
-            }}
-            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="p-1.5 sm:p-2 rounded-xl border border-ocean-200/50 dark:border-ocean-900/60 bg-white/80 dark:bg-abyss-card/80 text-slate-700 dark:text-slate-300 hover:text-ocean-600 dark:hover:text-aqua-400 transition-colors"
+            onClick={() => { Haptics.tap(); toggleTheme(); }}
+            title={isDark ? 'Light mode' : 'Dark mode'}
+            className="btn-ghost"
+            style={{ padding: '5px', color: 'var(--text-muted)' }}
           >
-            {isDark ? (
-              <Sun className="w-4 h-4 text-amber-400 hover:rotate-45 transition-transform" />
-            ) : (
-              <Moon className="w-4 h-4 text-slate-700 hover:-rotate-12 transition-transform" />
-            )}
+            {isDark
+              ? <Sun style={{ width: '16px', height: '16px', color: '#FBBF24' }} />
+              : <Moon style={{ width: '16px', height: '16px' }} />
+            }
           </button>
 
-          {/* Cloud Sync Status Icon */}
+          {/* Cloud sync */}
           <button
-            onClick={() => {
-              Haptics.tap();
-              setIsSyncModalOpen(true);
-            }}
+            onClick={() => { Haptics.tap(); setIsSyncModalOpen(true); }}
             title={
               cloudSyncStatus === 'syncing'
-                ? 'Syncing across devices...'
+                ? 'Syncing…'
                 : profile.googleConnected
-                ? `Google Synced: ${profile.email}`
-                : `Cloud Sync (${syncKey}) - Click to configure`
+                ? `Synced: ${profile.email}`
+                : `Sync (${syncKey})`
             }
-            className={`p-1.5 sm:p-2 rounded-xl border transition-all active:scale-95 ${
-              cloudSyncStatus === 'syncing'
-                ? 'bg-aqua-500/20 border-aqua-400/50 text-aqua-400 animate-pulse'
-                : profile.googleConnected || cloudSyncStatus === 'synced'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20'
-                : 'bg-white/80 dark:bg-abyss-card/80 border-ocean-200/50 dark:border-ocean-900/60 text-slate-500 hover:text-ocean-600 dark:hover:text-aqua-300'
-            }`}
+            className="btn-ghost"
+            style={{
+              padding: '5px',
+              color: cloudSyncStatus === 'syncing' || profile.googleConnected || cloudSyncStatus === 'synced'
+                ? 'var(--success)'
+                : 'var(--text-muted)',
+            }}
           >
-            {cloudSyncStatus === 'syncing' ? (
-              <RefreshCw className="w-4 h-4 text-aqua-400 animate-spin" />
-            ) : profile.googleConnected || cloudSyncStatus === 'synced' ? (
-              <Cloud className="w-4 h-4 text-emerald-500" />
-            ) : (
-              <CloudOff className="w-4 h-4" />
-            )}
+            {cloudSyncStatus === 'syncing'
+              ? <RefreshCw style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} />
+              : profile.googleConnected || cloudSyncStatus === 'synced'
+              ? <Cloud style={{ width: '16px', height: '16px' }} />
+              : <CloudOff style={{ width: '16px', height: '16px' }} />
+            }
           </button>
+
         </div>
       </div>
+
+      {/* ── Desktop tab bar visible class fix ────────── */}
+      <style>{`
+        @media (min-width: 768px) {
+          header nav.hidden { display: flex !important; }
+        }
+      `}</style>
     </header>
   );
 };
-
