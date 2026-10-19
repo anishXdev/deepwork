@@ -15,7 +15,13 @@ import {
   StudyBoard,
   BoardMember,
   Tag,
-  UserGamification
+  UserGamification,
+  CollabNotification,
+  ChatMessage,
+  CollabCallParticipant,
+  CallType,
+  ActiveCallState,
+  IncomingCall
 } from '../types';
 import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
@@ -74,6 +80,10 @@ interface AppContextType {
   setTopics: React.Dispatch<React.SetStateAction<Topic[]>>;
   setSessions: React.Dispatch<React.SetStateAction<StudySession[]>>;
   setStreaks: React.Dispatch<React.SetStateAction<StreakData>>;
+  setTags: React.Dispatch<React.SetStateAction<Tag[]>>;
+  setBoards: React.Dispatch<React.SetStateAction<StudyBoard[]>>;
+  setNotifications: React.Dispatch<React.SetStateAction<CollabNotification[]>>;
+  resetWorkspaceToCleanSlate: (newProfile?: UserProfile) => void;
 
   // Strict Focus Mode (Distraction Lockdown)
   isStrictFocusActive: boolean;
@@ -119,6 +129,33 @@ interface AppContextType {
   addBoardMember: (boardId: string, member: { name: string; email: string; role?: 'editor' | 'viewer' }) => void;
   removeBoardMember: (boardId: string, memberId: string) => void;
   delegateTopic: (topicId: string, member: BoardMember | null) => void;
+
+  // Collaboration Notifications & Interactive Invites
+  notifications: CollabNotification[];
+  unreadNotificationsCount: number;
+  isNotificationCenterOpen: boolean;
+  setIsNotificationCenterOpen: (open: boolean) => void;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  respondToNotification: (id: string, action: 'accept' | 'decline') => void;
+  clearNotification: (id: string) => void;
+  sendCollabNotification: (notif: Omit<CollabNotification, 'id' | 'timestamp' | 'read'>) => CollabNotification;
+
+  // Secure Collaboration Chat & Live Audio/Video Call
+  isTeamRoomOpen: boolean;
+  setIsTeamRoomOpen: (open: boolean) => void;
+  activeCall: ActiveCallState | null;
+  startCall: (type: CallType, selectedMemberIds?: string[]) => void;
+  endCall: () => void;
+  toggleCallMute: () => void;
+  toggleCallVideo: () => void;
+  toggleCallScreenShare: () => void;
+  incomingCall: IncomingCall | null;
+  acceptIncomingCall: () => void;
+  rejectIncomingCall: () => void;
+  simulateIncomingCall: (caller?: { name: string; avatar?: string; color: string }) => void;
+  chatMessages: ChatMessage[];
+  sendChatMessage: (content: string, taskId?: string, taskTitle?: string) => void;
 
   // Actions
   setActiveTab: (tab: 'study' | 'subjects' | 'tags' | 'timer' | 'analytics' | 'whiteboard' | 'sync') => void;
@@ -176,6 +213,197 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
+
+  // Collaboration Notifications State
+  const [notifications, setNotifications] = useState<CollabNotification[]>(() => StorageService.getNotifications());
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
+  const markNotificationAsRead = (id: string) => {
+    StorageService.markNotificationAsRead(id);
+    setNotifications(StorageService.getNotifications());
+  };
+
+  const markAllNotificationsAsRead = () => {
+    StorageService.markAllNotificationsAsRead();
+    setNotifications(StorageService.getNotifications());
+    Notifications.toast('info', 'All notifications marked as read.');
+  };
+
+  const respondToNotification = (id: string, action: 'accept' | 'decline') => {
+    StorageService.respondToNotification(id, action);
+    setNotifications(StorageService.getNotifications());
+    setBoards(StorageService.getBoards());
+    if (action === 'accept') {
+      sound.playCompletionChime();
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      Notifications.toast('success', '🎉 Invite accepted! You joined the board.');
+    } else {
+      Notifications.toast('info', 'Invite declined.');
+    }
+  };
+
+  const clearNotification = (id: string) => {
+    StorageService.clearNotification(id);
+    setNotifications(StorageService.getNotifications());
+  };
+
+  const sendCollabNotification = (notif: Omit<CollabNotification, 'id' | 'timestamp' | 'read'>): CollabNotification => {
+    const created = StorageService.addNotification(notif);
+    setNotifications(StorageService.getNotifications());
+    Notifications.toast('info', `🔔 ${notif.title}: ${notif.message}`);
+    return created;
+  };
+
+  // Team Room & Audio/Video Call State
+  const [isTeamRoomOpen, setIsTeamRoomOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => StorageService.getChatMessages());
+  const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (activeCall?.active) {
+      interval = setInterval(() => {
+        setActiveCall(prev => prev ? { ...prev, durationSeconds: prev.durationSeconds + 1 } : null);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeCall?.active]);
+
+  const startCall = (type: CallType, selectedMemberIds?: string[]) => {
+    Haptics.success();
+    sound.playCompletionChime();
+    const currentBoard = boards.find(b => b.id === activeBoardId);
+    const allMembers = currentBoard?.members || [];
+
+    // Filter only members that were selected to be called
+    const targetMembers = selectedMemberIds && selectedMemberIds.length > 0
+      ? allMembers.filter(m => selectedMemberIds.includes(m.id))
+      : allMembers;
+
+    const callParticipants: CollabCallParticipant[] = targetMembers.map(m => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      isMuted: false,
+      isVideoOn: type === 'video',
+      isSpeaking: false
+    }));
+
+    if (callParticipants.length === 0) {
+      callParticipants.push(
+        { id: profile.id || 'usr_me', name: profile.name || 'You', color: '#0C66E4', isMuted: false, isVideoOn: type === 'video', isSpeaking: false }
+      );
+    }
+
+    const memberIds = callParticipants.map(p => p.id);
+
+    setActiveCall({
+      active: true,
+      type,
+      isMuted: false,
+      isVideoOn: type === 'video',
+      isScreenSharing: false,
+      durationSeconds: 0,
+      participants: callParticipants,
+      selectedMemberIds: memberIds
+    });
+    setIsTeamRoomOpen(true);
+
+    StorageService.logTelemetryEvent('call_started', {
+      callType: type,
+      participantCount: callParticipants.length,
+      boardTitle: currentBoard?.name
+    });
+
+    Notifications.toast('success', `📞 Started encrypted ${type === 'video' ? 'Video' : 'Audio'} Call with ${callParticipants.length} selected teammate(s)!`);
+  };
+
+  const acceptIncomingCall = () => {
+    if (!incomingCall) return;
+    Haptics.success();
+    sound.playCompletionChime();
+    setActiveCall({
+      active: true,
+      type: incomingCall.type,
+      isMuted: false,
+      isVideoOn: incomingCall.type === 'video',
+      isScreenSharing: false,
+      durationSeconds: 0,
+      participants: incomingCall.participants,
+      selectedMemberIds: incomingCall.participants.map(p => p.id)
+    });
+    setIncomingCall(null);
+    setIsTeamRoomOpen(true);
+    Notifications.toast('success', `Connected to call with ${incomingCall.callerName}!`);
+  };
+
+  const rejectIncomingCall = () => {
+    if (!incomingCall) return;
+    Haptics.warning();
+    Notifications.toast('info', `Call from ${incomingCall.callerName} declined.`);
+    setIncomingCall(null);
+  };
+
+  const simulateIncomingCall = (caller?: { name: string; avatar?: string; color: string }) => {
+    const currentBoard = boards.find(b => b.id === activeBoardId);
+    const callerName = caller?.name || 'Teammate';
+    sound.playCompletionChime();
+    setIncomingCall({
+      id: 'call_' + Date.now(),
+      boardId: activeBoardId,
+      boardName: currentBoard?.name || 'Workspace',
+      callerId: 'usr_collab',
+      callerName,
+      callerColor: caller?.color || '#0C66E4',
+      callerAvatar: caller?.avatar || '',
+      type: 'video',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      participants: [
+        { id: 'usr_collab', name: callerName, color: caller?.color || '#0C66E4', isMuted: false, isVideoOn: true, isSpeaking: true }
+      ]
+    });
+  };
+
+  const endCall = () => {
+    Haptics.tap();
+    setActiveCall(null);
+    Notifications.toast('info', 'Call ended.');
+  };
+
+  const toggleCallMute = () => {
+    Haptics.tap();
+    setActiveCall(prev => prev ? { ...prev, isMuted: !prev.isMuted } : null);
+  };
+
+  const toggleCallVideo = () => {
+    Haptics.tap();
+    setActiveCall(prev => prev ? { ...prev, isVideoOn: !prev.isVideoOn } : null);
+  };
+
+  const toggleCallScreenShare = () => {
+    Haptics.tap();
+    setActiveCall(prev => prev ? { ...prev, isScreenSharing: !prev.isScreenSharing } : null);
+  };
+
+  const sendChatMessage = (content: string, taskId?: string, taskTitle?: string) => {
+    if (!content.trim()) return;
+    StorageService.addChatMessage({
+      boardId: activeBoardId,
+      senderId: profile.id || 'user_current',
+      senderName: profile.name || 'Deepwork Member',
+      senderColor: '#0C66E4',
+      content: content.trim(),
+      taskId,
+      taskTitle
+    });
+    setChatMessages(StorageService.getChatMessages());
+    Haptics.tap();
+  };
 
   const loadStarterTemplate = (templateId: string) => {
     const res = StorageService.applyStarterTemplate(templateId, activeBoardId);
@@ -324,6 +552,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const delegateTopic = (topicId: string, member: BoardMember | null) => {
+    const targetTopic = topics.find(t => t.id === topicId);
     setTopics(prev => prev.map(t => {
       if (t.id !== topicId) return t;
       return {
@@ -335,6 +564,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }));
     if (member) {
+      sendCollabNotification({
+        type: 'task_delegated',
+        title: 'Work Delegated',
+        message: `Card "${targetTopic?.name || 'Task'}" delegated to ${member.name}`,
+        senderName: profile.name || 'Deepwork Member',
+        senderColor: '#0C66E4',
+        taskId: topicId,
+        taskTitle: targetTopic?.name
+      });
       Notifications.toast('info', `👤 Delegated task to ${member.name}`);
     } else {
       Notifications.toast('info', 'Task unassigned.');
@@ -733,23 +971,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     CloudSyncService.scheduleDebouncedPush();
   }, [streaks]);
 
-  // Sync default starter subjects with isGatePrep mode when user has 0 topics
-  useEffect(() => {
-    if (topics.length === 0) {
-      const isCurrentlyGateStarter = subjects.length > 0 && subjects.every(s => s.id.startsWith('sub_gate_'));
-      const isCurrentlySimpleStarter =
-        subjects.length === 3 &&
-        subjects[0]?.id === 'sub_1' &&
-        subjects[1]?.id === 'sub_2' &&
-        subjects[2]?.id === 'sub_3';
 
-      if (settings.isGatePrep && isCurrentlySimpleStarter) {
-        setSubjects(getGateStarterSubjects(settings.gateTargetStream || 'CSE'));
-      } else if (!settings.isGatePrep && isCurrentlyGateStarter) {
-        setSubjects(getSimpleStarterSubjects());
-      }
-    }
-  }, [settings.isGatePrep]);
 
   const setStudyMode = (isGate: boolean, streamKey = 'CSE') => {
     setSettings(prev => ({
@@ -1100,6 +1322,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     CloudSyncService.pushToCloudImmediate();
   };
 
+  const resetWorkspaceToCleanSlate = (newProfile?: UserProfile) => {
+    StorageService.resetToCleanSlate(newProfile);
+    if (newProfile) {
+      StorageService.saveProfile(newProfile);
+      setProfile(newProfile);
+    }
+    setTags([]);
+    setTopics([]);
+    setSubjects([]);
+    setSessions([]);
+    setNotifications([]);
+    setChatMessages([]);
+    setStreaks(StorageService.getStreaks());
+    const freshBoards = StorageService.getBoards();
+    setBoards(freshBoards);
+    setActiveBoardIdState('board_main');
+    CloudSyncService.pushToCloudImmediate();
+  };
+
   const syncWithCloudNow = async (): Promise<boolean> => {
     setCloudSyncStatus('syncing');
     const res = await CloudSyncService.pushToCloudImmediate();
@@ -1166,6 +1407,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTopics,
         setSessions,
         setStreaks,
+        setTags,
+        setBoards,
+        setNotifications,
+        resetWorkspaceToCleanSlate,
         // Strict Focus Mode
         isStrictFocusActive,
         distractionCount,
@@ -1216,6 +1461,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addBoardMember,
         removeBoardMember,
         delegateTopic,
+        // Collaboration Notifications
+        notifications,
+        unreadNotificationsCount,
+        isNotificationCenterOpen,
+        setIsNotificationCenterOpen,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        respondToNotification,
+        clearNotification,
+        sendCollabNotification,
+        // Team Room & Live Call
+        isTeamRoomOpen,
+        setIsTeamRoomOpen,
+        activeCall,
+        startCall,
+        endCall,
+        toggleCallMute,
+        toggleCallVideo,
+        toggleCallScreenShare,
+        incomingCall,
+        acceptIncomingCall,
+        rejectIncomingCall,
+        simulateIncomingCall,
+        chatMessages,
+        sendChatMessage,
         // Cloud Sync
         cloudSyncStatus,
         syncKey,

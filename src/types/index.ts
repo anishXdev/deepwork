@@ -133,6 +133,76 @@ export interface StudyBoard {
   createdAt: string;
 }
 
+export type CollabNotificationType = 'collab_invite' | 'task_delegated' | 'mention' | 'call_invite';
+
+export interface CollabNotification {
+  id: string;
+  type: CollabNotificationType;
+  title: string;
+  message: string;
+  senderName: string;
+  senderAvatar?: string;
+  senderColor: string;
+  boardId?: string;
+  boardName?: string;
+  taskId?: string;
+  taskTitle?: string;
+  timestamp: string;
+  read: boolean;
+  status?: 'pending' | 'accepted' | 'declined';
+}
+
+export interface ChatMessage {
+  id: string;
+  boardId: string;
+  senderId: string;
+  senderName: string;
+  senderColor: string;
+  senderAvatar?: string;
+  content: string;
+  timestamp: string;
+  isSystem?: boolean;
+  taskId?: string;
+  taskTitle?: string;
+}
+
+export interface CollabCallParticipant {
+  id: string;
+  name: string;
+  color: string;
+  avatar?: string;
+  isMuted: boolean;
+  isVideoOn: boolean;
+  isScreenSharing?: boolean;
+  isSpeaking?: boolean;
+}
+
+export type CallType = 'audio' | 'video';
+
+export interface IncomingCall {
+  id: string;
+  boardId: string;
+  boardName: string;
+  callerId: string;
+  callerName: string;
+  callerAvatar?: string;
+  callerColor: string;
+  type: CallType;
+  timestamp: string;
+  participants: CollabCallParticipant[];
+}
+
+export interface ActiveCallState {
+  active: boolean;
+  type: CallType;
+  isMuted: boolean;
+  isVideoOn: boolean;
+  isScreenSharing: boolean;
+  durationSeconds: number;
+  participants: CollabCallParticipant[];
+  selectedMemberIds: string[];
+}
+
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface Task {
@@ -222,6 +292,7 @@ export interface UserProfile {
   name: string;
   email: string;
   avatarUrl?: string;
+  avatar?: string;
   googleConnected: boolean;
   googleCalendarSyncEnabled: boolean;
   googleAccessToken?: string;

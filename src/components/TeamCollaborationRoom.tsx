@@ -1,0 +1,784 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useApp } from '../context/AppContext';
+import {
+  MessageSquare,
+  Video,
+  Mic,
+  MicOff,
+  VideoOff,
+  PhoneOff,
+  ScreenShare,
+  Lock,
+  Send,
+  Users,
+  X,
+  Sparkles,
+  ShieldCheck,
+  Share2,
+  PhoneCall,
+  Radio,
+  FileText,
+  CheckSquare,
+  Square,
+  BellRing
+} from 'lucide-react';
+import { Haptics } from '../utils/haptics';
+import { Notifications } from '../services/notifications';
+import { BoardMember } from '../types';
+
+export const TeamCollaborationRoom: React.FC = () => {
+  const {
+    activeBoard,
+    isTeamRoomOpen,
+    setIsTeamRoomOpen,
+    activeCall,
+    startCall,
+    endCall,
+    toggleCallMute,
+    toggleCallVideo,
+    toggleCallScreenShare,
+    simulateIncomingCall,
+    chatMessages,
+    sendChatMessage,
+    profile,
+    topics
+  } = useApp();
+
+  const [activeTab, setActiveTab] = useState<'chat' | 'call'>('chat');
+  const [inputText, setInputText] = useState('');
+  const [selectedTaskToShare, setSelectedTaskToShare] = useState<string>('');
+  const [isTaskPickerOpen, setIsTaskPickerOpen] = useState(false);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const screenVideoRef = useRef<HTMLVideoElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
+  const members: BoardMember[] = activeBoard?.members && activeBoard.members.length > 0
+    ? activeBoard.members
+    : (profile.email ? [
+        {
+          id: profile.id || 'owner_1',
+          name: `${profile.name || 'You'} (You)`,
+          email: profile.email,
+          color: '#0C66E4',
+          role: 'owner' as const
+        }
+      ] : []);
+
+  // Exclude current user from callable teammates
+  const callableMembers = members.filter(m => m.email.toLowerCase() !== (profile.email || '').toLowerCase());
+  const effectiveCallable = callableMembers;
+
+  // Selected participants to call
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(() =>
+    effectiveCallable.map(m => m.id)
+  );
+
+  useEffect(() => {
+    setSelectedMemberIds(effectiveCallable.map(m => m.id));
+  }, [effectiveCallable.length]);
+
+  // If a call is started, auto-switch to call tab
+  useEffect(() => {
+    if (activeCall?.active) {
+      setActiveTab('call');
+    }
+  }, [activeCall?.active]);
+
+  // Handle local user webcam stream for real video
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    if (activeCall?.active && activeCall.isVideoOn) {
+      navigator.mediaDevices?.getUserMedia?.({ video: true, audio: true })
+        .then(s => {
+          stream = s;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = s;
+          }
+        })
+        .catch(err => {
+          console.warn('Webcam stream not permitted or unavailable, falling back to avatar tile:', err);
+        });
+    }
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [activeCall?.active, activeCall?.isVideoOn]);
+
+  // Handle screen stream attachment to screen video element
+  useEffect(() => {
+    if (screenStream && screenVideoRef.current) {
+      screenVideoRef.current.srcObject = screenStream;
+    }
+  }, [screenStream, activeCall?.isScreenSharing]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  if (!isTeamRoomOpen) return null;
+
+  const formatCallTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainder = secs % 60;
+    return `${mins.toString().padStart(2, '0')}:${remainder.toString().padStart(2, '0')}`;
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() && !selectedTaskToShare) return;
+
+    let taskId: string | undefined;
+    let taskTitle: string | undefined;
+
+    if (selectedTaskToShare) {
+      const task = topics.find(t => t.id === selectedTaskToShare);
+      if (task) {
+        taskId = task.id;
+        taskTitle = task.name;
+      }
+    }
+
+    sendChatMessage(inputText, taskId, taskTitle);
+    setInputText('');
+    setSelectedTaskToShare('');
+    setIsTaskPickerOpen(false);
+  };
+
+  const handleToggleMember = (id: string) => {
+    Haptics.tap();
+    setSelectedMemberIds(prev =>
+      prev.includes(id) ? prev.filter(mId => mId !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleAllMembers = () => {
+    Haptics.tap();
+    if (selectedMemberIds.length === effectiveCallable.length) {
+      setSelectedMemberIds([]);
+    } else {
+      setSelectedMemberIds(effectiveCallable.map(m => m.id));
+    }
+  };
+
+  // Built-in Screen Sharing Handler using getDisplayMedia
+  const handleToggleScreenShare = async () => {
+    Haptics.tap();
+    if (activeCall?.isScreenSharing) {
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        setScreenStream(null);
+      }
+      toggleCallScreenShare();
+      Notifications.toast('info', 'Screen sharing stopped.');
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: 'monitor' } as any,
+            audio: false
+          });
+          setScreenStream(stream);
+          toggleCallScreenShare();
+          Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
+
+          if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = stream;
+          }
+
+          stream.getVideoTracks()[0].onended = () => {
+            setScreenStream(null);
+            if (activeCall?.isScreenSharing) {
+              toggleCallScreenShare();
+            }
+            Notifications.toast('info', 'Screen sharing stopped.');
+          };
+        } else {
+          Notifications.toast('warning', 'Screen sharing is not supported by this browser.');
+        }
+      } catch (err: any) {
+        if (err.name !== 'NotAllowedError') {
+          console.warn('Screen share error:', err);
+        }
+      }
+    }
+  };
+
+  const handleEndCall = () => {
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      setScreenStream(null);
+    }
+    endCall();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in"
+      onClick={() => setIsTeamRoomOpen(false)}
+    >
+      <div
+        className="w-full max-w-3xl h-[88vh] max-h-[720px] flex flex-col rounded-2xl shadow-2xl border overflow-hidden animate-in zoom-in-95 duration-150"
+        style={{
+          background: 'var(--bg-card)',
+          borderColor: 'var(--border)'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Top Header */}
+        <div className="px-5 py-3.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600/10 text-emerald-600 flex items-center justify-center border border-emerald-600/20">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold truncate max-w-[200px] sm:max-w-xs" style={{ color: 'var(--text-primary)' }}>
+                  {activeBoard?.name || 'Main Board'} Team Room
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>E2EE Encrypted</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Peer-to-peer secure chat, voice & video workspace
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Tab switchers */}
+            <div className="flex items-center rounded-lg p-0.5 border" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  Haptics.tap();
+                  setActiveTab('chat');
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'chat'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Chat</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  Haptics.tap();
+                  setActiveTab('call');
+                }}
+                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'call'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                <span>Call {activeCall?.active && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsTeamRoomOpen(false)}
+              className="p-1.5 rounded-lg hover:bg-slate-500/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Main Panel */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {activeTab === 'chat' ? (
+              <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                {/* Chat Messages Log */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                        <Lock className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                        End-to-End Encrypted Team Chat
+                      </h4>
+                      <p className="text-xs max-w-sm" style={{ color: 'var(--text-muted)' }}>
+                        Messages are shared only with members of this board. Start the discussion or share a task card below!
+                      </p>
+                    </div>
+                  ) : (
+                    chatMessages.map(msg => {
+                      const isMe = msg.senderId === (profile.id || 'user_current');
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`flex items-start gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-xs text-white shadow-xs"
+                            style={{ backgroundColor: msg.senderColor || '#0C66E4' }}
+                          >
+                            {msg.senderName.slice(0, 2).toUpperCase()}
+                          </div>
+
+                          <div className={`space-y-1 max-w-[80%] ${isMe ? 'items-end' : ''}`}>
+                            <div className={`flex items-center gap-1.5 text-[10px] text-slate-400 ${isMe ? 'justify-end' : ''}`}>
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{msg.senderName}</span>
+                              <span>•</span>
+                              <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+
+                            <div
+                              className="p-3 rounded-2xl text-xs leading-relaxed break-words shadow-xs"
+                              style={{
+                                background: isMe ? 'var(--accent)' : 'var(--bg-card-alt)',
+                                color: isMe ? '#ffffff' : 'var(--text-primary)',
+                                border: isMe ? 'none' : '1px solid var(--border)'
+                              }}
+                            >
+                              {msg.content}
+
+                              {msg.taskId && (
+                                <div
+                                  className={`mt-2 p-2 rounded-xl flex items-center gap-2 border text-[11px] font-semibold ${
+                                    isMe
+                                      ? 'bg-black/20 border-white/20 text-white'
+                                      : 'bg-blue-500/10 border-blue-500/20 text-blue-600'
+                                  }`}
+                                >
+                                  <FileText className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="truncate">Card: {msg.taskTitle || 'Shared Card'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Chat Input Bar */}
+                <form
+                  onSubmit={handleSendMessage}
+                  className="p-3 border-t flex flex-col gap-2"
+                  style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}
+                >
+                  {selectedTaskToShare && (
+                    <div className="flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-600 font-medium">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Attached Card: {topics.find(t => t.id === selectedTaskToShare)?.name}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTaskToShare('')}
+                        className="text-slate-400 hover:text-rose-500 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTaskPickerOpen(!isTaskPickerOpen)}
+                      className="p-2 rounded-xl border hover:bg-slate-500/10 text-slate-400 hover:text-blue-500 transition-colors cursor-pointer"
+                      style={{ borderColor: 'var(--border)' }}
+                      title="Attach a card to chat"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+
+                    <input
+                      type="text"
+                      placeholder="Type encrypted message to team..."
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                      className="input-base text-xs py-2 flex-1"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={!inputText.trim() && !selectedTaskToShare}
+                      className="btn-primary text-xs px-3.5 py-2 flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Send</span>
+                    </button>
+                  </div>
+
+                  {isTaskPickerOpen && (
+                    <div className="p-2 rounded-xl border bg-slate-900 text-xs space-y-1 max-h-36 overflow-y-auto">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 px-1">Attach Card to Chat:</span>
+                      {topics.slice(0, 10).map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTaskToShare(t.id);
+                            setIsTaskPickerOpen(false);
+                          }}
+                          className="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 text-slate-200 truncate font-medium flex items-center gap-1.5"
+                        >
+                          <span className="text-blue-400 font-mono text-[10px]">#</span>
+                          <span className="truncate">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </form>
+              </div>
+            ) : (
+              /* Live Audio / Video Call Panel */
+              <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-slate-950">
+                {activeCall?.active ? (
+                  <div className="flex-1 flex flex-col justify-between gap-3 min-h-0">
+                    {/* Active Call Header */}
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                        <span className="font-bold text-white uppercase tracking-wider">
+                          Live {activeCall.type === 'video' ? 'Video' : 'Audio'} Room
+                        </span>
+                        <span className="text-slate-400 font-mono text-[11px]">
+                          ⏱️ {formatCallTime(activeCall.durationSeconds)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                          <Lock className="w-3 h-3" />
+                          <span>P2P Encrypted</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Participant Video/Audio Grid */}
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-0">
+                      {/* Built-in Screen Share Tile if Active */}
+                      {activeCall.isScreenSharing && (
+                        <div className="col-span-full relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-blue-500 shadow-2xl flex flex-col min-h-[220px]">
+                          <div className="px-3 py-1.5 bg-blue-600/90 text-white text-xs font-bold flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <ScreenShare className="w-4 h-4 animate-pulse" />
+                              <span>🖥️ Live Screen Sharing ({profile.name || 'You'})</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleToggleScreenShare}
+                              className="px-2 py-0.5 rounded bg-white text-blue-700 text-[10px] font-extrabold hover:bg-slate-100 transition cursor-pointer"
+                            >
+                              Stop Sharing
+                            </button>
+                          </div>
+                          <div className="flex-1 flex items-center justify-center p-1 bg-black">
+                            <video
+                              ref={screenVideoRef}
+                              autoPlay
+                              playsInline
+                              className="w-full h-full max-h-[280px] object-contain rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Local User Tile */}
+                      <div className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center shadow-lg min-h-[160px]">
+                        {activeCall.isVideoOn ? (
+                          <video
+                            ref={localVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-2 p-4">
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl ${
+                              !activeCall.isMuted ? 'ring-4 ring-emerald-500 animate-pulse' : ''
+                            }`} style={{ background: '#0C66E4' }}>
+                              {(profile.name || 'You').slice(0, 2).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-bold text-white">{profile.name || 'You'} (You)</span>
+                            {!activeCall.isMuted && (
+                              <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                                <Radio className="w-3 h-3 animate-pulse" /> Speaking
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Name badge */}
+                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1.5">
+                          <span>{profile.name || 'You'} (You)</span>
+                          {activeCall.isMuted && <MicOff className="w-3 h-3 text-rose-400" />}
+                        </div>
+                      </div>
+
+                      {/* Remote Teammates (Only selected participants) */}
+                      {activeCall.participants.map(p => (
+                        <div
+                          key={p.id}
+                          className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shadow-lg p-4 min-h-[160px]"
+                        >
+                          <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl ${
+                            p.isSpeaking ? 'ring-4 ring-emerald-500 animate-pulse' : ''
+                          }`} style={{ background: p.color || '#EC4899' }}>
+                            {p.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-xs font-bold text-white mt-2">{p.name}</span>
+                          <span className="text-[10px] text-emerald-400 font-mono">Connected</span>
+
+                          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1.5">
+                            <span>{p.name}</span>
+                            {p.isMuted && <MicOff className="w-3 h-3 text-rose-400" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Active Controls Bar */}
+                    <div className="flex items-center justify-center gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={toggleCallMute}
+                        className={`p-3 rounded-xl font-bold transition-all cursor-pointer ${
+                          activeCall.isMuted
+                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                            : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+                        }`}
+                        title={activeCall.isMuted ? 'Unmute' : 'Mute'}
+                      >
+                        {activeCall.isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5 text-emerald-400" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={toggleCallVideo}
+                        className={`p-3 rounded-xl font-bold transition-all cursor-pointer ${
+                          !activeCall.isVideoOn
+                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                            : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+                        }`}
+                        title={activeCall.isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
+                      >
+                        {activeCall.isVideoOn ? <Video className="w-5 h-5 text-blue-400" /> : <VideoOff className="w-5 h-5" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleToggleScreenShare}
+                        className={`p-3 rounded-xl font-bold transition-all cursor-pointer ${
+                          activeCall.isScreenSharing
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+                        }`}
+                        title={activeCall.isScreenSharing ? 'Stop Screen Share' : 'Share Screen (Built-in)'}
+                      >
+                        <ScreenShare className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleEndCall}
+                        className="p-3 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 cursor-pointer"
+                        title="End Call"
+                      >
+                        <PhoneOff className="w-5 h-5" />
+                        <span className="text-xs">End Call</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* No call in progress - Lobby with Participant Selection */
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-4 text-white">
+                    <div className="w-14 h-14 rounded-3xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-xl">
+                      <Video className="w-7 h-7" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-base font-bold text-white">Instant Encrypted Live Call</h3>
+                      <p className="text-xs text-slate-400 max-w-sm">
+                        Select which collaborators to call. Invited members receive an accept/decline alert.
+                      </p>
+                    </div>
+
+                    {/* Participant Selection Box */}
+                    <div className="w-full max-w-sm p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-2.5 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                          Select Teammates to Call
+                        </span>
+                        {effectiveCallable.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleToggleAllMembers}
+                            className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer"
+                          >
+                            {selectedMemberIds.length === effectiveCallable.length ? 'Clear Selection' : 'Select All'}
+                          </button>
+                        )}
+                      </div>
+
+                      {effectiveCallable.length === 0 ? (
+                        <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400">
+                          <p className="font-semibold text-slate-300">No other teammates on this board yet</p>
+                          <p className="text-[11px] text-slate-500 mt-1">Invite teammates by their email to start group voice or video calls!</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                          {effectiveCallable.map(m => {
+                            const isSelected = selectedMemberIds.includes(m.id);
+                            return (
+                              <label
+                                key={m.id}
+                                className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'bg-blue-600/15 border-blue-500/40 text-white'
+                                    : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleToggleMember(m.id)}
+                                    className="rounded accent-blue-600"
+                                  />
+                                  <div
+                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                                    style={{ backgroundColor: m.color || '#0C66E4' }}
+                                  >
+                                    {m.name.slice(0, 1).toUpperCase()}
+                                  </div>
+                                  <span className="font-semibold text-slate-200 truncate">{m.name}</span>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase bg-slate-800 text-slate-400">
+                                  {m.role}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {effectiveCallable.length > 0 && (
+                        <p className="text-[11px] text-slate-500">
+                          Calling: <strong className="text-slate-300">{selectedMemberIds.length}</strong> of {effectiveCallable.length} teammate(s).
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Launch Call Buttons */}
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                      <button
+                        type="button"
+                        disabled={selectedMemberIds.length === 0}
+                        onClick={() => startCall('video', selectedMemberIds)}
+                        className="btn-primary text-xs px-5 py-2.5 flex items-center gap-2 font-bold shadow-lg disabled:opacity-40 cursor-pointer"
+                      >
+                        <Video className="w-4 h-4" />
+                        <span>Start Video Call ({selectedMemberIds.length})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={selectedMemberIds.length === 0}
+                        onClick={() => startCall('audio', selectedMemberIds)}
+                        className="btn-secondary text-xs px-4 py-2.5 flex items-center gap-2 font-bold bg-slate-800 text-white border-slate-700 hover:bg-slate-700 disabled:opacity-40 cursor-pointer"
+                      >
+                        <PhoneCall className="w-4 h-4 text-emerald-400" />
+                        <span>Voice Only ({selectedMemberIds.length})</span>
+                      </button>
+                    </div>
+
+                    {/* Test Incoming Call Prompt Trigger */}
+                    {effectiveCallable.length > 0 && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => simulateIncomingCall({ name: effectiveCallable[0]?.name || 'Teammate', color: effectiveCallable[0]?.color || '#EC4899' })}
+                          className="text-[11px] text-slate-400 hover:text-emerald-400 flex items-center gap-1.5 transition cursor-pointer"
+                          title="Simulate an incoming call to preview the Accept / Decline alert"
+                        >
+                          <BellRing className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Test Incoming Call Alert (Accept / Decline)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-2">
+                      <span className="flex items-center gap-1">
+                        <Lock className="w-3.5 h-3.5 text-emerald-500" /> End-to-end encrypted
+                      </span>
+                      <span>•</span>
+                      <span>Built-in Screen Share</span>
+                      <span>•</span>
+                      <span>Individual Calling Selection</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right Sidebar: Active Members List */}
+          <div className="w-56 border-l p-4 hidden md:flex flex-col justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Members</span>
+                </span>
+                <span>{members.length}</span>
+              </div>
+
+              <div className="space-y-2">
+                {members.map(m => (
+                  <div
+                    key={m.id}
+                    className="p-2 rounded-xl flex items-center gap-2 border bg-white/40 dark:bg-slate-800/40 text-xs"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white"
+                      style={{ backgroundColor: m.color || '#0C66E4' }}
+                    >
+                      {m.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="truncate min-w-0">
+                      <div className="font-bold truncate text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                        {m.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400 capitalize">{m.role}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-slate-400 space-y-1">
+              <span className="font-bold text-blue-600 block flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Quick Tip
+              </span>
+              <span>Mention collaborators using <strong>@Name</strong> in card titles to assign work instantly.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

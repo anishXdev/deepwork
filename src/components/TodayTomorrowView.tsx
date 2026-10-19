@@ -24,7 +24,10 @@ import {
   UserPlus,
   LayoutGrid,
   Hash,
-  FolderDown
+  FolderDown,
+  Video,
+  MessageSquare,
+  AtSign
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { CreateBoardModal } from './CreateBoardModal';
@@ -55,7 +58,11 @@ export const TodayTomorrowView: React.FC = () => {
     activeBoard,
     setActiveBoardId,
     delegateTopic,
-    setIsTemplatesModalOpen
+    setIsTemplatesModalOpen,
+    setIsTeamRoomOpen,
+    activeCall,
+    sendCollabNotification,
+    profile
   } = useApp();
 
   const isGatePrep = Boolean(settings.isGatePrep);
@@ -234,10 +241,22 @@ export const TodayTomorrowView: React.FC = () => {
       scheduledDate = d.toISOString().split('T')[0];
     }
 
-    const assignedMember = (activeBoard?.members || []).find(m => m.id === inlineAssigneeId);
-    const cleanTitle = inlineTitle.replace(/#([a-zA-Z0-9_\-]+)/g, '').trim() || inlineTitle.trim();
+    // Check for inline @collaborator mention in title
+    const atMatches = (inlineTitle.match(/@([a-zA-Z0-9_\-]+)/g) || []).map(m => m.slice(1).toLowerCase());
+    let assignedMember = (activeBoard?.members || []).find(m => m.id === inlineAssigneeId);
+    if (!assignedMember && atMatches.length > 0) {
+      const matchName = atMatches[0];
+      assignedMember = (activeBoard?.members || []).find(m =>
+        m.name.toLowerCase().includes(matchName) || m.email.toLowerCase().includes(matchName)
+      );
+    }
 
-    await addTopic({
+    const cleanTitle = inlineTitle
+      .replace(/#([a-zA-Z0-9_\-]+)/g, '')
+      .replace(/@([a-zA-Z0-9_\-]+)/g, '')
+      .trim() || inlineTitle.trim();
+
+    const createdTopic = await addTopic({
       boardId: activeBoardId,
       name: cleanTitle,
       tags: finalTags,
@@ -252,6 +271,20 @@ export const TodayTomorrowView: React.FC = () => {
       assigneeName: assignedMember?.name,
       assigneeColor: assignedMember?.color,
     });
+
+    if (assignedMember) {
+      sendCollabNotification({
+        type: 'task_delegated',
+        title: 'Work Delegated',
+        message: `Card "${cleanTitle}" delegated to ${assignedMember.name}`,
+        senderName: profile.name || 'Deepwork Member',
+        senderColor: '#0C66E4',
+        boardId: activeBoardId,
+        boardName: activeBoard?.name,
+        taskId: createdTopic.id,
+        taskTitle: cleanTitle
+      });
+    }
 
     setInlineTitle('');
     setInlineAssigneeId('');
@@ -366,6 +399,24 @@ export const TodayTomorrowView: React.FC = () => {
               <UserPlus className="w-3.5 h-3.5 text-blue-600" />
               <span className="hidden sm:inline">Collaborate</span>
             </button>
+
+            <button
+              onClick={() => {
+                Haptics.tap();
+                setIsTeamRoomOpen(true);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              style={{
+                background: activeCall?.active ? '#10B98120' : 'var(--bg-card)',
+                border: activeCall?.active ? '1px solid #10B98150' : '1px solid var(--border)',
+                color: activeCall?.active ? '#10B981' : 'var(--text-secondary)'
+              }}
+              title="Secure Chat, Audio & Video Call Room"
+            >
+              <Video className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">Team Room & Call</span>
+              {activeCall?.active && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />}
+            </button>
           </div>
 
           <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
@@ -456,10 +507,10 @@ export const TodayTomorrowView: React.FC = () => {
       {/* ── Trello Kanban Columns ───────────────────────────────── */}
       <div className="trello-board">
 
-        {/* ── Column 1: Backlog & Syllabus ──────────────────────── */}
+        {/* ── Column 1: Brainstorm ──────────────────────────────── */}
         <TrelloColumn
           id="backlog"
-          title="📋 Backlog & Syllabus"
+          title="💡 Brainstorm"
           items={backlogTopics}
           totalHours={calcHours(backlogTopics)}
           isDragOver={dragOverColumn === 'backlog'}
@@ -480,6 +531,9 @@ export const TodayTomorrowView: React.FC = () => {
           setInlineTagId={setInlineTagId}
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
+          boardMembers={activeBoard?.members || []}
+          inlineAssigneeId={inlineAssigneeId}
+          setInlineAssigneeId={setInlineAssigneeId}
           isGatePrep={isGatePrep}
           renderCard={topic => (
             <TrelloCard
@@ -533,6 +587,9 @@ export const TodayTomorrowView: React.FC = () => {
           setInlineTagId={setInlineTagId}
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
+          boardMembers={activeBoard?.members || []}
+          inlineAssigneeId={inlineAssigneeId}
+          setInlineAssigneeId={setInlineAssigneeId}
           isGatePrep={isGatePrep}
           renderCard={topic => (
             <TrelloCard
@@ -585,6 +642,9 @@ export const TodayTomorrowView: React.FC = () => {
           setInlineTagId={setInlineTagId}
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
+          boardMembers={activeBoard?.members || []}
+          inlineAssigneeId={inlineAssigneeId}
+          setInlineAssigneeId={setInlineAssigneeId}
           isGatePrep={isGatePrep}
           renderCard={topic => (
             <TrelloCard
@@ -635,6 +695,9 @@ export const TodayTomorrowView: React.FC = () => {
           setInlineTagId={() => {}}
           inlineHours={1.5}
           setInlineHours={() => {}}
+          boardMembers={activeBoard?.members || []}
+          inlineAssigneeId=""
+          setInlineAssigneeId={() => {}}
           isGatePrep={isGatePrep}
           hideAddButton
           renderCard={topic => (
@@ -790,6 +853,9 @@ interface TrelloColumnProps {
   setInlineTagId: (val: string) => void;
   inlineHours: number;
   setInlineHours: (val: number) => void;
+  boardMembers?: BoardMember[];
+  inlineAssigneeId: string;
+  setInlineAssigneeId: (val: string) => void;
   isGatePrep: boolean;
   hideAddButton?: boolean;
   renderCard: (topic: Topic) => React.ReactNode;
@@ -815,6 +881,9 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
   setInlineTagId,
   inlineHours,
   setInlineHours,
+  boardMembers,
+  inlineAssigneeId,
+  setInlineAssigneeId,
   hideAddButton,
   renderCard,
 }) => {
@@ -923,6 +992,73 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
                   ))}
                 </div>
               )}
+
+              {/* Collaborator Delegation & @ Mention Chips */}
+              {(() => {
+                const assignedMember = (boardMembers || []).find(m => m.id === inlineAssigneeId);
+                return (
+                  <>
+                    {assignedMember && (
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className="text-[10px] text-slate-400 font-semibold">Assignee:</span>
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border"
+                          style={{
+                            backgroundColor: `${assignedMember.color}15`,
+                            color: assignedMember.color,
+                            borderColor: `${assignedMember.color}35`
+                          }}
+                        >
+                          <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: assignedMember.color }}>
+                            {assignedMember.name.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span>@{assignedMember.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setInlineAssigneeId('')}
+                            className="hover:opacity-75 cursor-pointer ml-0.5 font-bold"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </div>
+                    )}
+
+                    {boardMembers && boardMembers.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                          <AtSign className="w-3 h-3 text-blue-500" /> Delegate:
+                        </span>
+                        {boardMembers.map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              Haptics.tap();
+                              setInlineAssigneeId(inlineAssigneeId === m.id ? '' : m.id);
+                            }}
+                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer transition-all flex items-center gap-1 ${
+                              inlineAssigneeId === m.id
+                                ? 'ring-1'
+                                : 'opacity-80 hover:opacity-100'
+                            }`}
+                            style={{
+                              background: `${m.color}15`,
+                              color: m.color,
+                              borderColor: `${m.color}40`
+                            }}
+                          >
+                            <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ background: m.color }}>
+                              {m.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span>@{m.name.split(' ')[0]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Target Duration Selector & Controls */}
               <div className="flex items-center justify-between gap-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>

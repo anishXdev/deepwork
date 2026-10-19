@@ -1,7 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { GateTaskCategory, GATE_TASK_CATEGORIES } from '../types';
 import {
   BarChart3,
   Flame,
@@ -68,29 +67,56 @@ export const AnalyticsDashboard: React.FC = () => {
   const hoursLeft = Math.max(0, Math.round((settings.weeklyHoursTarget - hoursThisWeek) * 10) / 10);
   const percentAchieved = Math.min(100, Math.round((hoursThisWeek / settings.weeklyHoursTarget) * 100));
 
-  // Total logged all-time hours
-  const totalAllTimeHours = Math.round(
-    sessions.reduce((acc, s) => acc + (s.durationHours || s.durationMinutes / 60), 0) * 10
+  // Tag-based Time Distribution Range State
+  const [tagTimeRange, setTagTimeRange] = useState<'all' | '30d' | '7d' | 'today'>('all');
+
+  // Filtered sessions for the selected tag time range
+  const tagFilteredSessions = useMemo(() => {
+    if (tagTimeRange === 'all') return sessions;
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    if (tagTimeRange === 'today') {
+      return sessions.filter(s => s && s.startTime && s.startTime.startsWith(todayStr));
+    }
+    const days = tagTimeRange === '7d' ? 7 : 30;
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    return sessions.filter(s => s && s.startTime && new Date(s.startTime) >= cutoff);
+  }, [sessions, tagTimeRange]);
+
+  // Total hours in selected tag period
+  const totalTagPeriodHours = Math.round(
+    tagFilteredSessions.reduce((acc, s) => acc + (s.durationHours || (s.durationMinutes || 0) / 60), 0) * 10
   ) / 10;
 
-  // Universal Tag Time Allocation Breakdown
-  const tagBreakdown = tags.filter(Boolean).map(tag => {
-    const matchingSessions = sessions.filter(s => s && (s.tagId === tag.id || s.subjectId === tag.id));
-    const totalMinutes = matchingSessions.reduce((acc, s) => acc + (s.durationMinutes || (s.durationHours || 0) * 60), 0);
-    const hours = Math.round((totalMinutes / 60) * 10) / 10;
-    const matchingTopics = topics.filter(t => t && ((t.tags && t.tags.includes(tag.id)) || t.subjectId === tag.id));
-    const doneTopics = matchingTopics.filter(t => t.status === 'completed');
-    return {
-      id: tag.id,
-      name: tag.name,
-      color: tag.color || '#0C66E4',
-      icon: tag.icon || '🏷️',
-      hours,
-      taskCount: matchingTopics.length,
-      doneCount: doneTopics.length,
-      percentage: totalAllTimeHours > 0 ? Math.round((hours / totalAllTimeHours) * 100) : 0
-    };
-  }).sort((a, b) => b.hours - a.hours);
+  // Total all-time logged hours
+  const totalAllTimeHours = Math.round(
+    sessions.reduce((acc, s) => acc + (s.durationHours || (s.durationMinutes || 0) / 60), 0) * 10
+  ) / 10;
+
+  // Detailed Tag-Based Time Distribution
+  const tagBreakdown = useMemo(() => {
+    return tags.filter(Boolean).map(tag => {
+      const matchingSessions = tagFilteredSessions.filter(s => s && (s.tagId === tag.id || s.subjectId === tag.id));
+      const totalMinutes = matchingSessions.reduce((acc, s) => acc + (s.durationMinutes || (s.durationHours || 0) * 60), 0);
+      const hours = Math.round((totalMinutes / 60) * 10) / 10;
+      const matchingTopics = topics.filter(t => t && ((t.tags && t.tags.includes(tag.id)) || t.subjectId === tag.id));
+      const doneTopics = matchingTopics.filter(t => t.status === 'completed');
+      const avgMinutesPerTask = doneTopics.length > 0 ? Math.round(totalMinutes / doneTopics.length) : 0;
+      return {
+        id: tag.id,
+        name: tag.name,
+        color: tag.color || '#0C66E4',
+        icon: tag.icon || '🏷️',
+        hours,
+        totalMinutes,
+        sessionsCount: matchingSessions.length,
+        taskCount: matchingTopics.length,
+        doneCount: doneTopics.length,
+        avgMinutesPerTask,
+        percentage: totalTagPeriodHours > 0 ? Math.round((hours / totalTagPeriodHours) * 100) : 0
+      };
+    }).sort((a, b) => b.hours - a.hours);
+  }, [tags, tagFilteredSessions, topics, totalTagPeriodHours]);
 
   // Deep work focus ratio (sessions with duration >= 25 mins)
   const deepWorkSessions = sessions.filter(s => (s.durationMinutes || (s.durationHours || 0) * 60) >= 25);
@@ -418,119 +444,149 @@ export const AnalyticsDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* GATE Pillar Balance */}
-      {settings.isGatePrep && (
-        <div className="card p-5 space-y-4" style={{ borderLeft: '3px solid var(--accent)' }}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
-              <GraduationCap className="w-4 h-4" />
-              <span>GATE Prep Pillar Balance (Concept • PYQs • Mocks • Revision)</span>
-            </span>
-            <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-              🎯 Target: {settings.gateTargetStream ? `GATE ${settings.gateTargetStream}` : 'GATE'} • {settings.gateTargetAir || 'AIR < 100'}
-            </span>
+      {/* ── Comprehensive Tag-Based Time Distribution Analysis ─────────── */}
+      <div className="card p-5 space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-blue-600/10 text-blue-600 border border-blue-600/20">
+                <Hash className="w-4 h-4" />
+              </span>
+              <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                Tag-Based Time Distribution
+              </h3>
+            </div>
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              Quantitative allocation of your deep focus hours and task completion across all tags
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-            {(Object.keys(GATE_TASK_CATEGORIES) as GateTaskCategory[]).map(catKey => {
-              const cat = GATE_TASK_CATEGORIES[catKey];
-              const catTopics = topics.filter(t => (t.category || 'concept') === catKey);
-              const doneCount = catTopics.filter(t => t.status === 'completed').length;
-              const hoursLogged = Math.round(
-                catTopics.reduce((acc, t) => acc + (t.completedHours || (t.status === 'completed' ? t.approxHours : 0)), 0) * 10
-              ) / 10;
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Timeframe Filter Buttons */}
+            <div className="flex items-center rounded-xl p-1 border text-xs" style={{ background: 'var(--bg-card-alt)', borderColor: 'var(--border)' }}>
+              {[
+                { id: 'all', label: 'All Time' },
+                { id: '30d', label: '30 Days' },
+                { id: '7d', label: '7 Days' },
+                { id: 'today', label: 'Today' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    Haptics.tap();
+                    setTagTimeRange(f.id as any);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                    tagTimeRange === f.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="px-3 py-1 rounded-xl text-xs font-mono font-bold border" style={{ background: 'var(--bg-card-alt)', borderColor: 'var(--border)', color: 'var(--accent)' }}>
+              {totalTagPeriodHours}h {tagTimeRange === 'today' ? 'today' : 'logged'}
+            </div>
+          </div>
+        </div>
+
+        {/* Multi-color Tag Distribution Bar */}
+        {tagBreakdown.length > 0 && totalTagPeriodHours > 0 ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+              <span>Proportional Time Allocation</span>
+              <span>{tagBreakdown.filter(t => t.hours > 0).length} active tags</span>
+            </div>
+            <div className="w-full h-4 rounded-full overflow-hidden flex" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+              {tagBreakdown.filter(t => t.hours > 0).map(item => (
+                <div
+                  key={item.id}
+                  title={`#${item.name}: ${item.hours}h (${item.percentage}%)`}
+                  className="h-full transition-all hover:opacity-85 cursor-pointer relative group"
+                  style={{ width: `${Math.max(item.percentage, 2)}%`, backgroundColor: item.color }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Tag Cards & Velocity Breakdown */}
+        {tagBreakdown.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {tagBreakdown.map(item => {
+              const maxTagHours = Math.max(...tagBreakdown.map(t => t.hours), 1);
+              const relativeWidth = Math.min(100, Math.round((item.hours / maxTagHours) * 100));
 
               return (
-                <div key={catKey} className="p-3 rounded-xl flex flex-col justify-between"
-                  style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cat.bgClass}`}>
-                      {cat.emoji} {cat.label}
-                    </span>
+                <div
+                  key={item.id}
+                  className="p-3.5 rounded-xl flex flex-col justify-between gap-3 border transition-all hover:shadow-sm"
+                  style={{ background: 'var(--bg-card-alt)', borderColor: 'var(--border)' }}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm select-none">{item.icon || '🏷️'}</span>
+                        <span className="font-bold text-xs truncate" style={{ color: item.color }}>
+                          #{item.name}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-xs shrink-0" style={{ color: 'var(--text-primary)' }}>
+                        {item.hours}h <span className="text-[10px] font-normal text-slate-400">({item.percentage}%)</span>
+                      </span>
+                    </div>
+
+                    {/* Relative volume progress meter */}
+                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${relativeWidth}%`, backgroundColor: item.color }}
+                      />
+                    </div>
                   </div>
-                  <div className="text-lg sm:text-xl font-black font-mono" style={{ color: 'var(--text-primary)' }}>
-                    {hoursLogged}<span className="text-[10px] font-normal ml-0.5" style={{ color: 'var(--text-muted)' }}>hrs</span>
-                  </div>
-                  <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    ✓ {doneCount}/{catTopics.length} tasks
+
+                  <div className="space-y-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>✓ {item.doneCount}/{item.taskCount} tasks done</span>
+                      <span>{item.sessionsCount} sessions</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {item.avgMinutesPerTask > 0 ? `⚡ ~${item.avgMinutesPerTask}m / task` : 'Ready to sprint'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          Haptics.tap();
+                          const candidate = topics.find(t => (t.tags && t.tags.includes(item.id)) || t.subjectId === item.id);
+                          if (candidate) setActiveFocusTopic(candidate);
+                          setActiveTab('timer');
+                        }}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold text-blue-600 hover:bg-blue-600/10 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Play className="w-2.5 h-2.5 fill-current" />
+                        <span>Focus</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* ── Universal Domain & Tag Time Allocation ─────────── */}
-      <div className="card p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-              <Hash className="w-4 h-4 text-blue-600" />
-              <span>Universal Time Allocation by Domain</span>
-            </span>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Automated breakdown of where your focus time is being spent across all tasks and projects
+        ) : (
+          <div className="p-8 text-center rounded-2xl border border-dashed flex flex-col items-center justify-center gap-2" style={{ borderColor: 'var(--border)' }}>
+            <Hash className="w-8 h-8 text-slate-400" />
+            <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>No tags created yet</h4>
+            <p className="text-xs max-w-sm" style={{ color: 'var(--text-muted)' }}>
+              Type <strong>#tag</strong> in any card title to automatically create tags and analyze your time distribution here.
             </p>
           </div>
-          <span className="text-xs font-mono font-bold" style={{ color: 'var(--accent)' }}>
-            {totalAllTimeHours}h logged total
-          </span>
-        </div>
-
-        {/* Multi-color Tag Distribution Bar */}
-        {tagBreakdown.length > 0 && (
-          <div className="w-full h-4 rounded-full overflow-hidden flex" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-            {tagBreakdown.map(item => (
-              <div
-                key={item.id}
-                title={`#${item.name}: ${item.hours}h (${item.percentage}%)`}
-                className="h-full transition-all hover:opacity-90 cursor-pointer"
-                style={{ width: `${Math.max(item.percentage, 2)}%`, backgroundColor: item.color }}
-              />
-            ))}
-          </div>
         )}
-
-        {/* Tag Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
-          {tagBreakdown.map(item => (
-            <div
-              key={item.id}
-              className="p-3 rounded-xl flex flex-col justify-between gap-2 transition-all hover:scale-[1.01]"
-              style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm select-none">{item.icon || '🏷️'}</span>
-                  <span className="font-bold text-xs truncate" style={{ color: item.color }}>
-                    #{item.name}
-                  </span>
-                </div>
-                <span className="font-mono font-bold text-xs shrink-0" style={{ color: 'var(--text-primary)' }}>
-                  {item.hours}h <span className="text-[10px] font-normal text-slate-400">({item.percentage}%)</span>
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-                <span>✓ {item.doneCount}/{item.taskCount} tasks done</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    Haptics.tap();
-                    const candidate = topics.find(t => (t.tags && t.tags.includes(item.id)) || t.subjectId === item.id);
-                    if (candidate) setActiveFocusTopic(candidate);
-                    setActiveTab('timer');
-                  }}
-                  className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer"
-                >
-                  <Play className="w-2.5 h-2.5 fill-current" />
-                  <span>Focus</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* ── Efficiency & Work Patterns ───── */}
@@ -585,35 +641,6 @@ export const AnalyticsDashboard: React.FC = () => {
               <span className="text-[11px] font-semibold text-slate-500">{userGamification.levelTitle}</span>
             </div>
             <p className="text-[10px] text-slate-400">{userGamification.xp} total XP accumulated</p>
-          </div>
-        </div>
-
-        {/* Productivity Guidelines */}
-        <div
-          className="p-3.5 rounded-xl text-xs space-y-2.5"
-          style={{
-            background: 'var(--bg-card-alt)',
-            border: '1px solid var(--border)'
-          }}
-        >
-          <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-            <TrendingUp className="w-4 h-4 text-blue-600" />
-            <span>Productivity Best Practices:</span>
-          </div>
-
-          <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-            <div className="flex items-start gap-2">
-              <span className="text-emerald-500 font-bold">•</span>
-              <span><strong>Sustained Focus:</strong> Peak cognitive velocity is achieved in 35–45 minute blocks. Use the Pomodoro timer to maintain clean sprints.</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-blue-500 font-bold">•</span>
-              <span><strong>Domain Balance:</strong> Allocate at least 1 focus session daily to each high-priority project to maintain steady forward momentum.</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-amber-500 font-bold">•</span>
-              <span><strong>Distraction Defense:</strong> Use the strict focus lockdown mode during critical sprint intervals to eliminate context switching.</span>
-            </div>
           </div>
         </div>
       </div>

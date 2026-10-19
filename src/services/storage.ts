@@ -11,7 +11,9 @@ import {
   StudyBoard,
   UserGamification,
   WhiteboardElement,
-  GATE_STREAM_SYLLABUS
+  GATE_STREAM_SYLLABUS,
+  CollabNotification,
+  ChatMessage
 } from '../types';
 import { STARTER_TEMPLATES } from './templates';
 
@@ -34,6 +36,10 @@ const STORAGE_KEYS = {
   ACTIVE_BOARD: 'studypulse_active_board',
   GAMIFICATION: 'studypulse_gamification',
   WHITEBOARD: 'studypulse_whiteboard_data',
+  NOTIFICATIONS: 'studypulse_collab_notifications',
+  CHAT_MESSAGES: 'studypulse_chat_messages',
+  REGISTERED_USERS: 'studypulse_registered_users',
+  TELEMETRY_EVENTS: 'deepwork_telemetry_events',
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -54,20 +60,16 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 export const DEFAULT_PROFILE: UserProfile = {
-  id: 'user_default',
-  name: 'Alex Rivera',
-  email: 'alex@dstudy.app',
+  id: '',
+  name: '',
+  email: '',
   googleConnected: false,
-  googleCalendarSyncEnabled: true,
+  googleCalendarSyncEnabled: false,
   syncKey: ''
 };
 
 export function getSimpleStarterSubjects(): Subject[] {
-  return [
-    { id: 'sub_1', name: 'Core Work', color: '#0d9488', createdAt: new Date().toISOString() },
-    { id: 'sub_2', name: 'Problem Solving', color: '#06b6d4', createdAt: new Date().toISOString() },
-    { id: 'sub_3', name: 'Review & Notes', color: '#8b5cf6', createdAt: new Date().toISOString() },
-  ];
+  return [];
 }
 
 export function getGateStarterSubjects(streamKey = 'CSE'): Subject[] {
@@ -84,55 +86,19 @@ export function getGateStarterSubjects(streamKey = 'CSE'): Subject[] {
 }
 
 export function getDefaultTags(): Tag[] {
-  return DEFAULT_TAG_PALETTE.map(t => ({
-    id: t.id,
-    name: t.name,
-    color: t.color,
-    icon: t.icon,
-    createdAt: new Date().toISOString()
-  }));
+  return [];
 }
 
 export function getDefaultBoards(): StudyBoard[] {
   return [
     {
-      id: 'board_default',
-      name: 'Tasks & Projects',
-      description: 'Universal task management for internships, hackathons, coding & study',
+      id: 'board_main',
+      name: 'Main Board',
+      description: 'Personal task and project management',
       color: '#0C66E4',
       icon: '⚡',
       isDefault: true,
-      members: [
-        { id: 'member_me', name: 'You (Owner)', email: 'you@dstudy.app', color: '#0C66E4', role: 'owner' },
-        { id: 'member_alex', name: 'Alex Rivera', email: 'alex@startup.io', color: '#10B981', role: 'editor' },
-        { id: 'member_priya', name: 'Priya Sharma', email: 'priya@hackathon.dev', color: '#8B5CF6', role: 'editor' },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'board_internship',
-      name: 'Internship & Career',
-      description: 'Tickets, PR reviews, features & deliverables',
-      color: '#10B981',
-      icon: '💼',
-      isDefault: false,
-      members: [
-        { id: 'member_me', name: 'You (Owner)', email: 'you@dstudy.app', color: '#0C66E4', role: 'owner' },
-        { id: 'member_alex', name: 'Alex Rivera', email: 'alex@startup.io', color: '#10B981', role: 'editor' },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'board_hackathon',
-      name: 'Hackathon Sprint',
-      description: 'MVP features, system architecture, presentation & demo prep',
-      color: '#8B5CF6',
-      icon: '🚀',
-      isDefault: false,
-      members: [
-        { id: 'member_me', name: 'You (Owner)', email: 'you@dstudy.app', color: '#0C66E4', role: 'owner' },
-        { id: 'member_priya', name: 'Priya Sharma', email: 'priya@hackathon.dev', color: '#8B5CF6', role: 'editor' },
-      ],
+      members: [],
       createdAt: new Date().toISOString(),
     }
   ];
@@ -442,6 +408,82 @@ export const StorageService = {
 
   saveProfile(profile: UserProfile) {
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    this.registerUser(profile);
+  },
+
+  /* ── Registered Users Directory ────────────────────────────── */
+  getRegisteredUsers(): UserProfile[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
+      let users: UserProfile[] = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(users)) users = [];
+
+      // Cleanse any dummy accounts previously seeded in localStorage
+      const dummyEmails = ['sarah@deepwork.app', 'marcus@deepwork.app', 'priya@deepwork.app', 'alex@deepwork.app'];
+      users = users.filter(u => u && u.email && !dummyEmails.includes(u.email.toLowerCase()));
+
+      // Ensure current user is in list if email exists
+      const current = this.getProfile();
+      if (current && current.email && !users.some(u => u.email.toLowerCase() === current.email.toLowerCase())) {
+        users.push(current);
+      }
+
+      localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(users));
+      return users;
+    } catch {
+      return [];
+    }
+  },
+
+  registerUser(profile: UserProfile): void {
+    if (!profile || !profile.email) return;
+    try {
+      const users = this.getRegisteredUsers();
+      const idx = users.findIndex(u => u.email.toLowerCase() === profile.email.toLowerCase());
+      if (idx >= 0) {
+        users[idx] = { ...users[idx], ...profile };
+      } else {
+        users.push(profile);
+      }
+      localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(users));
+      this.logTelemetryEvent('signup', { email: profile.email, name: profile.name });
+    } catch (e) {
+      console.warn('Could not register user:', e);
+    }
+  },
+
+  findUserByEmail(email: string): UserProfile | undefined {
+    if (!email) return undefined;
+    const normalized = email.trim().toLowerCase();
+    const users = this.getRegisteredUsers();
+    return users.find(u => u.email.trim().toLowerCase() === normalized);
+  },
+
+  /* ── Real Telemetry Event Logging ─────────────────────────── */
+  logTelemetryEvent(event: string, metadata: Record<string, any> = {}) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.TELEMETRY_EVENTS);
+      const events = raw ? JSON.parse(raw) : [];
+      const profile = this.getProfile();
+      const newEvt = {
+        id: 'evt_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        userId: profile.id || 'usr_local',
+        userName: profile.name || 'Anonymous User',
+        userEmail: profile.email || 'guest@deepwork.local',
+        avatar: profile.avatar || '',
+        event,
+        eventLabel: metadata.label || event,
+        category: metadata.category || 'engagement',
+        timestamp: new Date().toISOString(),
+        country: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local',
+        device: navigator.userAgent.includes('Mac') ? 'macOS' : navigator.userAgent.includes('Win') ? 'Windows' : 'Mobile/Linux',
+        metadata
+      };
+      const updated = [newEvt, ...events.slice(0, 200)];
+      localStorage.setItem(STORAGE_KEYS.TELEMETRY_EVENTS, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
   },
 
   /* ── Boards Operations ─────────────────────────────────────── */
@@ -552,10 +594,35 @@ export const StorageService = {
     };
   },
 
-  resetToCleanSlate(isGatePrep = false) {
+  resetToCleanSlate(userProfile?: UserProfile) {
+    this.saveTags([]);
     this.saveTopics([]);
     this.saveSessions([]);
+    this.saveSubjects([]);
+    this.saveNotifications([]);
+    this.saveChatMessages([]);
     this.resetStreak(false);
+
+    const freshBoard: StudyBoard = {
+      id: 'board_main',
+      name: 'Main Board',
+      description: 'Personal task and project management',
+      color: '#0C66E4',
+      icon: '⚡',
+      isDefault: true,
+      members: userProfile?.email ? [
+        {
+          id: userProfile.id || 'owner_1',
+          name: userProfile.name || 'You',
+          email: userProfile.email,
+          color: '#0C66E4',
+          role: 'owner'
+        }
+      ] : [],
+      createdAt: new Date().toISOString()
+    };
+    this.saveBoards([freshBoard]);
+    this.saveActiveBoardId('board_main');
   },
 
   /* ── Gamification & XP System ──────────────────────────────── */
@@ -760,5 +827,125 @@ export const StorageService = {
       console.error('Import failed:', e);
       return false;
     }
+  },
+
+  // ── Collaboration Notifications ──────────────────────────────
+  getNotifications(): CollabNotification[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      console.error('Failed to load notifications:', e);
+    }
+    return [];
+  },
+
+  saveNotifications(notifications: CollabNotification[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+    } catch (e) {
+      console.error('Failed to save notifications:', e);
+    }
+  },
+
+  addNotification(notif: Omit<CollabNotification, 'id' | 'timestamp' | 'read'>): CollabNotification {
+    const list = this.getNotifications();
+    const created: CollabNotification = {
+      ...notif,
+      id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    const updated = [created, ...list];
+    this.saveNotifications(updated);
+    return created;
+  },
+
+  markNotificationAsRead(id: string): void {
+    const list = this.getNotifications();
+    const updated = list.map(n => n.id === id ? { ...n, read: true } : n);
+    this.saveNotifications(updated);
+  },
+
+  markAllNotificationsAsRead(): void {
+    const list = this.getNotifications();
+    const updated = list.map(n => ({ ...n, read: true }));
+    this.saveNotifications(updated);
+  },
+
+  respondToNotification(id: string, action: 'accept' | 'decline'): void {
+    const list = this.getNotifications();
+    const target = list.find(n => n.id === id);
+    if (!target) return;
+    const updated = list.map(n => {
+      if (n.id === id) {
+        return {
+          ...n,
+          read: true,
+          status: action === 'accept' ? ('accepted' as const) : ('declined' as const)
+        };
+      }
+      return n;
+    });
+    this.saveNotifications(updated);
+
+    // If accepting a board invite, ensure board exists or add user to it
+    if (action === 'accept' && target.boardId) {
+      const boards = this.getBoards();
+      const existing = boards.find(b => b.id === target.boardId);
+      if (!existing && target.boardName) {
+        const newBoard: StudyBoard = {
+          id: target.boardId,
+          name: target.boardName,
+          description: 'Collaborative project board',
+          color: '#8B5CF6',
+          icon: '🚀',
+          members: [
+            { id: 'm_' + Math.random().toString(36).substring(2, 6), name: target.senderName, email: '', color: target.senderColor || '#EC4899', role: 'owner' }
+          ],
+          createdAt: new Date().toISOString()
+        };
+        this.saveBoards([...boards, newBoard]);
+      }
+    }
+  },
+
+  clearNotification(id: string): void {
+    const list = this.getNotifications();
+    this.saveNotifications(list.filter(n => n.id !== id));
+  },
+
+  // ── Secure Collaboration Chat ─────────────────────────────────
+  getChatMessages(boardId?: string): ChatMessage[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CHAT_MESSAGES);
+      const all: ChatMessage[] = raw ? JSON.parse(raw) : [];
+      if (!boardId) return all;
+      return all.filter(m => m.boardId === boardId);
+    } catch (e) {
+      console.error('Failed to load chat messages:', e);
+      return [];
+    }
+  },
+
+  saveChatMessages(messages: ChatMessage[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(messages));
+    } catch (e) {
+      console.error('Failed to save chat messages:', e);
+    }
+  },
+
+  addChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {
+    const raw = localStorage.getItem(STORAGE_KEYS.CHAT_MESSAGES);
+    const all: ChatMessage[] = raw ? JSON.parse(raw) : [];
+    const newMsg: ChatMessage = {
+      ...msg,
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      timestamp: new Date().toISOString()
+    };
+    all.push(newMsg);
+    this.saveChatMessages(all);
+    return newMsg;
   }
 };

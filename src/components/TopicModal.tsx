@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { X, LayoutGrid, Clock, Calendar, Hash, Sparkles, AlertCircle } from 'lucide-react';
+import { X, LayoutGrid, Clock, Calendar, Hash, Sparkles, AlertCircle, AtSign, Users, UserPlus } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
 export const TopicModal: React.FC = () => {
@@ -13,11 +13,14 @@ export const TopicModal: React.FC = () => {
     addTag,
     addTopic,
     activeBoardId,
-    activeBoard
+    activeBoard,
+    sendCollabNotification,
+    profile
   } = useApp();
 
   const [titleInput, setTitleInput] = useState<string>('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
   const [approxHours, setApproxHours] = useState<number>(1.5);
   const [scheduledDate, setScheduledDate] = useState<string>(
     topicModalDefaultDate || AnalyticsService.getTodayDateString()
@@ -31,6 +34,7 @@ export const TopicModal: React.FC = () => {
 
   // Real-time extracted hashtags from title input
   const extractedHashtags = (titleInput.match(/#([a-zA-Z0-9_\-]+)/g) || []).map(m => m.slice(1).toLowerCase());
+  const extractedMentions = (titleInput.match(/@([a-zA-Z0-9_\-]+)/g) || []).map(m => m.slice(1).toLowerCase());
 
   const handleToggleTag = (tagId: string) => {
     Haptics.tap();
@@ -63,10 +67,22 @@ export const TopicModal: React.FC = () => {
       const finalTagIds = Array.from(new Set([...selectedTagIds, ...tagIdsFromHashtags]));
       const primarySubjectId = finalTagIds[0] || 'tag_default';
 
-      // Clean title text of trailing hashtags for sleek display
-      const cleanTitle = titleInput.replace(/#([a-zA-Z0-9_\-]+)/g, '').trim() || titleInput.trim();
+      // Find matching collaborator from @mention or selection
+      let assignedMember = (activeBoard?.members || []).find(m => m.id === selectedAssigneeId);
+      if (!assignedMember && extractedMentions.length > 0) {
+        const matchName = extractedMentions[0];
+        assignedMember = (activeBoard?.members || []).find(m =>
+          m.name.toLowerCase().includes(matchName) || m.email.toLowerCase().includes(matchName)
+        );
+      }
 
-      await addTopic({
+      // Clean title text of trailing hashtags and @mentions for sleek display
+      const cleanTitle = titleInput
+        .replace(/#([a-zA-Z0-9_\-]+)/g, '')
+        .replace(/@([a-zA-Z0-9_\-]+)/g, '')
+        .trim() || titleInput.trim();
+
+      const createdTopic = await addTopic({
         boardId: activeBoardId,
         name: cleanTitle,
         tags: finalTagIds.length > 0 ? finalTagIds : undefined,
@@ -76,11 +92,29 @@ export const TopicModal: React.FC = () => {
         scheduledTime,
         status: 'todo',
         notes: notes.trim(),
-        priority: priority !== 'normal' ? priority : undefined
+        priority: priority !== 'normal' ? priority : undefined,
+        assigneeId: assignedMember?.id,
+        assigneeName: assignedMember?.name,
+        assigneeColor: assignedMember?.color
       });
+
+      if (assignedMember) {
+        sendCollabNotification({
+          type: 'task_delegated',
+          title: 'Work Delegated',
+          message: `Card "${cleanTitle}" delegated to ${assignedMember.name}`,
+          senderName: profile.name || 'Deepwork Member',
+          senderColor: '#0C66E4',
+          boardId: activeBoardId,
+          boardName: activeBoard?.name,
+          taskId: createdTopic.id,
+          taskTitle: cleanTitle
+        });
+      }
 
       Haptics.success();
       setTitleInput('');
+      setSelectedAssigneeId('');
       setNotes('');
       setSelectedTagIds([]);
       closeTopicModal();
@@ -194,6 +228,45 @@ export const TopicModal: React.FC = () => {
                     >
                       <span>{t.icon || '🏷️'}</span>
                       <span>#{t.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Collaborator Delegation Section */}
+          {activeBoard?.members && activeBoard.members.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-semibold mb-1 flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                <AtSign className="w-3.5 h-3.5 text-blue-500" />
+                <span>Delegate to Collaborator (or type @Name in title):</span>
+              </label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeBoard.members.map(m => {
+                  const isAssigned = selectedAssigneeId === m.id || extractedMentions.includes(m.name.toLowerCase().split(' ')[0]);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        Haptics.tap();
+                        setSelectedAssigneeId(selectedAssigneeId === m.id ? '' : m.id);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                        isAssigned ? 'ring-2 ring-blue-500 shadow-xs' : 'opacity-85 hover:opacity-100'
+                      }`}
+                      style={{
+                        background: isAssigned ? `${m.color}25` : `${m.color}10`,
+                        color: m.color,
+                        borderColor: isAssigned ? m.color : `${m.color}35`
+                      }}
+                    >
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-xs" style={{ background: m.color }}>
+                        {m.name.slice(0, 2).toUpperCase()}
+                      </span>
+                      <span>@{m.name}</span>
+                      {isAssigned && <span className="text-[10px] font-bold">✓</span>}
                     </button>
                   );
                 })}

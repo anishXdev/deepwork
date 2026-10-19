@@ -18,7 +18,8 @@ import {
   PenTool,
   Hash,
   Keyboard,
-  ShieldCheck
+  ShieldCheck,
+  Video
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { DStudyLogo } from './DStudyLogo';
@@ -41,7 +42,11 @@ export const Navbar: React.FC = () => {
     timeLeft,
     userGamification,
     setIsShortcutsModalOpen,
-    setIsMcpModalOpen
+    setIsMcpModalOpen,
+    unreadNotificationsCount,
+    setIsNotificationCenterOpen,
+    setIsTeamRoomOpen,
+    activeCall
   } = useApp();
 
   const isDark = settings.theme === 'dark';
@@ -211,10 +216,10 @@ export const Navbar: React.FC = () => {
           {/* Sign In / Account */}
           <button
             onClick={() => { Haptics.tap(); openAuthModal(); }}
-            title={profile.googleConnected ? `${profile.email}` : 'Sign in'}
+            title={profile.email ? `${profile.email}` : 'Sign in'}
             className="btn-secondary text-xs px-2.5 py-1"
           >
-            {profile.googleConnected ? (
+            {profile.googleConnected || profile.email ? (
               <>
                 <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
                 <span className="hidden sm:inline">
@@ -229,18 +234,35 @@ export const Navbar: React.FC = () => {
             )}
           </button>
 
-          {/* Notification bell */}
+          {/* Live Team Room & Call */}
           <button
-            onClick={handleToggleNotifications}
-            title={notifPerm === 'granted' ? 'Notifications on' : 'Enable notifications'}
-            className="btn-ghost"
+            onClick={() => { Haptics.tap(); setIsTeamRoomOpen(true); }}
+            title="Encrypted Team Room, Chat & Calls"
+            className="btn-ghost relative"
             style={{ padding: '6px' }}
           >
-            {notifPerm === 'granted'
-              ? <Bell className="w-4 h-4 text-blue-600" />
-              : <BellOff className="w-4 h-4" />
-            }
+            <Video className={`w-4 h-4 ${activeCall?.active ? 'text-emerald-500' : 'text-slate-400'}`} />
+            {activeCall?.active && (
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            )}
           </button>
+
+          {/* Collaboration Notification Center Bell with Badge */}
+          <button
+            onClick={() => { Haptics.tap(); setIsNotificationCenterOpen(true); }}
+            title="Collaboration notifications & invites"
+            className="btn-ghost relative"
+            style={{ padding: '6px' }}
+          >
+            <Bell className={`w-4 h-4 ${unreadNotificationsCount > 0 ? 'text-blue-600' : 'text-slate-400'}`} />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 px-1 min-w-[15px] h-[15px] rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                {unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
+
 
           {/* Theme toggle */}
           <button

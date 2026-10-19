@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Users, UserPlus, Copy, Check, Trash2, Shield, X, Mail } from 'lucide-react';
+import { Users, UserPlus, Copy, Check, Trash2, X, AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
+import { StorageService } from '../services/storage';
+import { UserProfile } from '../types';
 
 interface CollaborationModalProps {
   isOpen: boolean;
@@ -10,30 +12,109 @@ interface CollaborationModalProps {
 }
 
 export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, onClose }) => {
-  const { activeBoard, addBoardMember, removeBoardMember } = useApp();
+  const { activeBoard, addBoardMember, removeBoardMember, profile, sendCollabNotification } = useApp();
 
-  const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
+  const [validationError, setValidationError] = useState<string>('');
+  const [matchedUser, setMatchedUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const users = StorageService.getRegisteredUsers();
+      setRegisteredUsers(users);
+      setInviteEmail('');
+      setInviteName('');
+      setValidationError('');
+      setMatchedUser(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen || !activeBoard) return null;
 
   const members = activeBoard.members || [];
 
+  const handleEmailChange = (val: string) => {
+    setInviteEmail(val);
+    const trimmed = val.trim().toLowerCase();
+
+    if (!trimmed) {
+      setValidationError('');
+      setMatchedUser(null);
+      return;
+    }
+
+    const found = registeredUsers.find(u => u.email.toLowerCase() === trimmed);
+    if (found) {
+      // Check if already in board
+      const isAlreadyMember = members.some(m => m.email.toLowerCase() === trimmed);
+      if (isAlreadyMember) {
+        setValidationError(`"${found.name || trimmed}" is already a member of this board.`);
+        setMatchedUser(null);
+      } else {
+        setValidationError('');
+        setMatchedUser(found);
+        setInviteName(found.name || '');
+      }
+    } else {
+      setMatchedUser(null);
+      setValidationError('No existing Deepwork user found with this email. Invites can only be sent to registered users.');
+    }
+  };
+
+  const handleSelectQuickUser = (user: UserProfile) => {
+    setInviteEmail(user.email);
+    setInviteName(user.name || '');
+    setMatchedUser(user);
+    setValidationError('');
+  };
+
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteName.trim() || !inviteEmail.trim()) return;
+    if (!inviteEmail.trim()) return;
+
+    const trimmed = inviteEmail.trim().toLowerCase();
+    const existing = StorageService.findUserByEmail(trimmed);
+
+    if (!existing) {
+      setValidationError('No existing Deepwork user found with this email. Collaboration invites can only be sent to existing users.');
+      Haptics.warning();
+      return;
+    }
+
+    if (members.some(m => m.email.toLowerCase() === trimmed)) {
+      setValidationError('This user is already a collaborator on this board.');
+      Haptics.warning();
+      return;
+    }
 
     Haptics.success();
     addBoardMember(activeBoard.id, {
-      name: inviteName.trim(),
-      email: inviteEmail.trim(),
+      name: existing.name || inviteName.trim() || existing.email,
+      email: existing.email,
       role: inviteRole,
     });
 
+    // Dispatch interactive notification to the user
+    sendCollabNotification({
+      type: 'collab_invite',
+      title: 'Board Collaboration Invite',
+      message: `${profile.name || 'A teammate'} invited you to collaborate on "${activeBoard.name}"`,
+      boardId: activeBoard.id,
+      boardName: activeBoard.name,
+      senderName: profile.name || 'Board Lead',
+      senderAvatar: profile.avatar || profile.avatarUrl,
+      senderColor: '#0C66E4'
+    });
+
+    Notifications.toast('success', `👥 Invite sent to existing user "${existing.name || existing.email}"!`);
     setInviteName('');
     setInviteEmail('');
+    setMatchedUser(null);
+    setValidationError('');
   };
 
   const handleCopyInviteLink = () => {
@@ -41,32 +122,39 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
     navigator.clipboard.writeText(inviteUrl);
     setCopiedLink(true);
     Haptics.notification();
-    Notifications.toast('success', '🔗 Collaboration invite link copied to clipboard!');
+    Notifications.toast('success', '🔗 Collaboration link copied to clipboard!');
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  // Candidates among registered users not yet added
+  const availableRegisteredUsers = registeredUsers.filter(
+    u => u.email && !members.some(m => m.email.toLowerCase() === u.email.toLowerCase())
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
       <div
-        className="w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95"
+        className="w-full max-w-lg rounded-2xl p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-600" />
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
             <div>
               <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
                 Board Collaborators
               </h3>
               <p className="text-[11px] text-slate-400">
-                {activeBoard.name} • {members.length} member{members.length !== 1 ? 's' : ''}
+                {activeBoard.name} • {members.length} active member{members.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+            className="p-1 rounded-lg hover:bg-slate-500/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -75,9 +163,9 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
         {/* Shareable Link Box */}
         <div className="p-3 rounded-xl flex items-center justify-between gap-2" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Invite with Link</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direct Invite Link</p>
             <p className="text-xs truncate text-slate-500 font-mono">
-              {window.location.origin}/board/{activeBoard.id.substring(0, 10)}...
+              {window.location.origin}/board/{activeBoard.id.substring(0, 8)}...
             </p>
           </div>
           <button
@@ -99,31 +187,78 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        {/* Invite Member Form */}
-        <form onSubmit={handleInvite} className="p-3 rounded-xl space-y-2.5" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-            <UserPlus className="w-3.5 h-3.5 text-blue-600" />
-            <span>Add Teammate or Collaborator</span>
+        {/* Invite Member Form: Only Existing Users */}
+        <form onSubmit={handleInvite} className="p-3.5 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+              <UserPlus className="w-3.5 h-3.5 text-blue-600" />
+              <span>Invite Existing Deepwork User</span>
+            </div>
+            <span className="text-[10px] font-semibold text-slate-400 bg-slate-500/10 px-2 py-0.5 rounded-md">
+              Email Lookup Only
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input
-              type="text"
-              required
-              placeholder="Full name (e.g. Alex Rivera)"
-              value={inviteName}
-              onChange={e => setInviteName(e.target.value)}
-              className="input-base text-xs py-1.5"
-            />
-            <input
-              type="email"
-              required
-              placeholder="Email address"
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              className="input-base text-xs py-1.5"
-            />
+          <div>
+            <div className="relative">
+              <input
+                type="email"
+                required
+                placeholder="Enter existing user's registered email..."
+                value={inviteEmail}
+                onChange={e => handleEmailChange(e.target.value)}
+                className="input-base text-xs py-2 w-full pr-8"
+              />
+              {matchedUser && (
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-2.5 top-1/2 -translate-y-1/2" />
+              )}
+            </div>
+
+            {/* Validation Feedback */}
+            {matchedUser && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Verified user: <strong>{matchedUser.name}</strong> ({matchedUser.email})</span>
+              </div>
+            )}
+
+            {validationError && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-500 leading-snug">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{validationError}</span>
+              </div>
+            )}
           </div>
+
+          {/* Quick Add Existing Teammates Chips */}
+          {availableRegisteredUsers.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">
+                Quick Select Registered Users:
+              </p>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                {availableRegisteredUsers.map(u => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleSelectQuickUser(u)}
+                    className="px-2 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all hover:scale-[1.02] cursor-pointer"
+                    style={{
+                      background: inviteEmail.toLowerCase() === u.email.toLowerCase() ? 'var(--accent-soft)' : 'var(--bg-card)',
+                      borderColor: inviteEmail.toLowerCase() === u.email.toLowerCase() ? 'var(--accent)' : 'var(--border)',
+                      color: inviteEmail.toLowerCase() === u.email.toLowerCase() ? 'var(--accent)' : 'var(--text-primary)'
+                    }}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
+                      {(u.name || u.email).slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="font-semibold">{u.name || u.email.split('@')[0]}</span>
+                    <span className="text-[10px] text-slate-400">({u.email})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between gap-2 pt-1">
             <div className="flex items-center gap-2">
@@ -140,21 +275,21 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
 
             <button
               type="submit"
-              disabled={!inviteName.trim() || !inviteEmail.trim()}
-              className="btn-primary text-xs px-3 py-1 flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+              disabled={!matchedUser || Boolean(validationError)}
+              className="btn-primary text-xs px-3.5 py-1.5 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              <UserPlus className="w-3 h-3" />
-              <span>Invite</span>
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Send Invite</span>
             </button>
           </div>
         </form>
 
-        {/* Members List */}
+        {/* Current Members List */}
         <div>
           <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
             Current Members ({members.length})
           </h4>
-          <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
             {members.map(member => (
               <div
                 key={member.id}
@@ -194,7 +329,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                     <button
                       type="button"
                       onClick={() => removeBoardMember(activeBoard.id, member.id)}
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
                       title="Remove member"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

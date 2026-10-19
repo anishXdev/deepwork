@@ -170,11 +170,12 @@ export const GoogleAuthService = {
 
   signOut(): UserProfile {
     const defaultProfile: UserProfile = {
-      id: 'user_default',
-      name: 'Focus Scholar',
-      email: 'scholar@local',
+      id: '',
+      name: '',
+      email: '',
       googleConnected: false,
-      googleCalendarSyncEnabled: false
+      googleCalendarSyncEnabled: false,
+      syncKey: ''
     };
     StorageService.saveProfile(defaultProfile);
     return defaultProfile;

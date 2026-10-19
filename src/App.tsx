@@ -11,6 +11,9 @@ const ExcalidrawWhiteboard = React.lazy(() => import('./components/ExcalidrawWhi
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { TemplatesModal } from './components/TemplatesModal';
 import { McpModal } from './components/McpModal';
+import { NotificationCenterModal } from './components/NotificationCenterModal';
+import { TeamCollaborationRoom } from './components/TeamCollaborationRoom';
+import { IncomingCallModal } from './components/IncomingCallModal';
 import { TopicModal } from './components/TopicModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { GoogleSyncModal } from './components/GoogleSyncModal';
@@ -69,6 +72,9 @@ const MainContent: React.FC = () => {
         <KeyboardShortcutsModal />
         <TemplatesModal />
         <McpModal />
+        <NotificationCenterModal />
+        <TeamCollaborationRoom />
+        <IncomingCallModal />
         <ToastContainer />
       </div>
     </main>
