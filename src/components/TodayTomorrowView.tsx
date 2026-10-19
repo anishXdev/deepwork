@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { Topic, Subject, GateTaskCategory, GATE_TASK_CATEGORIES, GATE_STREAM_SYLLABUS } from '../types';
+import { Topic, Subject, GateTaskCategory, GATE_TASK_CATEGORIES, GATE_STREAM_SYLLABUS, BoardMember } from '../types';
 import {
   Play,
   Plus,
@@ -19,9 +19,14 @@ import {
   CalendarClock,
   Layers,
   ChevronDown,
-  Filter
+  Filter,
+  Users,
+  UserPlus,
+  LayoutGrid
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
+import { CreateBoardModal } from './CreateBoardModal';
+import { CollaborationModal } from './CollaborationModal';
 
 type ColumnId = 'backlog' | 'today' | 'tomorrow' | 'completed';
 
@@ -36,12 +41,16 @@ export const TodayTomorrowView: React.FC = () => {
     setActiveTab,
     openAddTopicModal,
     openRescheduleModal,
-    openCreateSubjectModal,
     deleteTopic,
     addTopic,
     updateTopic,
     setStudyMode,
     loadGateStreamSyllabus,
+    boards,
+    activeBoardId,
+    activeBoard,
+    setActiveBoardId,
+    delegateTopic
   } = useApp();
 
   const isGatePrep = Boolean(settings.isGatePrep);
@@ -50,14 +59,24 @@ export const TodayTomorrowView: React.FC = () => {
   const customExamName = settings.examName || 'Target Exam';
 
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
+  const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string>('all');
   const [isEditingExamModal, setIsEditingExamModal] = useState<boolean>(false);
+  const [isCreateBoardOpen, setIsCreateBoardOpen] = useState<boolean>(false);
+  const [isCollabModalOpen, setIsCollabModalOpen] = useState<boolean>(false);
+  const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState<boolean>(false);
+
+  // Active inline add card per column
   const [activeInlineAddColumn, setActiveInlineAddColumn] = useState<ColumnId | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
   const [inlineSubjectId, setInlineSubjectId] = useState('');
   const [inlineHours, setInlineHours] = useState(1.5);
   const [inlineCategory, setInlineCategory] = useState<GateTaskCategory>('concept');
+  const [inlineAssigneeId, setInlineAssigneeId] = useState<string>('');
+
+  // Drag and Drop & Card delegation
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<ColumnId | null>(null);
+  const [activeDelegatingTopicId, setActiveDelegatingTopicId] = useState<string | null>(null);
 
   const todayStr = AnalyticsService.getTodayDateString();
   const tomorrowStr = AnalyticsService.getTomorrowDateString();
@@ -81,10 +100,20 @@ export const TodayTomorrowView: React.FC = () => {
     settings.weekStartsOnMonday
   );
 
-  // Filter topics by subject if filter is active
-  const filteredTopics = selectedSubjectFilter === 'all'
-    ? topics
-    : topics.filter(t => t.subjectId === selectedSubjectFilter);
+  // Filter topics for the active board
+  const boardTopics = topics.filter(t => !t.boardId || t.boardId === activeBoardId);
+
+  // Filter topics by subject
+  const subjectFiltered = selectedSubjectFilter === 'all'
+    ? boardTopics
+    : boardTopics.filter(t => t.subjectId === selectedSubjectFilter);
+
+  // Filter topics by assignee / collaborator
+  const filteredTopics = selectedAssigneeFilter === 'all'
+    ? subjectFiltered
+    : selectedAssigneeFilter === 'unassigned'
+    ? subjectFiltered.filter(t => !t.assigneeId)
+    : subjectFiltered.filter(t => t.assigneeId === selectedAssigneeFilter);
 
   // Group into Trello Kanban columns
   const backlogTopics = filteredTopics.filter(t =>
@@ -121,7 +150,6 @@ export const TodayTomorrowView: React.FC = () => {
     } else if (targetCol === 'tomorrow') {
       updateTopic(topicId, { scheduledDate: tomorrowStr, status: 'todo' });
     } else if (targetCol === 'backlog') {
-      // Future date or remove date
       const future = new Date();
       future.setDate(future.getDate() + 7);
       updateTopic(topicId, { scheduledDate: future.toISOString().split('T')[0], status: 'todo' });
@@ -180,7 +208,10 @@ export const TodayTomorrowView: React.FC = () => {
       scheduledDate = d.toISOString().split('T')[0];
     }
 
+    const assignedMember = (activeBoard?.members || []).find(m => m.id === inlineAssigneeId);
+
     await addTopic({
+      boardId: activeBoardId,
       name: inlineTitle.trim(),
       subjectId: targetSubId,
       category: isGatePrep ? inlineCategory : undefined,
@@ -189,14 +220,17 @@ export const TodayTomorrowView: React.FC = () => {
       scheduledTime: colId === 'today' ? '10:00' : '09:00',
       status: colId === 'completed' ? 'completed' : 'todo',
       notes: '',
+      assigneeId: assignedMember?.id,
+      assigneeName: assignedMember?.name,
+      assigneeColor: assignedMember?.color,
     });
 
     setInlineTitle('');
+    setInlineAssigneeId('');
     setActiveInlineAddColumn(null);
     Haptics.success();
   };
 
-  // Calculate total hours in each column
   const calcHours = (items: Topic[]) => {
     const total = items.reduce((acc, t) => acc + (t.approxHours || 1), 0);
     return Math.round(total * 10) / 10;
@@ -208,12 +242,102 @@ export const TodayTomorrowView: React.FC = () => {
       {/* ── Trello Board Header Bar ─────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
         
-        {/* Left: Board Name & Key Stats */}
+        {/* Left: Board Switcher & Collaborators */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {isGatePrep ? `GATE ${targetStream} Board` : 'Study Board'}
-            </h1>
+          {/* Board Selector Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsBoardDropdownOpen(!isBoardDropdownOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors cursor-pointer"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)'
+              }}
+            >
+              <span>{activeBoard?.icon || '📋'}</span>
+              <span className="truncate max-w-[180px]">{activeBoard?.name || 'Study Board'}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isBoardDropdownOpen && (
+              <div
+                className="absolute left-0 top-10 z-40 w-64 rounded-xl p-2 shadow-2xl space-y-1"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+              >
+                <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b" style={{ borderColor: 'var(--border)' }}>
+                  <span>Study Boards</span>
+                  <span>{boards.length}</span>
+                </div>
+
+                <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                  {boards.map(b => (
+                    <button
+                      key={b.id}
+                      onClick={() => {
+                        setActiveBoardId(b.id);
+                        setIsBoardDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                      style={{
+                        background: b.id === activeBoardId ? 'var(--accent-soft)' : 'transparent',
+                        color: b.id === activeBoardId ? 'var(--accent)' : 'var(--text-primary)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span>{b.icon || '📋'}</span>
+                        <span className="truncate">{b.name}</span>
+                      </div>
+                      {b.id === activeBoardId && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-1.5 border-t" style={{ borderColor: 'var(--border)' }}>
+                  <button
+                    onClick={() => {
+                      setIsBoardDropdownOpen(false);
+                      setIsCreateBoardOpen(true);
+                    }}
+                    className="w-full py-1.5 px-2 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 flex items-center gap-1.5 justify-center cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Create New Board</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Collaborator Avatars & Share/Invite Button */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center -space-x-1.5">
+              {(activeBoard?.members || []).slice(0, 4).map(m => (
+                <div
+                  key={m.id}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900"
+                  style={{ backgroundColor: m.color }}
+                  title={`${m.name} (${m.role})`}
+                >
+                  {m.name.substring(0, 2).toUpperCase()}
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setIsCollabModalOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)'
+              }}
+              title="Collaborate & delegate tasks"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden sm:inline">Collaborate</span>
+            </button>
           </div>
 
           <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
@@ -232,75 +356,59 @@ export const TodayTomorrowView: React.FC = () => {
             <GraduationCap className="w-3.5 h-3.5" />
             <span>
               {daysUntilExam !== null ? (
-                <><strong>{daysUntilExam}d</strong> left to {isGatePrep ? `GATE` : customExamName}</>
+                <><strong>{daysUntilExam}d</strong> left</>
               ) : (
                 <>+ Set Exam Date</>
               )}
             </span>
-            <Settings2 className="w-3 h-3 opacity-60 ml-0.5" />
           </button>
-
-          {/* Weekly Pacing Progress Chip */}
-          <div
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
-            style={{
-              background: 'var(--bg-card)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <span>🎯</span>
-            <span>
-              <strong>{recommendation.hoursStudiedThisWeek}h</strong> / {recommendation.weeklyTarget}h this week
-            </span>
-          </div>
         </div>
 
-        {/* Right: Controls & Actions */}
+        {/* Right: Filters & Controls */}
         <div className="flex flex-wrap items-center gap-2">
           
-          {/* Subject Filter Dropdown */}
-          <div className="flex items-center gap-1">
-            <select
-              value={selectedSubjectFilter}
-              onChange={e => setSelectedSubjectFilter(e.target.value)}
-              className="text-xs font-medium px-2.5 py-1.5 rounded-md cursor-pointer transition-colors"
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              <option value="all">Filter: All Subjects ({topics.length})</option>
-              {subjects.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Mode Switcher Pill */}
-          <button
-            type="button"
-            onClick={() => setStudyMode(!isGatePrep, targetStream)}
-            className="px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer"
+          {/* Filter by Assignee */}
+          <select
+            value={selectedAssigneeFilter}
+            onChange={e => setSelectedAssigneeFilter(e.target.value)}
+            className="text-xs font-medium px-2.5 py-1.5 rounded-md cursor-pointer transition-colors"
             style={{
-              background: isGatePrep ? 'var(--accent)' : 'var(--bg-card)',
-              color: isGatePrep ? '#FFFFFF' : 'var(--text-secondary)',
+              background: 'var(--bg-card)',
               border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
             }}
-            title={isGatePrep ? 'Switch to Simple Board' : 'Preparing for GATE? Switch to GATE Mode'}
+            title="Filter by Collaborator"
           >
-            {isGatePrep ? '🎓 GATE Mode' : '📚 Simple Mode'}
-          </button>
+            <option value="all">Assignee: All ({boardTopics.length})</option>
+            <option value="unassigned">Unassigned</option>
+            {(activeBoard?.members || []).map(m => (
+              <option key={m.id} value={m.id}>👤 {m.name}</option>
+            ))}
+          </select>
+
+          {/* Subject Filter Dropdown */}
+          <select
+            value={selectedSubjectFilter}
+            onChange={e => setSelectedSubjectFilter(e.target.value)}
+            className="text-xs font-medium px-2.5 py-1.5 rounded-md cursor-pointer transition-colors"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <option value="all">Subject: All ({boardTopics.length})</option>
+            {subjects.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
 
           {/* Add Task Button */}
           <button
             onClick={() => openAddTopicModal(todayStr)}
-            className="btn-primary"
+            className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1"
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <Plus className="w-3.5 h-3.5" />
             <span>Add Task</span>
           </button>
         </div>
@@ -309,7 +417,7 @@ export const TodayTomorrowView: React.FC = () => {
       {/* ── Trello Kanban Columns ───────────────────────────────── */}
       <div className="trello-board">
 
-        {/* ── Column 1: Backlog / Syllabus ──────────────────────── */}
+        {/* ── Column 1: Backlog & Syllabus ──────────────────────── */}
         <TrelloColumn
           id="backlog"
           title="📋 Backlog & Syllabus"
@@ -334,19 +442,26 @@ export const TodayTomorrowView: React.FC = () => {
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
           isGatePrep={isGatePrep}
-          renderCard={(topic) => (
+          renderCard={topic => (
             <TrelloCard
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
               isGatePrep={isGatePrep}
+              members={activeBoard?.members || []}
+              isDelegating={activeDelegatingTopicId === topic.id}
+              onToggleDelegate={() => setActiveDelegatingTopicId(activeDelegatingTopicId === topic.id ? null : topic.id)}
+              onAssign={member => {
+                delegateTopic(topic.id, member);
+                setActiveDelegatingTopicId(null);
+              }}
               onDragStart={e => handleDragStart(e, topic.id)}
               onFocus={() => startFocusOnTopic(topic)}
               onComplete={() => toggleTopicCompletion(topic.id)}
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
               primaryAction={{
-                label: 'Today',
+                label: "Today's Focus",
                 action: () => handleMoveCard(topic.id, 'today'),
               }}
             />
@@ -357,9 +472,9 @@ export const TodayTomorrowView: React.FC = () => {
         <TrelloColumn
           id="today"
           title="⚡ Today's Focus"
-          accentColor="var(--accent)"
           items={todayTopics}
           totalHours={calcHours(todayTopics)}
+          accentColor="var(--accent)"
           isDragOver={dragOverColumn === 'today'}
           onDragOver={e => handleDragOver(e, 'today')}
           onDragLeave={handleDragLeave}
@@ -379,12 +494,19 @@ export const TodayTomorrowView: React.FC = () => {
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
           isGatePrep={isGatePrep}
-          renderCard={(topic) => (
+          renderCard={topic => (
             <TrelloCard
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
               isGatePrep={isGatePrep}
+              members={activeBoard?.members || []}
+              isDelegating={activeDelegatingTopicId === topic.id}
+              onToggleDelegate={() => setActiveDelegatingTopicId(activeDelegatingTopicId === topic.id ? null : topic.id)}
+              onAssign={member => {
+                delegateTopic(topic.id, member);
+                setActiveDelegatingTopicId(null);
+              }}
               onDragStart={e => handleDragStart(e, topic.id)}
               onFocus={() => startFocusOnTopic(topic)}
               onComplete={() => toggleTopicCompletion(topic.id)}
@@ -423,19 +545,26 @@ export const TodayTomorrowView: React.FC = () => {
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
           isGatePrep={isGatePrep}
-          renderCard={(topic) => (
+          renderCard={topic => (
             <TrelloCard
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
               isGatePrep={isGatePrep}
+              members={activeBoard?.members || []}
+              isDelegating={activeDelegatingTopicId === topic.id}
+              onToggleDelegate={() => setActiveDelegatingTopicId(activeDelegatingTopicId === topic.id ? null : topic.id)}
+              onAssign={member => {
+                delegateTopic(topic.id, member);
+                setActiveDelegatingTopicId(null);
+              }}
               onDragStart={e => handleDragStart(e, topic.id)}
               onFocus={() => startFocusOnTopic(topic)}
               onComplete={() => toggleTopicCompletion(topic.id)}
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
               primaryAction={{
-                label: 'Today',
+                label: 'Do Today',
                 action: () => handleMoveCard(topic.id, 'today'),
               }}
             />
@@ -446,9 +575,9 @@ export const TodayTomorrowView: React.FC = () => {
         <TrelloColumn
           id="completed"
           title="✅ Completed"
-          accentColor="var(--success)"
           items={completedTopics}
           totalHours={calcHours(completedTopics)}
+          accentColor="#1F845A"
           isDragOver={dragOverColumn === 'completed'}
           onDragOver={e => handleDragOver(e, 'completed')}
           onDragLeave={handleDragLeave}
@@ -462,17 +591,24 @@ export const TodayTomorrowView: React.FC = () => {
           subjects={subjects}
           inlineSubjectId=""
           setInlineSubjectId={() => {}}
-          inlineHours={1}
+          inlineHours={1.5}
           setInlineHours={() => {}}
           isGatePrep={isGatePrep}
-          hideAddButton={true}
-          renderCard={(topic) => (
+          hideAddButton
+          renderCard={topic => (
             <TrelloCard
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
               isGatePrep={isGatePrep}
-              isCompleted={true}
+              isCompleted
+              members={activeBoard?.members || []}
+              isDelegating={activeDelegatingTopicId === topic.id}
+              onToggleDelegate={() => setActiveDelegatingTopicId(activeDelegatingTopicId === topic.id ? null : topic.id)}
+              onAssign={member => {
+                delegateTopic(topic.id, member);
+                setActiveDelegatingTopicId(null);
+              }}
               onDragStart={e => handleDragStart(e, topic.id)}
               onFocus={() => startFocusOnTopic(topic)}
               onComplete={() => toggleTopicCompletion(topic.id)}
@@ -488,15 +624,24 @@ export const TodayTomorrowView: React.FC = () => {
 
       </div>
 
-      {/* ── Exam Date Settings Modal ────────────────────────────── */}
+      {/* ── Create Board Modal ────────────────────────────────────── */}
+      <CreateBoardModal
+        isOpen={isCreateBoardOpen}
+        onClose={() => setIsCreateBoardOpen(false)}
+      />
+
+      {/* ── Collaboration & Delegation Modal ──────────────────────── */}
+      <CollaborationModal
+        isOpen={isCollabModalOpen}
+        onClose={() => setIsCollabModalOpen(false)}
+      />
+
+      {/* ── Exam Date Settings Modal ─────────────────────────────── */}
       {isEditingExamModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
           <div
-            className="w-full max-w-md rounded-xl p-5 shadow-lg space-y-4"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-            }}
+            className="w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-2xl"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -547,19 +692,6 @@ export const TodayTomorrowView: React.FC = () => {
                       ))}
                     </select>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      Target Rank / Goal
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. AIR < 100"
-                      value={settings.gateTargetAir || ''}
-                      onChange={e => updateSettings({ gateTargetAir: e.target.value })}
-                      className="input-base"
-                    />
-                  </div>
                 </>
               ) : (
                 <div>
@@ -575,20 +707,6 @@ export const TodayTomorrowView: React.FC = () => {
                   />
                 </div>
               )}
-
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Weekly Target Hours
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="80"
-                  value={settings.weeklyHoursTarget}
-                  onChange={e => updateSettings({ weeklyHoursTarget: Number(e.target.value) || 20 })}
-                  className="input-base"
-                />
-              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -654,7 +772,6 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
   setInlineSubjectId,
   inlineHours,
   setInlineHours,
-  isGatePrep,
   hideAddButton,
   renderCard,
 }) => {
@@ -663,72 +780,58 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`trello-column transition-all ${isDragOver ? 'ring-2 ring-blue-500 bg-blue-500/5' : ''}`}
+      className={`trello-column ${isDragOver ? 'ring-2 ring-blue-500/50 bg-blue-50/20' : ''}`}
     >
       {/* Column Header */}
-      <div className="p-3 pb-2 flex items-center justify-between select-none">
-        <div className="flex items-center gap-2">
-          <h2 className="text-xs font-bold tracking-tight uppercase" style={{ color: accentColor || 'var(--text-secondary)' }}>
+      <div className="trello-column-header">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: accentColor || 'var(--accent)' }}
+          />
+          <h2 className="text-xs sm:text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
             {title}
           </h2>
-          <span
-            className="text-[11px] font-bold px-1.5 py-0.2 rounded-full"
+        </div>
+
+        <div className="flex items-center gap-1.5 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          <span className="font-bold">{items.length}</span>
+          <span>•</span>
+          <span>{totalHours}h</span>
+        </div>
+      </div>
+
+      {/* Cards Scroll Container */}
+      <div className="trello-column-cards">
+        {items.map(topic => renderCard(topic))}
+
+        {/* Inline Card Creation Form */}
+        {activeInlineAdd && (
+          <div
+            className="p-3 rounded-lg flex flex-col gap-2.5 shadow-sm"
             style={{
               background: 'var(--bg-card)',
-              color: 'var(--text-muted)',
               border: '1px solid var(--border)',
             }}
           >
-            {items.length}
-          </span>
-        </div>
-
-        {totalHours > 0 && (
-          <span className="text-[11px] font-mono text-slate-500">
-            {totalHours}h
-          </span>
-        )}
-      </div>
-
-      {/* Cards Scrollable Body */}
-      <div className="flex-1 overflow-y-auto px-2.5 pb-2 space-y-2 scrollbar-thin">
-        {items.map(topic => renderCard(topic))}
-
-        {items.length === 0 && !activeInlineAdd && (
-          <div className="py-6 px-3 text-center border-2 border-dashed rounded-lg text-xs" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-            No tasks here. Drop cards or click + below.
-          </div>
-        )}
-
-        {/* Inline Card Composer */}
-        {activeInlineAdd && (
-          <div className="card p-2.5 space-y-2 animate-in fade-in duration-100">
-            <textarea
+            <input
+              type="text"
               autoFocus
-              rows={2}
-              placeholder="What needs to be studied?"
+              placeholder="Enter a title for this card..."
               value={inlineTitle}
               onChange={e => setInlineTitle(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  onInlineSubmit();
-                }
+                if (e.key === 'Enter') onInlineSubmit();
+                if (e.key === 'Escape') onCloseInlineAdd();
               }}
-              className="w-full p-2 text-xs rounded border outline-none resize-none"
-              style={{
-                background: 'var(--bg-input)',
-                borderColor: 'var(--border)',
-                color: 'var(--text-primary)',
-              }}
+              className="input-base text-xs py-1.5"
             />
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <select
-                value={inlineSubjectId || subjects[0]?.id || ''}
+                value={inlineSubjectId}
                 onChange={e => setInlineSubjectId(e.target.value)}
-                className="text-[11px] p-1 rounded border flex-1"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                className="input-base text-xs py-1 flex-1 truncate"
               >
                 {subjects.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -737,15 +840,14 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
 
               <select
                 value={inlineHours}
-                onChange={e => setInlineHours(Number(e.target.value))}
-                className="text-[11px] p-1 rounded border w-16"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                onChange={e => setInlineHours(parseFloat(e.target.value) || 1.5)}
+                className="input-base text-xs py-1 w-20"
               >
                 <option value={0.5}>0.5h</option>
-                <option value={1}>1.0h</option>
+                <option value={1.0}>1.0h</option>
                 <option value={1.5}>1.5h</option>
-                <option value={2}>2.0h</option>
-                <option value={3}>3.0h</option>
+                <option value={2.0}>2.0h</option>
+                <option value={3.0}>3.0h</option>
               </select>
             </div>
 
@@ -803,6 +905,10 @@ interface TrelloCardProps {
   subject?: Subject;
   isGatePrep: boolean;
   isCompleted?: boolean;
+  members: BoardMember[];
+  isDelegating: boolean;
+  onToggleDelegate: () => void;
+  onAssign: (member: BoardMember | null) => void;
   onDragStart: (e: React.DragEvent) => void;
   onFocus: () => void;
   onComplete: () => void;
@@ -819,6 +925,10 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
   subject,
   isGatePrep,
   isCompleted,
+  members,
+  isDelegating,
+  onToggleDelegate,
+  onAssign,
   onDragStart,
   onFocus,
   onComplete,
@@ -832,29 +942,107 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
     <div
       draggable
       onDragStart={onDragStart}
-      className={`trello-card group flex flex-col gap-2 ${isCompleted ? 'opacity-70' : ''}`}
+      className={`trello-card group flex flex-col gap-2 relative ${isCompleted ? 'opacity-70' : ''}`}
     >
-      {/* Card Labels / Subject Badges (Trello Colored Tags) */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {subject && (
-          <span
-            className="trello-badge"
-            style={{
-              backgroundColor: `${subject.color}15`,
-              color: subject.color,
-              border: `1px solid ${subject.color}35`,
-            }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: subject.color }} />
-            <span className="truncate max-w-[130px]">{subject.name}</span>
-          </span>
-        )}
+      {/* Top Labels: Subject Badge & Delegated Member Avatar */}
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex flex-wrap items-center gap-1 min-w-0">
+          {subject && (
+            <span
+              className="trello-badge"
+              style={{
+                backgroundColor: `${subject.color}15`,
+                color: subject.color,
+                border: `1px solid ${subject.color}35`,
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: subject.color }} />
+              <span className="truncate max-w-[120px]">{subject.name}</span>
+            </span>
+          )}
 
-        {catMeta && (
-          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${catMeta.bgClass}`}>
-            {catMeta.emoji} {catMeta.label}
-          </span>
-        )}
+          {catMeta && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${catMeta.bgClass}`}>
+              {catMeta.emoji} {catMeta.label}
+            </span>
+          )}
+        </div>
+
+        {/* Assignee / Delegation Chip */}
+        <div className="relative">
+          {topic.assigneeName ? (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onToggleDelegate(); }}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition-all hover:scale-105 cursor-pointer"
+              style={{
+                background: `${topic.assigneeColor || '#0C66E4'}15`,
+                color: topic.assigneeColor || '#0C66E4',
+                border: `1px solid ${topic.assigneeColor || '#0C66E4'}30`
+              }}
+              title={`Assigned to ${topic.assigneeName} • Click to change`}
+            >
+              <span
+                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                style={{ backgroundColor: topic.assigneeColor || '#0C66E4' }}
+              >
+                {topic.assigneeName.substring(0, 2).toUpperCase()}
+              </span>
+              <span className="truncate max-w-[70px]">{topic.assigneeName.split(' ')[0]}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onToggleDelegate(); }}
+              className="text-[10px] text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+              title="Delegate to a collaborator"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Delegation Popover */}
+          {isDelegating && (
+            <div
+              onClick={e => e.stopPropagation()}
+              className="absolute right-0 top-6 z-40 p-1.5 rounded-xl shadow-2xl w-44"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1">Delegate Task</p>
+              <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                {members.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onAssign(m)}
+                    className="w-full text-left px-2 py-1 rounded-md text-xs font-medium flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white font-bold flex-shrink-0"
+                        style={{ backgroundColor: m.color }}
+                      >
+                        {m.name.substring(0, 2).toUpperCase()}
+                      </span>
+                      <span className="truncate text-slate-700 dark:text-slate-200">{m.name}</span>
+                    </div>
+                    {topic.assigneeId === m.id && <Check className="w-3 h-3 text-blue-600" />}
+                  </button>
+                ))}
+              </div>
+              {topic.assigneeId && (
+                <button
+                  type="button"
+                  onClick={() => onAssign(null)}
+                  className="w-full text-left px-2 py-1 mt-1 border-t text-[10px] text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded cursor-pointer"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  ✕ Unassign
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Card Title */}
@@ -864,13 +1052,6 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
       }}>
         {topic.name}
       </div>
-
-      {/* Optional Notes Snippet */}
-      {topic.notes && (
-        <p className="text-[11px] line-clamp-1 italic" style={{ color: 'var(--text-muted)' }}>
-          {topic.notes}
-        </p>
-      )}
 
       {/* Bottom Metadata & Quick Actions */}
       <div className="flex items-center justify-between pt-1 border-t mt-1" style={{ borderColor: 'var(--border-subtle)' }}>

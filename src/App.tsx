@@ -5,6 +5,7 @@ import { TodayTomorrowView } from './components/TodayTomorrowView';
 import { SubjectManager } from './components/SubjectManager';
 import { PomodoroTimer } from './components/PomodoroTimer';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
+import { ExcalidrawWhiteboard } from './components/ExcalidrawWhiteboard';
 import { TopicModal } from './components/TopicModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { GoogleSyncModal } from './components/GoogleSyncModal';
@@ -31,6 +32,7 @@ const MainContent: React.FC = () => {
           {activeTab === 'study' && <TodayTomorrowView />}
           {activeTab === 'subjects' && <SubjectManager />}
           {activeTab === 'timer' && <PomodoroTimer />}
+          {activeTab === 'whiteboard' && <ExcalidrawWhiteboard />}
           {activeTab === 'analytics' && <AnalyticsDashboard />}
         </div>
 

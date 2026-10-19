@@ -11,7 +11,9 @@ import {
   CloudSyncStatus,
   TimerMode,
   AmbientSoundType,
-  GATE_STREAM_SYLLABUS
+  GATE_STREAM_SYLLABUS,
+  StudyBoard,
+  BoardMember
 } from '../types';
 import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
@@ -29,7 +31,7 @@ interface AppContextType {
   settings: UserSettings;
   profile: UserProfile;
   streaks: StreakData;
-  activeTab: 'study' | 'subjects' | 'timer' | 'analytics' | 'sync';
+  activeTab: 'study' | 'subjects' | 'timer' | 'analytics' | 'whiteboard' | 'sync';
   activeFocusTopic: Topic | null;
   rescheduleTargetTopic: Topic | null;
   isTopicModalOpen: boolean;
@@ -90,8 +92,20 @@ interface AppContextType {
   syncWithCloudNow: () => Promise<boolean>;
   updateSyncKey: (newKey: string) => Promise<void>;
 
+  // Boards & Collaborators
+  boards: StudyBoard[];
+  activeBoardId: string;
+  activeBoard: StudyBoard | undefined;
+  setActiveBoardId: (id: string) => void;
+  createBoard: (name: string, description?: string, color?: string, icon?: string) => StudyBoard;
+  updateBoard: (id: string, updates: Partial<StudyBoard>) => void;
+  deleteBoard: (id: string) => void;
+  addBoardMember: (boardId: string, member: { name: string; email: string; role?: 'editor' | 'viewer' }) => void;
+  removeBoardMember: (boardId: string, memberId: string) => void;
+  delegateTopic: (topicId: string, member: BoardMember | null) => void;
+
   // Actions
-  setActiveTab: (tab: 'study' | 'subjects' | 'timer' | 'analytics' | 'sync') => void;
+  setActiveTab: (tab: 'study' | 'subjects' | 'timer' | 'analytics' | 'whiteboard' | 'sync') => void;
   setActiveFocusTopic: (topic: Topic | null) => void;
   openAddTopicModal: (defaultDate?: string) => void;
   closeTopicModal: () => void;
@@ -139,9 +153,100 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<UserSettings>(() => StorageService.getSettings());
   const [profile, setProfile] = useState<UserProfile>(() => StorageService.getProfile());
   const [streaks, setStreaks] = useState<StreakData>(() => StorageService.getStreaks());
+  const [boards, setBoards] = useState<StudyBoard[]>(() => StorageService.getBoards());
+  const [activeBoardId, setActiveBoardIdState] = useState<string>(() => StorageService.getActiveBoardId());
 
-  const [activeTab, setActiveTab] = useState<'study' | 'subjects' | 'timer' | 'analytics' | 'sync'>('study');
+  const [activeTab, setActiveTab] = useState<'study' | 'subjects' | 'timer' | 'analytics' | 'whiteboard' | 'sync'>('study');
   const [activeFocusTopic, setActiveFocusTopicState] = useState<Topic | null>(null);
+
+  useEffect(() => {
+    StorageService.saveBoards(boards);
+  }, [boards]);
+
+  const setActiveBoardId = (id: string) => {
+    setActiveBoardIdState(id);
+    StorageService.saveActiveBoardId(id);
+  };
+
+  const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0];
+
+  const createBoard = (name: string, description = '', color = '#0C66E4', icon = '📋'): StudyBoard => {
+    const newBoard: StudyBoard = {
+      id: 'board_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: name.trim(),
+      description: description.trim(),
+      color,
+      icon,
+      isDefault: false,
+      members: [
+        { id: 'member_me', name: 'You (Owner)', email: profile.email || 'you@dstudy.app', color, role: 'owner' },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+    setBoards(prev => [...prev, newBoard]);
+    setActiveBoardId(newBoard.id);
+    Notifications.toast('success', `📋 Board "${newBoard.name}" created!`);
+    return newBoard;
+  };
+
+  const updateBoard = (id: string, updates: Partial<StudyBoard>) => {
+    setBoards(prev => prev.map(b => (b.id === id ? { ...b, ...updates } : b)));
+  };
+
+  const deleteBoard = (id: string) => {
+    if (boards.length <= 1) {
+      Notifications.toast('warning', '⚠️ Cannot delete the only remaining board.');
+      return;
+    }
+    const filtered = boards.filter(b => b.id !== id);
+    setBoards(filtered);
+    if (activeBoardId === id) {
+      setActiveBoardId(filtered[0].id);
+    }
+    Notifications.toast('info', 'Board deleted.');
+  };
+
+  const addBoardMember = (boardId: string, member: { name: string; email: string; role?: 'editor' | 'viewer' }) => {
+    const colors = ['#0C66E4', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899', '#06B6D4'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const newMember: BoardMember = {
+      id: 'member_' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+      name: member.name.trim(),
+      email: member.email.trim(),
+      color: randomColor,
+      role: member.role || 'editor',
+    };
+    setBoards(prev => prev.map(b => {
+      if (b.id !== boardId) return b;
+      return { ...b, members: [...(b.members || []), newMember] };
+    }));
+    Notifications.toast('success', `👥 Collaborator "${newMember.name}" invited to board!`);
+  };
+
+  const removeBoardMember = (boardId: string, memberId: string) => {
+    setBoards(prev => prev.map(b => {
+      if (b.id !== boardId) return b;
+      return { ...b, members: (b.members || []).filter(m => m.id !== memberId) };
+    }));
+  };
+
+  const delegateTopic = (topicId: string, member: BoardMember | null) => {
+    setTopics(prev => prev.map(t => {
+      if (t.id !== topicId) return t;
+      return {
+        ...t,
+        assigneeId: member ? member.id : undefined,
+        assigneeName: member ? member.name : undefined,
+        assigneeColor: member ? member.color : undefined,
+        updatedAt: new Date().toISOString()
+      };
+    }));
+    if (member) {
+      Notifications.toast('info', `👤 Delegated task to ${member.name}`);
+    } else {
+      Notifications.toast('info', 'Task unassigned.');
+    }
+  };
 
   // Persistent Global Focus Timer State & Delta Engine
   const [timerMode, setTimerMode] = useState<TimerMode>('work');
@@ -619,6 +724,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newTopic: Topic = {
       ...topicData,
       id: 'top_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      boardId: topicData.boardId || activeBoardId,
       completedHours: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -966,6 +1072,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCustomTimerMinutes,
         addFiveMinutes,
         manualCompleteAndLog,
+        // Boards & Collaborators
+        boards,
+        activeBoardId,
+        activeBoard,
+        setActiveBoardId,
+        createBoard,
+        updateBoard,
+        deleteBoard,
+        addBoardMember,
+        removeBoardMember,
+        delegateTopic,
         // Cloud Sync
         cloudSyncStatus,
         syncKey,

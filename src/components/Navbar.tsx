@@ -15,6 +15,7 @@ import {
   UserCheck,
   Bell,
   BellOff,
+  PenTool,
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { DStudyLogo } from './DStudyLogo';
@@ -60,10 +61,11 @@ export const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    { id: 'study',     label: 'Board',      icon: LayoutGrid   },
-    { id: 'subjects',  label: 'Subjects',   icon: BookOpen     },
-    { id: 'timer',     label: 'Focus',      icon: Timer        },
-    { id: 'analytics', label: 'Analytics',  icon: BarChart3    },
+    { id: 'study',      label: 'Board',      icon: LayoutGrid },
+    { id: 'subjects',   label: 'Subjects',   icon: BookOpen   },
+    { id: 'timer',      label: 'Focus',      icon: Timer      },
+    { id: 'whiteboard', label: 'Whiteboard', icon: PenTool    },
+    { id: 'analytics',  label: 'Analytics',  icon: BarChart3  },
   ] as const;
 
   return (

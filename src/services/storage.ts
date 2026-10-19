@@ -1,4 +1,4 @@
-import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, GATE_STREAM_SYLLABUS } from '../types';
+import { Subject, Topic, StudySession, UserSettings, UserProfile, StreakData, GATE_STREAM_SYLLABUS, StudyBoard } from '../types';
 
 const STORAGE_KEYS = {
   SUBJECTS: 'studypulse_subjects',
@@ -9,7 +9,9 @@ const STORAGE_KEYS = {
   STREAKS: 'studypulse_streaks',
   LAST_SYNC: 'studypulse_last_sync',
   INITIALIZED: 'studypulse_initialized',
-  SYNC_ROOM: 'studypulse_sync_room'
+  SYNC_ROOM: 'studypulse_sync_room',
+  BOARDS: 'studypulse_boards',
+  ACTIVE_BOARD: 'studypulse_active_board',
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -77,9 +79,42 @@ export function getGateStarterSubjects(streamKey = 'CSE'): Subject[] {
   }));
 }
 
+export function getDefaultBoards(isGatePrep = false): StudyBoard[] {
+  return [
+    {
+      id: 'board_default',
+      name: isGatePrep ? 'GATE CSE 2027 Sprint' : 'Main Study Board',
+      description: isGatePrep ? 'Comprehensive GATE syllabus, PYQ practice & mock exams' : 'Daily goals, syllabus tasks, and deep focus sessions',
+      color: '#0C66E4',
+      icon: '🎯',
+      isDefault: true,
+      members: [
+        { id: 'member_me', name: 'You (Owner)', email: 'you@dstudy.app', color: '#0C66E4', role: 'owner' },
+        { id: 'member_alex', name: 'Alex Rivera', email: 'alex@studygroup.io', color: '#10B981', role: 'editor' },
+        { id: 'member_priya', name: 'Priya Sharma', email: 'priya@gateprep.org', color: '#8B5CF6', role: 'editor' },
+      ],
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'board_revision',
+      name: 'PYQ Drill & Revision',
+      description: 'Previous year question sprints, short formula notes, and review',
+      color: '#F59E0B',
+      icon: '⚡',
+      isDefault: false,
+      members: [
+        { id: 'member_me', name: 'You (Owner)', email: 'you@dstudy.app', color: '#0C66E4', role: 'owner' },
+        { id: 'member_alex', name: 'Alex Rivera', email: 'alex@studygroup.io', color: '#10B981', role: 'editor' },
+      ],
+      createdAt: new Date().toISOString(),
+    }
+  ];
+}
+
 // Seed starter subjects if app is opened for the first time
 export function getInitialStarterData(isGatePrep = false) {
   const subjects: Subject[] = isGatePrep ? getGateStarterSubjects('CSE') : getSimpleStarterSubjects();
+  const boards: StudyBoard[] = getDefaultBoards(isGatePrep);
 
   const topics: Topic[] = [];
   const sessions: StudySession[] = [];
@@ -91,7 +126,7 @@ export function getInitialStarterData(isGatePrep = false) {
     activityHistory: {}
   };
 
-  return { subjects, topics, sessions, streakData };
+  return { subjects, topics, sessions, streakData, boards };
 }
 
 export const StorageService = {
@@ -103,6 +138,8 @@ export const StorageService = {
       this.saveTopics(init.topics);
       this.saveSessions(init.sessions);
       this.saveStreaks(init.streakData);
+      this.saveBoards(init.boards);
+      this.saveActiveBoardId(init.boards[0].id);
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     }
   },
@@ -191,6 +228,39 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
   },
 
+  getBoards(): StudyBoard[] {
+    this.ensureInitialized();
+    const raw = localStorage.getItem(STORAGE_KEYS.BOARDS);
+    try {
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      const def = getDefaultBoards(false);
+      this.saveBoards(def);
+      return def;
+    } catch {
+      return getDefaultBoards(false);
+    }
+  },
+
+  saveBoards(boards: StudyBoard[]) {
+    localStorage.setItem(STORAGE_KEYS.BOARDS, JSON.stringify(boards));
+  },
+
+  getActiveBoardId(): string {
+    const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_BOARD);
+    if (raw) return raw;
+    const boards = this.getBoards();
+    const id = boards[0]?.id || 'board_default';
+    this.saveActiveBoardId(id);
+    return id;
+  },
+
+  saveActiveBoardId(id: string) {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_BOARD, id);
+  },
+
   getStreaks(): StreakData {
     this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.STREAKS);
@@ -273,6 +343,7 @@ export const StorageService = {
       settings: this.getSettings(),
       profile: this.getProfile(),
       streaks: this.getStreaks(),
+      boards: this.getBoards(),
       exportedAt: new Date().toISOString(),
       version: '1.0.0'
     };
@@ -286,5 +357,6 @@ export const StorageService = {
     if (jsonData.settings) this.saveSettings(jsonData.settings);
     if (jsonData.profile) this.saveProfile(jsonData.profile);
     if (jsonData.streaks) this.saveStreaks(jsonData.streaks);
+    if (jsonData.boards) this.saveBoards(jsonData.boards);
   }
 };

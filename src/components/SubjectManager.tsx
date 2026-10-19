@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { Topic, SUBJECT_PALETTE, GATE_STREAM_SYLLABUS, GATE_TASK_CATEGORIES } from '../types';
+import { Topic, SUBJECT_PALETTE, GATE_STREAM_SYLLABUS, GATE_TASK_CATEGORIES, GateTaskCategory } from '../types';
 import {
   BookOpen,
   Plus,
@@ -9,11 +9,16 @@ import {
   Play,
   ChevronDown,
   ChevronRight,
-  ExternalLink,
-  Check,
+  CheckCircle2,
+  Circle,
   GraduationCap,
-  Sparkles
+  Sparkles,
+  Calendar,
+  Clock,
+  Search,
+  Filter
 } from 'lucide-react';
+import { Haptics } from '../utils/haptics';
 
 export const SubjectManager: React.FC = () => {
   const {
@@ -23,34 +28,71 @@ export const SubjectManager: React.FC = () => {
     settings,
     addSubject,
     deleteSubject,
-    openAddTopicModal,
-    openRescheduleModal,
     setActiveFocusTopic,
     setActiveTab,
     deleteTopic,
     addTopic,
+    toggleTopicCompletion,
+    openRescheduleModal,
     loadGateStreamSyllabus
   } = useApp();
 
   const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(subjects[0]?.id || null);
-  const [isCreatingSubject, setIsCreatingSubject] = useState(false);
-  const [newSubjectName, setNewSubjectName] = useState('');
-  const [newSubjectColor, setNewSubjectColor] = useState(SUBJECT_PALETTE[0].hex);
-  const [newSubjectWeeklyTarget, setNewSubjectWeeklyTarget] = useState(5);
-  const [queuedTopicFlash, setQueuedTopicFlash] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Quick Add Subject state
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubColor, setNewSubColor] = useState(SUBJECT_PALETTE[0].hex);
+  const [newSubHours, setNewSubHours] = useState(5);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
 
+  // Quick Add Topic per subject state: subjectId -> { name, hours, category, date }
+  const [inlineTopicName, setInlineTopicName] = useState<Record<string, string>>({});
+  const [inlineTopicHours, setInlineTopicHours] = useState<Record<string, number>>({});
+  const [inlineTopicCat, setInlineTopicCat] = useState<Record<string, GateTaskCategory>>({});
+  const [queuedFlash, setQueuedFlash] = useState<string | null>(null);
+
+  const isGatePrep = Boolean(settings.isGatePrep);
+  const todayStr = AnalyticsService.getTodayDateString();
+
+  // Create subject quickly
   const handleCreateSubject = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubjectName.trim()) return;
-    const created = addSubject(newSubjectName.trim(), newSubjectColor, newSubjectWeeklyTarget);
-    setNewSubjectName('');
-    setIsCreatingSubject(false);
+    if (!newSubName.trim()) return;
+    const created = addSubject(newSubName.trim(), newSubColor, Number(newSubHours) || 5);
+    setNewSubName('');
+    setIsPaletteOpen(false);
     setExpandedSubjectId(created.id);
+    Haptics.success();
   };
 
-  const handleQuickQueueHighYield = async (subjectId: string, topicTitle: string, isPyq: boolean) => {
-    const todayStr = AnalyticsService.getTodayDateString();
-    const fullTitle = isPyq ? `${topicTitle} — 25 PYQ Drill` : `${topicTitle} — Concept & Notes`;
+  // Add topic to a specific subject inline
+  const handleAddTopicInline = async (subjectId: string, e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const name = inlineTopicName[subjectId]?.trim();
+    if (!name) return;
+
+    const approxHours = inlineTopicHours[subjectId] || 1.5;
+    const category = inlineTopicCat[subjectId] || 'concept';
+
+    await addTopic({
+      subjectId,
+      name,
+      approxHours,
+      category: isGatePrep ? category : undefined,
+      scheduledDate: todayStr,
+      scheduledTime: '10:00',
+      status: 'todo',
+      notes: ''
+    });
+
+    setInlineTopicName(prev => ({ ...prev, [subjectId]: '' }));
+    Haptics.success();
+  };
+
+  // Quick queue high yield GATE topic
+  const handleQueueHighYield = async (subjectId: string, topicTitle: string, isPyq: boolean) => {
+    const fullTitle = isPyq ? `${topicTitle} (PYQ Drill)` : `${topicTitle} (Concept)`;
     await addTopic({
       subjectId,
       name: fullTitle,
@@ -59,10 +101,11 @@ export const SubjectManager: React.FC = () => {
       scheduledDate: todayStr,
       scheduledTime: '10:00',
       status: 'todo',
-      notes: 'High-yield GATE syllabus topic'
+      notes: 'High-yield GATE topic'
     });
-    setQueuedTopicFlash(`${subjectId}:${topicTitle}`);
-    setTimeout(() => setQueuedTopicFlash(null), 1800);
+    setQueuedFlash(`${subjectId}:${topicTitle}`);
+    setTimeout(() => setQueuedFlash(null), 1600);
+    Haptics.success();
   };
 
   const getSubjectHours = (subjectId: string) => {
@@ -72,73 +115,71 @@ export const SubjectManager: React.FC = () => {
   };
 
   const startFocusOnTopic = (topic: Topic) => {
+    Haptics.tap();
     setActiveFocusTopic(topic);
     setActiveTab('timer');
   };
 
-  const isGatePrep = Boolean(settings.isGatePrep);
-  const totalSyllabusMarks = subjects.reduce((acc, s) => acc + (s.examWeightageMarks || 0), 0);
+  const filteredSubjects = subjects.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalTasks = topics.length;
+  const completedTasks = topics.filter(t => t.status === 'completed').length;
+  const totalHoursInvested = Math.round(sessions.reduce((acc, s) => acc + (s.durationHours || s.durationMinutes / 60), 0) * 10) / 10;
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 pb-28 space-y-5">
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-5 pb-28 space-y-4">
+      
+      {/* ── Header ────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <BookOpen className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-            <span>{isGatePrep ? 'GATE Syllabus & Weightages' : 'Subjects'}</span>
+            <BookOpen className="w-5 h-5 text-blue-600" />
+            <span>{isGatePrep ? 'Syllabus & Subjects' : 'Subjects & Topics'}</span>
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {isGatePrep
-              ? `Track official GATE subjects, mark weightages${totalSyllabusMarks > 0 ? ` (${totalSyllabusMarks}/100 Marks mapped)` : ''}, and high-yield topics.`
-              : 'Manage your study subjects, target hours, and nested topics.'}
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+            Organize study subjects, track task completion, and queue high-priority topics.
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreatingSubject(true)}
-          className="btn-primary flex items-center gap-1.5 self-start sm:self-auto text-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{isGatePrep ? '+ Custom Subject' : '+ Subject'}</span>
-        </button>
+        {/* Global Stats Badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2.5 py-1 rounded-md text-xs font-semibold" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            📚 {subjects.length} Subjects
+          </span>
+          <span className="px-2.5 py-1 rounded-md text-xs font-semibold" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+            ✓ {completedTasks}/{totalTasks} Tasks Done
+          </span>
+          <span className="px-2.5 py-1 rounded-md text-xs font-semibold" style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)', color: 'var(--accent)' }}>
+            ⏱️ {totalHoursInvested}h Studied
+          </span>
+        </div>
       </div>
 
-      {/* GATE Stream Preset Bar */}
+      {/* ── GATE Syllabus Stream Presets (if GATE Mode) ──── */}
       {isGatePrep && (
-        <div className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
-              <GraduationCap className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Official GATE Stream Syllabus Presets</h3>
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Load complete subject weightages (100 Marks) & high-yield topics in 1 click</p>
-            </div>
+        <div className="p-3 rounded-xl flex flex-wrap items-center justify-between gap-2.5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2">
+            <GraduationCap className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Quick Load Official Syllabus:</span>
           </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {Object.entries(GATE_STREAM_SYLLABUS).map(([streamKey, streamData]) => {
-              const isActiveStream = (settings.gateTargetStream || 'CSE') === streamKey;
+              const isActive = (settings.gateTargetStream || 'CSE') === streamKey;
               return (
                 <button
                   key={streamKey}
                   type="button"
                   onClick={() => {
-                    if (topics.length > 0) {
-                      if (confirm(`Switch to ${streamData.label} syllabus? Click OK to replace default subjects, or Cancel.`)) {
-                        loadGateStreamSyllabus(streamKey, true);
-                      }
-                    } else {
-                      loadGateStreamSyllabus(streamKey, true);
-                    }
+                    if (topics.length > 0 && !confirm(`Load ${streamData.label} subjects? This will add any missing stream subjects.`)) return;
+                    loadGateStreamSyllabus(streamKey, false);
                   }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  className="px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer"
                   style={{
+                    background: isActive ? 'var(--accent)' : 'var(--bg-card-alt)',
+                    color: isActive ? '#fff' : 'var(--text-secondary)',
                     border: '1px solid var(--border)',
-                    background: isActiveStream ? 'var(--accent)' : 'var(--bg-card-alt)',
-                    color: isActiveStream ? '#fff' : 'var(--text-secondary)',
                   }}
                 >
                   🎓 {streamData.label.replace('GATE ', '')}
@@ -149,244 +190,239 @@ export const SubjectManager: React.FC = () => {
         </div>
       )}
 
-      {/* Create Subject Form */}
-      {isCreatingSubject && (
-        <form onSubmit={handleCreateSubject} className="card p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Add Subject</h3>
-            <button
-              type="button"
-              onClick={() => setIsCreatingSubject(false)}
-              className="text-xs"
-              style={{ color: 'var(--text-muted)' }}
+      {/* ── Fast Inline Quick-Add Subject Bar ─────────────── */}
+      <form
+        onSubmit={handleCreateSubject}
+        className="p-2 sm:p-2.5 rounded-xl flex flex-wrap items-center gap-2 transition-all"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-sm)'
+        }}
+      >
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsPaletteOpen(!isPaletteOpen)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-transform hover:scale-105 cursor-pointer"
+            style={{ backgroundColor: newSubColor }}
+            title="Click to change subject color"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-white opacity-80" />
+          </button>
+
+          {/* Quick Color Dropdown */}
+          {isPaletteOpen && (
+            <div
+              className="absolute left-0 top-10 z-30 p-2 rounded-xl grid grid-cols-5 gap-1.5 shadow-xl"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
             >
-              ✕ Cancel
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block mb-1 text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>Name</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Compiler Design, Discrete Mathematics..."
-                value={newSubjectName}
-                onChange={e => setNewSubjectName(e.target.value)}
-                className="input-base w-full"
-              />
-              <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Quick suggestions:</span>
-                {['DBMS', 'Compiler Design', 'Engineering Mathematics', 'Computer Networks', 'Operating Systems', 'General Aptitude'].map(name => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setNewSubjectName(name)}
-                    className="text-[10px] px-2 py-0.5 rounded-md transition-colors"
-                    style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}
-                  >
-                    + {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block mb-1 text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>Target Hours/wk</label>
-              <input
-                type="number"
-                min="1"
-                max="80"
-                step="0.5"
-                value={newSubjectWeeklyTarget}
-                onChange={e => setNewSubjectWeeklyTarget(parseFloat(e.target.value) || 1)}
-                className="input-base w-full font-mono"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>Color Accent (20 Themes)</label>
-              <span className="text-[10px]" style={{ color: 'var(--accent)' }}>
-                {SUBJECT_PALETTE.find(c => c.hex === newSubjectColor)?.name || 'Selected'}
-              </span>
-            </div>
-            <div className="grid grid-cols-10 gap-2 p-2.5 rounded-xl" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-              {SUBJECT_PALETTE.map(c => (
+              {SUBJECT_PALETTE.slice(0, 15).map(c => (
                 <button
                   key={c.hex}
                   type="button"
+                  onClick={() => { setNewSubColor(c.hex); setIsPaletteOpen(false); }}
+                  className="w-5 h-5 rounded-full transition-transform hover:scale-125"
+                  style={{ backgroundColor: c.hex }}
                   title={c.name}
-                  onClick={() => setNewSubjectColor(c.hex)}
-                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all"
-                  style={{
-                    backgroundColor: c.hex,
-                    transform: newSubjectColor === c.hex ? 'scale(1.25)' : 'scale(1)',
-                    boxShadow: newSubjectColor === c.hex ? '0 0 0 2px #fff, 0 0 0 3px ' + c.hex : 'none',
-                    opacity: newSubjectColor === c.hex ? 1 : 0.7,
-                  }}
-                >
-                  {newSubjectColor === c.hex && <Check className="w-3.5 h-3.5 text-white stroke-[3] drop-shadow-md" />}
-                </button>
+                />
               ))}
             </div>
+          )}
+        </div>
+
+        <input
+          type="text"
+          required
+          placeholder="+ Add a new subject (e.g. Operating Systems, Algorithms)..."
+          value={newSubName}
+          onChange={e => setNewSubName(e.target.value)}
+          className="input-base flex-1 min-w-[200px] text-xs py-1.5 font-medium"
+        />
+
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 px-2 py-1 rounded-md text-xs" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+            <span className="text-[10px] text-slate-400">Goal:</span>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              value={newSubHours}
+              onChange={e => setNewSubHours(Number(e.target.value) || 1)}
+              className="w-8 bg-transparent font-bold text-center text-xs outline-none"
+              style={{ color: 'var(--text-primary)' }}
+            />
+            <span className="text-[10px] text-slate-400">h/wk</span>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsCreatingSubject(false)}
-              className="btn-secondary"
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary">
-              Save Subject
-            </button>
-          </div>
-        </form>
+          <button
+            type="submit"
+            className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1 whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Subject</span>
+          </button>
+        </div>
+      </form>
+
+      {/* ── Search Bar (if more than 3 subjects) ──────────── */}
+      {subjects.length > 3 && (
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 opacity-50" style={{ color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            placeholder="Search subjects or syllabus..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="input-base w-full pl-8 py-1.5 text-xs"
+          />
+        </div>
       )}
 
-      {/* Subjects List */}
+      {/* ── Subjects List ─────────────────────────────────── */}
       {subjects.length === 0 ? (
-        <div className="card p-10 text-center" style={{ border: '1px dashed var(--border)' }}>
-          <BookOpen className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-          <h3 className="font-bold mb-1" style={{ color: 'var(--text-primary)' }}>No subjects created yet</h3>
-          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-            Load an official GATE syllabus above or create your own subject.
+        <div className="p-8 text-center rounded-2xl border border-dashed" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+          <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-600" />
+          <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>No subjects added yet</h3>
+          <p className="text-xs mt-1 mb-4" style={{ color: 'var(--text-secondary)' }}>
+            Add your first subject using the bar above, or load an official syllabus preset.
           </p>
-          <button
-            onClick={() => loadGateStreamSyllabus('CSE', true)}
-            className="btn-primary"
-          >
-            🎓 Load GATE CS & IT Syllabus
-          </button>
+          {isGatePrep && (
+            <button
+              onClick={() => loadGateStreamSyllabus('CSE', true)}
+              className="btn-primary text-xs px-4 py-2"
+            >
+              🎓 Load GATE CSE 2027 Syllabus
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {subjects.map(subject => {
+          {filteredSubjects.map(subject => {
             const isExpanded = expandedSubjectId === subject.id;
             const subjectTopics = topics.filter(t => t.subjectId === subject.id);
             const hoursInvested = getSubjectHours(subject.id);
-            const completedTopicsCount = subjectTopics.filter(t => t.status === 'completed').length;
+            const doneCount = subjectTopics.filter(t => t.status === 'completed').length;
+            const pctDone = subjectTopics.length > 0 ? Math.round((doneCount / subjectTopics.length) * 100) : 0;
+
+            const curTopicName = inlineTopicName[subject.id] || '';
+            const curTopicHours = inlineTopicHours[subject.id] || 1.5;
+            const curTopicCat = inlineTopicCat[subject.id] || 'concept';
 
             return (
               <div
                 key={subject.id}
-                className="card overflow-hidden transition-all"
-                style={{ borderLeft: `3px solid ${subject.color}` }}
+                className="rounded-xl overflow-hidden transition-all"
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderLeft: `4px solid ${subject.color}`,
+                  boxShadow: 'var(--shadow-sm)'
+                }}
               >
-                {/* Subject Header */}
+                {/* Subject Header Row */}
                 <div
                   onClick={() => setExpandedSubjectId(isExpanded ? null : subject.id)}
-                  className="p-4 sm:p-5 flex items-center justify-between cursor-pointer select-none transition-colors"
-                  style={{ background: 'transparent' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-alt)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  className="p-3 sm:p-3.5 flex items-center justify-between cursor-pointer select-none transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: subject.color }}
-                    />
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subject.color }} />
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm sm:text-base font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
                           {subject.name}
                         </h3>
-                        {isGatePrep && subject.examWeightageMarks && (
-                          <span className="pill text-[10px]" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
-                            🎯 {subject.examWeightageMarks} Marks
+                        {subject.examWeightageMarks && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                            🎯 {subject.examWeightageMarks}M
                           </span>
                         )}
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-md" style={{ background: 'var(--bg-card-alt)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded text-slate-500 bg-slate-100 dark:bg-slate-800">
                           {subjectTopics.length} tasks
                         </span>
                       </div>
-                      <div className="flex items-center gap-2.5 text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
-                        <span>⏱️ <strong style={{ color: 'var(--accent)' }}>{hoursInvested}h</strong> invested</span>
+
+                      {/* Progress bar and hours */}
+                      <div className="flex items-center gap-3 text-[11px] mt-1 font-mono text-slate-500">
+                        <span>⏱️ {hoursInvested}h studied</span>
                         <span>•</span>
-                        <span>✓ {completedTopicsCount}/{subjectTopics.length} done</span>
+                        <span>{doneCount}/{subjectTopics.length} done ({pctDone}%)</span>
                         {subject.weeklyTargetHours && (
                           <>
                             <span>•</span>
-                            <span>📅 {subject.weeklyTargetHours}h/wk goal</span>
+                            <span>Goal: {subject.weeklyTargetHours}h/wk</span>
                           </>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 ml-2">
                     <button
-                      onClick={e => { e.stopPropagation(); openAddTopicModal(); }}
-                      className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors"
-                      style={{ background: 'var(--bg-card-alt)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>Task</span>
-                    </button>
-
-                    <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
-                        if (confirm(`Delete subject "${subject.name}" and its topics?`)) {
+                        if (confirm(`Delete "${subject.name}" and its tasks?`)) {
                           deleteSubject(subject.id);
                         }
                       }}
-                      className="p-1.5 rounded-lg transition-colors"
-                      style={{ color: 'var(--text-muted)' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+                      className="p-1.5 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                       title="Delete Subject"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
 
-                    <div style={{ color: 'var(--text-muted)' }} className="p-1">
+                    <div className="p-1 text-slate-400">
                       {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </div>
                   </div>
                 </div>
 
-                {/* Expanded Topics */}
+                {/* Expanded Content: High-Yield Presets & Tasks */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-3 space-y-4" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-card-alt)' }}>
-
-                    {/* High-Yield GATE Chips */}
+                  <div
+                    className="p-3 sm:p-4 space-y-3.5 border-t"
+                    style={{
+                      borderColor: 'var(--border)',
+                      background: 'var(--bg-app)'
+                    }}
+                  >
+                    {/* High Yield GATE Chips (1-click queue) */}
                     {isGatePrep && subject.highYieldTopics && subject.highYieldTopics.length > 0 && (
-                      <div className="p-3 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <div className="flex items-center gap-1 mb-2">
-                          <Sparkles className="w-3 h-3" style={{ color: 'var(--accent)' }} />
-                          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
-                            High-Yield GATE Topics (Click to Queue for Today)
+                      <div className="p-2.5 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                            High-Yield Topics (1-Click Queue)
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {subject.highYieldTopics.map(hy => {
-                            const isFlashed = queuedTopicFlash === `${subject.id}:${hy}`;
+                            const isFlashed = queuedFlash === `${subject.id}:${hy}`;
                             return (
-                              <div key={hy} className="inline-flex items-center rounded-lg overflow-hidden text-[11px]"
-                                style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-                                <span className="px-2 py-1 font-semibold" style={{ color: 'var(--text-primary)' }}>{hy}</span>
+                              <div
+                                key={hy}
+                                className="inline-flex items-center rounded-md overflow-hidden text-[11px]"
+                                style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
+                              >
+                                <span className="px-2 py-0.5 font-medium" style={{ color: 'var(--text-primary)' }}>{hy}</span>
                                 <button
                                   type="button"
-                                  onClick={() => handleQuickQueueHighYield(subject.id, hy, false)}
+                                  onClick={() => handleQueueHighYield(subject.id, hy, false)}
+                                  className="px-1.5 py-0.5 font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 transition-colors cursor-pointer border-l"
+                                  style={{ borderColor: 'var(--border)' }}
                                   title="Queue Concept Study for Today"
-                                  className="px-1.5 py-1 font-bold transition-colors cursor-pointer"
-                                  style={{ borderLeft: '1px solid var(--border)', color: 'var(--accent)', background: 'var(--accent-soft)' }}
                                 >
-                                  +📖
+                                  +📖 Concept
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleQuickQueueHighYield(subject.id, hy, true)}
-                                  title="Queue 25-PYQ Drill for Today"
-                                  className="px-1.5 py-1 font-bold transition-colors cursor-pointer"
-                                  style={{ borderLeft: '1px solid var(--border)', color: '#f59e0b', background: 'rgba(245,158,11,0.07)' }}
+                                  onClick={() => handleQueueHighYield(subject.id, hy, true)}
+                                  className="px-1.5 py-0.5 font-bold hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-600 transition-colors cursor-pointer border-l"
+                                  style={{ borderColor: 'var(--border)' }}
+                                  title="Queue 25 PYQ Drill for Today"
                                 >
-                                  {isFlashed ? '✓ Queued' : '+📝 PYQ'}
+                                  {isFlashed ? '✓ Added' : '+📝 PYQ'}
                                 </button>
                               </div>
                             );
@@ -395,101 +431,164 @@ export const SubjectManager: React.FC = () => {
                       </div>
                     )}
 
-                    <div>
-                      <div className="flex items-center justify-between mb-2.5">
-                        <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                          Queued & Completed Tasks ({subjectTopics.length})
-                        </span>
-                        <button
-                          onClick={() => openAddTopicModal()}
-                          className="text-xs font-bold flex items-center gap-1 hover:underline"
-                          style={{ color: 'var(--accent)' }}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>+ Custom Task</span>
-                        </button>
-                      </div>
+                    {/* ── Easy Inline Add Topic Input ───────────────── */}
+                    <form
+                      onSubmit={e => handleAddTopicInline(subject.id, e)}
+                      className="p-2 rounded-lg flex flex-wrap items-center gap-2"
+                      style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+                    >
+                      <input
+                        type="text"
+                        placeholder={`+ Add a topic or task to ${subject.name}...`}
+                        value={curTopicName}
+                        onChange={e => setInlineTopicName({ ...inlineTopicName, [subject.id]: e.target.value })}
+                        className="input-base flex-1 min-w-[180px] text-xs py-1"
+                      />
 
-                      {subjectTopics.length === 0 ? (
-                        <p className="text-xs italic py-2" style={{ color: 'var(--text-muted)' }}>
-                          {isGatePrep
-                            ? 'No tasks queued for this subject yet. Tap any High-Yield topic above (+📖 or +📝 PYQ) to queue it for today!'
-                            : 'No tasks queued for this subject yet. Click "+ Custom Task" to add one.'}
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {subjectTopics.map(topic => {
-                            const catMeta = GATE_TASK_CATEGORIES[topic.category || 'concept'];
-                            return (
-                              <div
-                                key={topic.id}
-                                className="p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
-                                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`w-2 h-2 rounded-full ${topic.status === 'completed' ? 'bg-emerald-500' : ''}`}
-                                      style={{ backgroundColor: topic.status === 'completed' ? '#10b981' : subject.color }} />
+                      {/* Hours pill */}
+                      <select
+                        value={curTopicHours}
+                        onChange={e => setInlineTopicHours({ ...inlineTopicHours, [subject.id]: parseFloat(e.target.value) || 1.5 })}
+                        className="input-base text-xs py-1 px-2"
+                        title="Estimated Hours"
+                      >
+                        <option value={0.5}>0.5h</option>
+                        <option value={1.0}>1.0h</option>
+                        <option value={1.5}>1.5h</option>
+                        <option value={2.0}>2.0h</option>
+                        <option value={3.0}>3.0h</option>
+                        <option value={4.0}>4.0h</option>
+                      </select>
+
+                      {/* Category Pill (if GATE) */}
+                      {isGatePrep && (
+                        <select
+                          value={curTopicCat}
+                          onChange={e => setInlineTopicCat({ ...inlineTopicCat, [subject.id]: e.target.value as GateTaskCategory })}
+                          className="input-base text-xs py-1 px-2"
+                          title="Category"
+                        >
+                          <option value="concept">📖 Concept</option>
+                          <option value="pyq">📝 PYQs</option>
+                          <option value="mock">🧪 Mock</option>
+                          <option value="revision">🔁 Revision</option>
+                          <option value="notes">📓 Notes</option>
+                        </select>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={!curTopicName.trim()}
+                        className="btn-primary text-xs px-2.5 py-1 flex items-center gap-1 disabled:opacity-40"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Task</span>
+                      </button>
+                    </form>
+
+                    {/* Topic Cards List */}
+                    {subjectTopics.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-1 text-center">
+                        No tasks queued for this subject yet. Type a topic name above and press Add!
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {subjectTopics.map(topic => {
+                          const isDone = topic.status === 'completed';
+                          const catMeta = GATE_TASK_CATEGORIES[topic.category || 'concept'];
+
+                          return (
+                            <div
+                              key={topic.id}
+                              className="p-2 sm:p-2.5 rounded-lg flex items-center justify-between gap-2 transition-all hover:border-slate-300 dark:hover:border-slate-700"
+                              style={{
+                                background: 'var(--bg-card)',
+                                border: '1px solid var(--border)',
+                                opacity: isDone ? 0.65 : 1,
+                              }}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTopicCompletion(topic.id)}
+                                  className="text-slate-400 hover:text-emerald-500 transition-colors cursor-pointer flex-shrink-0"
+                                  title={isDone ? 'Mark as incomplete' : 'Mark as done'}
+                                >
+                                  {isDone ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
+                                  ) : (
+                                    <Circle className="w-4 h-4" />
+                                  )}
+                                </button>
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span
+                                      className="text-xs font-semibold truncate"
+                                      style={{
+                                        color: isDone ? 'var(--text-muted)' : 'var(--text-primary)',
+                                        textDecoration: isDone ? 'line-through' : 'none'
+                                      }}
+                                    >
+                                      {topic.name}
+                                    </span>
                                     {isGatePrep && catMeta && (
-                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${catMeta.bgClass}`}>
+                                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
                                         {catMeta.emoji} {catMeta.label}
                                       </span>
                                     )}
-                                    <span className="text-xs sm:text-sm font-semibold"
-                                      style={{ color: topic.status === 'completed' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: topic.status === 'completed' ? 'line-through' : 'none' }}>
-                                      {topic.name}
-                                    </span>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                                    <span>⏱️ {topic.approxHours}h (Done: {topic.completedHours}h)</span>
-                                    <span>•</span>
-                                    <span>📅 {topic.scheduledDate} {topic.scheduledTime ? `@ ${topic.scheduledTime}` : ''}</span>
-                                  </div>
-                                </div>
 
-                                <div className="flex items-center gap-1.5 self-end sm:self-center">
-                                  {topic.gcalLink && (
-                                    <a
-                                      href={topic.gcalLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="p-1.5 transition-colors"
-                                      style={{ color: 'var(--text-muted)' }}
-                                      title="Google Calendar"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </a>
-                                  )}
-                                  <button
-                                    onClick={() => openRescheduleModal(topic)}
-                                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors"
-                                    style={{ background: 'var(--bg-card-alt)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                                  >
-                                    🗓️ Reschedule
-                                  </button>
-                                  <button
-                                    onClick={() => startFocusOnTopic(topic)}
-                                    className="btn-primary flex items-center gap-1 text-[11px] py-1 px-2.5"
-                                  >
-                                    <Play className="w-3 h-3 fill-white" />
-                                    <span>Focus</span>
-                                  </button>
-                                  <button
-                                    onClick={() => deleteTopic(topic.id)}
-                                    className="px-1.5 py-1 text-xs transition-colors"
-                                    style={{ color: 'var(--text-muted)' }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-                                  >
-                                    ✕
-                                  </button>
+                                  <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400 mt-0.5">
+                                    <span>⏱️ {topic.approxHours}h</span>
+                                    <span>•</span>
+                                    <span>📅 {topic.scheduledDate}</span>
+                                    {topic.assigneeName && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-blue-600 font-semibold">👤 {topic.assigneeName}</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+
+                              {/* Task Action Buttons */}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {!isDone && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startFocusOnTopic(topic)}
+                                    className="p-1 rounded-md text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
+                                    title="Start Focus Timer on this topic"
+                                  >
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => openRescheduleModal(topic)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                  title="Reschedule Date"
+                                >
+                                  <Calendar className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTopic(topic.id)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-rose-500 transition-colors"
+                                  title="Delete Task"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

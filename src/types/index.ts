@@ -95,8 +95,29 @@ export interface Subject {
   createdAt: string;
 }
 
+export interface BoardMember {
+  id: string;
+  name: string;
+  email: string;
+  color: string;
+  avatar?: string;
+  role: 'owner' | 'editor' | 'viewer';
+}
+
+export interface StudyBoard {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  isDefault?: boolean;
+  members: BoardMember[];
+  createdAt: string;
+}
+
 export interface Topic {
   id: string;
+  boardId?: string; // ID of the board this card belongs to
   subjectId: string;
   name: string;
   approxHours: number; // e.g. 1.5
@@ -106,6 +127,9 @@ export interface Topic {
   status: TaskStatus;
   category?: GateTaskCategory; // Concept, PYQ, Mock Test, Revision, Notes
   notes?: string;
+  assigneeId?: string; // Collaborator member ID delegated to this task
+  assigneeName?: string; // Collaborator display name
+  assigneeColor?: string; // Collaborator avatar color
   gcalEventId?: string; // Google Calendar Event ID if synced
   gcalLink?: string; // Web link to view event in Google Calendar
   createdAt: string;
