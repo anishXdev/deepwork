@@ -63,6 +63,11 @@ interface AppContextType {
   setCelebrationTask: (val: { name: string; quote: string } | null) => void;
   openAuthModal: () => void;
   closeAuthModal: () => void;
+  isTemplatesModalOpen: boolean;
+  setIsTemplatesModalOpen: (open: boolean) => void;
+  isMcpModalOpen: boolean;
+  setIsMcpModalOpen: (open: boolean) => void;
+  loadStarterTemplate: (templateId: string) => void;
 
   setSubjects: React.Dispatch<React.SetStateAction<Subject[]>>;
   setProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
@@ -169,6 +174,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [tags, setTags] = useState<Tag[]>(() => StorageService.getTags());
   const [userGamification, setUserGamification] = useState<UserGamification>(() => StorageService.getGamification());
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
+  const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
+
+  const loadStarterTemplate = (templateId: string) => {
+    const res = StorageService.applyStarterTemplate(templateId, activeBoardId);
+    setTags(StorageService.getTags());
+    setTopics(StorageService.getTopics());
+    Notifications.toast('success', `✨ Template loaded! Added ${res.createdTags.length} tags and ${res.createdTasks.length} cards.`);
+  };
 
   const [activeTab, setActiveTab] = useState<'study' | 'subjects' | 'tags' | 'timer' | 'analytics' | 'whiteboard' | 'sync'>('study');
   const [activeFocusTopic, setActiveFocusTopicState] = useState<Topic | null>(null);
@@ -208,7 +222,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dstudy-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `deepwork-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     Notifications.toast('success', '💾 Full backup exported successfully!');
@@ -639,9 +653,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCloudSyncStatus('syncing');
     CloudSyncService.pullFromCloud().then(res => {
       if (res.found && res.data) {
-        if (res.data.subjects) setSubjects(res.data.subjects);
-        if (res.data.topics) setTopics(res.data.topics);
-        if (res.data.sessions) setSessions(res.data.sessions);
+        if (Array.isArray(res.data.tags)) {
+          setTags(res.data.tags.filter((t: any) => t && typeof t === 'object' && t.id).map((t: any) => ({
+            ...t,
+            color: t.color || '#0C66E4',
+            icon: t.icon || '🏷️'
+          })));
+        }
+        if (Array.isArray(res.data.subjects)) {
+          setSubjects(res.data.subjects.filter((s: any) => s && typeof s === 'object' && s.id).map((s: any) => ({
+            ...s,
+            color: s.color || '#0d9488'
+          })));
+        }
+        if (Array.isArray(res.data.topics)) {
+          setTopics(res.data.topics.filter((t: any) => t && typeof t === 'object' && t.id));
+        }
+        if (Array.isArray(res.data.sessions)) {
+          setSessions(res.data.sessions.filter((s: any) => s && typeof s === 'object' && s.id));
+        }
+        if (Array.isArray(res.data.boards)) {
+          setBoards(res.data.boards.filter((b: any) => b && typeof b === 'object' && b.id).map((b: any) => ({
+            ...b,
+            color: b.color || '#0C66E4',
+            members: Array.isArray(b.members) ? b.members.filter(Boolean) : []
+          })));
+        }
         if (res.data.streaks) setStreaks(res.data.streaks);
         if (res.data.settings) setSettings(res.data.settings);
         setCloudSyncStatus('synced');
@@ -1161,6 +1198,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addXp,
         isShortcutsModalOpen,
         setIsShortcutsModalOpen,
+        isTemplatesModalOpen,
+        setIsTemplatesModalOpen,
+        isMcpModalOpen,
+        setIsMcpModalOpen,
+        loadStarterTemplate,
         exportBackup,
         importBackup,
         // Boards & Collaborators

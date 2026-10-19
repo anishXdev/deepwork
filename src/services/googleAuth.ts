@@ -19,7 +19,10 @@ export const GoogleAuthService = {
    */
   async fetchBackendConfig(): Promise<string> {
     try {
-      const res = await fetch('/api/config');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 800);
+      const res = await fetch('/api/config', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         if (data.clientId) {

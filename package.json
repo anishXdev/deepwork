@@ -1,12 +1,13 @@
 {
-  "name": "dstudy",
+  "name": "deepwork",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mcp": "node scripts/deepwork-mcp.cjs"
   },
   "dependencies": {
     "@capacitor/core": "^6.0.0",

@@ -316,7 +316,7 @@ export const SubjectManager: React.FC = () => {
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border)',
-                  borderLeft: `4px solid ${subject.color}`,
+                  borderLeft: `4px solid ${subject?.color || '#0d9488'}`,
                   boxShadow: 'var(--shadow-sm)'
                 }}
               >
@@ -326,7 +326,7 @@ export const SubjectManager: React.FC = () => {
                   className="p-3 sm:p-3.5 flex items-center justify-between cursor-pointer select-none transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/40"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subject.color }} />
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subject?.color || '#0d9488' }} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>

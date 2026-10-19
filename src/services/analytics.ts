@@ -83,8 +83,8 @@ export const AnalyticsService = {
       0
     );
 
-    const breakdown = subjects.map(sub => {
-      const subSessions = filteredSessions.filter(s => s.subjectId === sub.id);
+    const breakdown = subjects.filter(Boolean).map(sub => {
+      const subSessions = filteredSessions.filter(s => s && s.subjectId === sub.id);
       const hours = subSessions.reduce(
         (acc, s) => acc + (s.durationHours || s.durationMinutes / 60),
         0
@@ -95,7 +95,7 @@ export const AnalyticsService = {
       return {
         subjectId: sub.id,
         subjectName: sub.name,
-        color: sub.color,
+        color: sub?.color || '#0d9488',
         hours: roundedHours,
         percentage
       };

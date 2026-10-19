@@ -21,7 +21,8 @@ import {
   Download,
   ChevronDown,
   ChevronRight,
-  Filter
+  Filter,
+  FolderDown
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
@@ -36,7 +37,8 @@ export const TagsManager: React.FC = () => {
     toggleTopicCompletion,
     setActiveFocusTopic,
     setActiveTab,
-    exportBackup
+    exportBackup,
+    setIsTemplatesModalOpen
   } = useApp();
 
   const [newTagName, setNewTagName] = useState('');
@@ -167,7 +169,7 @@ export const TagsManager: React.FC = () => {
   };
 
   const filteredTags = tags.filter(tag => 
-    tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+    Boolean(tag && tag.name && tag.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -332,6 +334,35 @@ export const TagsManager: React.FC = () => {
         </div>
       </div>
 
+      {/* ── Blank State when no tags exist ────────────────── */}
+      {tags.length === 0 && (
+        <div
+          className="p-8 rounded-2xl border text-center space-y-3"
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center mx-auto text-xl">
+            🏷️
+          </div>
+          <div>
+            <h3 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+              Blank Slate: No tags created yet
+            </h3>
+            <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-secondary)' }}>
+              Your workspace is completely clean. Type <strong>#tag</strong> when creating any card to automatically create tags, or load/download starter templates.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <button
+              onClick={() => setIsTemplatesModalOpen(true)}
+              className="btn-primary text-xs px-3.5 py-1.5 flex items-center gap-1.5 cursor-pointer"
+            >
+              <FolderDown className="w-3.5 h-3.5" />
+              <span>Browse Starter Templates</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Tags Grid ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredTags.map(tag => {
@@ -360,7 +391,7 @@ export const TagsManager: React.FC = () => {
                     <span className="text-base select-none">{tag.icon || '🏷️'}</span>
                     <span
                       className="font-bold text-sm truncate"
-                      style={{ color: tag.color }}
+                      style={{ color: tag.color || '#0C66E4' }}
                     >
                       #{tag.name}
                     </span>
@@ -372,9 +403,9 @@ export const TagsManager: React.FC = () => {
                       onClick={() => startFocusOnTag(tag)}
                       className="p-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all hover:scale-105 cursor-pointer"
                       style={{
-                        background: `${tag.color}15`,
-                        color: tag.color,
-                        border: `1px solid ${tag.color}30`
+                        background: `${tag.color || '#0C66E4'}15`,
+                        color: tag.color || '#0C66E4',
+                        border: `1px solid ${tag.color || '#0C66E4'}30`
                       }}
                       title={`Start focus timer on #${tag.name}`}
                     >
@@ -409,7 +440,7 @@ export const TagsManager: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase">Progress</div>
-                    <div className="text-xs font-bold" style={{ color: tag.color }}>
+                    <div className="text-xs font-bold" style={{ color: tag.color || '#0C66E4' }}>
                       {completionPct}%
                     </div>
                   </div>
@@ -419,7 +450,7 @@ export const TagsManager: React.FC = () => {
                 <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-card-alt)' }}>
                   <div
                     className="h-full transition-all duration-300"
-                    style={{ width: `${completionPct}%`, backgroundColor: tag.color }}
+                    style={{ width: `${completionPct}%`, backgroundColor: tag.color || '#0C66E4' }}
                   />
                 </div>
 

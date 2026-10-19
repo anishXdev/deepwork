@@ -10,7 +10,7 @@ export const MobileBottomNav: React.FC = () => {
     { id: 'study',      label: 'Board',      icon: LayoutGrid },
     { id: 'tags',       label: 'Tags',       icon: Hash       },
     { id: 'timer',      label: 'Focus',      icon: Timer      },
-    { id: 'whiteboard', label: 'Whiteboard', icon: PenTool    },
+    { id: 'whiteboard', label: 'White Board', icon: PenTool    },
     { id: 'analytics',  label: 'Analytics',  icon: BarChart3  },
   ] as const;
 

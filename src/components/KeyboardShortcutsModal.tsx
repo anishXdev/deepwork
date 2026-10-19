@@ -128,7 +128,7 @@ export const KeyboardShortcutsModal: React.FC = () => {
     { key: '1', desc: 'Jump to Kanban Board', badge: 'Nav' },
     { key: '2', desc: 'Jump to Focus Timer', badge: 'Nav' },
     { key: '3', desc: 'Jump to Offline Whiteboard', badge: 'Nav' },
-    { key: '4', desc: 'Jump to Time Analytics & AI', badge: 'Nav' },
+    { key: '4', desc: 'Jump to Time Analytics', badge: 'Nav' },
     { key: '5', desc: 'Jump to Tags & Projects', badge: 'Nav' },
     { key: 'm', desc: 'Toggle Ambient Audio Mute / Sound', badge: 'Audio' },
     { key: '?', desc: 'Toggle this Shortcuts Guide', badge: 'Help' },

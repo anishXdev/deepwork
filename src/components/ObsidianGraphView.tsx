@@ -127,9 +127,10 @@ export const ObsidianGraphView: React.FC = () => {
     }
 
     // Include all subjects if no restrictive search is set
+    const validSubjects = subjects.filter(Boolean);
     const includedSubjects = searchQuery.trim() || subjectFilter !== 'all' 
-      ? subjects.filter(s => activeSubjectIds.has(s.id))
-      : subjects;
+      ? validSubjects.filter(s => activeSubjectIds.has(s.id))
+      : validSubjects;
 
     // Subject Hub Nodes (arranged in a compact center circle)
     const subjectNodeMap = new Map<string, { x: number; y: number }>();

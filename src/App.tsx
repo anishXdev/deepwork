@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { TodayTomorrowView } from './components/TodayTomorrowView';
-import { TagsManager } from './components/TagsManager';
-import { PomodoroTimer } from './components/PomodoroTimer';
-import { AnalyticsDashboard } from './components/AnalyticsDashboard';
-import { ExcalidrawWhiteboard } from './components/ExcalidrawWhiteboard';
+
+// Lazy-load secondary tabs to make initial page load instantaneous
+const TagsManager = React.lazy(() => import('./components/TagsManager').then(m => ({ default: m.TagsManager })));
+const PomodoroTimer = React.lazy(() => import('./components/PomodoroTimer').then(m => ({ default: m.PomodoroTimer })));
+const AnalyticsDashboard = React.lazy(() => import('./components/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const ExcalidrawWhiteboard = React.lazy(() => import('./components/ExcalidrawWhiteboard').then(m => ({ default: m.ExcalidrawWhiteboard })));
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { TemplatesModal } from './components/TemplatesModal';
+import { McpModal } from './components/McpModal';
 import { TopicModal } from './components/TopicModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { GoogleSyncModal } from './components/GoogleSyncModal';
@@ -21,6 +25,13 @@ import { MobileFab } from './components/MobileFab';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+const ViewLoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-[300px] text-xs font-semibold text-slate-400">
+    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
+    Loading...
+  </div>
+);
+
 const MainContent: React.FC = () => {
   const { activeTab, isStreakModalOpen, closeStreakModal } = useApp();
 
@@ -31,10 +42,12 @@ const MainContent: React.FC = () => {
 
         <div className="flex-1">
           {activeTab === 'study' && <TodayTomorrowView />}
-          {(activeTab === 'tags' || activeTab === 'subjects') && <TagsManager />}
-          {activeTab === 'timer' && <PomodoroTimer />}
-          {activeTab === 'whiteboard' && <ExcalidrawWhiteboard />}
-          {activeTab === 'analytics' && <AnalyticsDashboard />}
+          <Suspense fallback={<ViewLoadingFallback />}>
+            {(activeTab === 'tags' || activeTab === 'subjects') && <TagsManager />}
+            {activeTab === 'timer' && <PomodoroTimer />}
+            {activeTab === 'whiteboard' && <ExcalidrawWhiteboard />}
+            {activeTab === 'analytics' && <AnalyticsDashboard />}
+          </Suspense>
         </div>
 
         {/* Global Floating Action Button for Mobile */}
@@ -54,6 +67,8 @@ const MainContent: React.FC = () => {
         <StreakModal isOpen={isStreakModalOpen} onClose={closeStreakModal} />
         <StrictFocusOverlay />
         <KeyboardShortcutsModal />
+        <TemplatesModal />
+        <McpModal />
         <ToastContainer />
       </div>
     </main>

@@ -62,7 +62,10 @@ export const CloudSyncService = {
     if (!key) return { success: false, found: false, error: 'No sync key set' };
 
     try {
-      const res = await fetch(`/api/sync?key=${encodeURIComponent(key)}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`/api/sync?key=${encodeURIComponent(key)}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) {
         return { success: false, found: false, error: `HTTP ${res.status}` };
       }
@@ -78,7 +81,7 @@ export const CloudSyncService = {
 
       return { success: true, found: false };
     } catch (err: any) {
-      console.warn('Cloud sync pull failed:', err);
+      // Offline or local dev fallback without serverless endpoint
       return { success: false, found: false, error: err.message || 'Network error' };
     }
   },
@@ -92,11 +95,15 @@ export const CloudSyncService = {
 
     try {
       const allData = StorageService.exportAllData();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, data: allData })
+        body: JSON.stringify({ key, data: allData }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         return { success: false, error: `HTTP ${res.status}` };
@@ -107,7 +114,6 @@ export const CloudSyncService = {
       this.setLastSyncedAt(now);
       return { success: true, updatedAt: now };
     } catch (err: any) {
-      console.warn('Cloud sync push failed:', err);
       return { success: false, error: err.message || 'Network error' };
     }
   },

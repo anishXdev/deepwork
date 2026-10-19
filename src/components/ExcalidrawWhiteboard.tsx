@@ -97,28 +97,40 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     }
 
     // Render all elements
+    const validElements = (elements || []).filter((el): el is WhiteboardElement => Boolean(el && typeof el === 'object' && el.id));
     const allElements = currentElementRef.current
-      ? [...elements, currentElementRef.current]
-      : elements;
+      ? [...validElements, currentElementRef.current]
+      : validElements;
 
     allElements.forEach(el => {
-      ctx.strokeStyle = el.color;
-      ctx.lineWidth = el.strokeWidth;
+      if (!el) return;
+      const elColor = el.color || '#0C66E4';
+      const elWidth = typeof el.strokeWidth === 'number' ? el.strokeWidth : 3;
+
+      ctx.strokeStyle = elColor;
+      ctx.lineWidth = elWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
       if (el.type === 'pen' && el.points && el.points.length > 0) {
-        ctx.beginPath();
-        ctx.globalAlpha = 1.0;
-        ctx.moveTo(el.points[0].x, el.points[0].y);
-        for (let i = 1; i < el.points.length; i++) {
-          ctx.lineTo(el.points[i].x, el.points[i].y);
+        if (el.points.length === 1) {
+          ctx.beginPath();
+          ctx.fillStyle = elColor;
+          ctx.arc(el.points[0].x, el.points[0].y, Math.max(2, elWidth / 2), 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.globalAlpha = 1.0;
+          ctx.moveTo(el.points[0].x, el.points[0].y);
+          for (let i = 1; i < el.points.length; i++) {
+            ctx.lineTo(el.points[i].x, el.points[i].y);
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
       } else if (el.type === 'highlighter' && el.points && el.points.length > 0) {
         ctx.beginPath();
         ctx.globalAlpha = 0.35;
-        ctx.lineWidth = el.strokeWidth * 4;
+        ctx.lineWidth = elWidth * 4;
         ctx.moveTo(el.points[0].x, el.points[0].y);
         for (let i = 1; i < el.points.length; i++) {
           ctx.lineTo(el.points[i].x, el.points[i].y);
@@ -156,7 +168,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
         if (el.type === 'arrow') {
           // Arrowhead
           const angle = Math.atan2(endY - el.y, endX - el.x);
-          const headLen = Math.max(10, el.strokeWidth * 3.5);
+          const headLen = Math.max(10, elWidth * 3.5);
           ctx.beginPath();
           ctx.moveTo(endX, endY);
           ctx.lineTo(
@@ -172,8 +184,9 @@ export const ExcalidrawWhiteboard: React.FC = () => {
         }
       } else if (el.type === 'text' && el.text) {
         ctx.globalAlpha = 1.0;
-        ctx.font = 'bold 15px sans-serif';
-        ctx.fillStyle = el.color;
+        ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = elColor;
         ctx.fillText(el.text, el.x, el.y);
       }
     });
@@ -186,15 +199,19 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     const updateSize = () => {
       const container = canvas.parentElement;
       if (container) {
-        canvas.width = container.clientWidth;
-        canvas.height = Math.max(650, container.clientHeight);
-        renderCanvas();
+        const w = container.clientWidth;
+        const h = Math.max(650, container.clientHeight);
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          renderCanvas();
+        }
       }
     };
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, [renderCanvas]);
+  }, []);
 
   useEffect(() => {
     renderCanvas();
@@ -204,6 +221,9 @@ export const ExcalidrawWhiteboard: React.FC = () => {
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -216,11 +236,13 @@ export const ExcalidrawWhiteboard: React.FC = () => {
 
     if (activeTool === 'eraser') {
       // Find element near click and remove it
-      setElements(prev => prev.filter(el => {
-        const dist = Math.hypot(el.x - x, el.y - y);
+      setElements(prev => (prev || []).filter(el => {
+        if (!el) return false;
+        const dist = Math.hypot((el.x || 0) - x, (el.y || 0) - y);
         return dist > 25;
       }));
       Haptics.tap();
+      isDrawingRef.current = false;
       return;
     }
 
@@ -236,7 +258,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
           strokeWidth,
           text: text.trim()
         };
-        setElements(prev => [...prev, newEl]);
+        setElements(prev => [...(prev || []), newEl]);
       }
       isDrawingRef.current = false;
       return;
@@ -277,12 +299,20 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     renderCanvas();
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e?: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {}
+    }
     if (isDrawingRef.current && currentElementRef.current) {
-      setElements(prev => [...prev, currentElementRef.current!]);
+      const finished = { ...currentElementRef.current };
       currentElementRef.current = null;
       isDrawingRef.current = false;
-      renderCanvas();
+      setElements(prev => [...(prev || []), finished]);
+    } else {
+      currentElementRef.current = null;
+      isDrawingRef.current = false;
     }
   };
 
@@ -364,7 +394,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
                 mode === 'offline' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-xs' : 'text-slate-500'
               }`}
             >
-              ⚡ 100% Offline Whiteboard
+              ⚡ Offline White Board
             </button>
             <button
               onClick={() => { Haptics.tap(); setMode('cloud'); }}
@@ -592,6 +622,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             className="w-full h-full cursor-crosshair touch-none"
             style={{ minHeight: '650px' }}
           />

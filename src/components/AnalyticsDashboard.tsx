@@ -51,8 +51,6 @@ export const AnalyticsDashboard: React.FC = () => {
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState(settings.weeklyHoursTarget);
   const [heatmapRange, setHeatmapRange] = useState<'30days' | 'yearly'>('30days');
-  const [isGeneratingAiInsight, setIsGeneratingAiInsight] = useState(false);
-  const [customAiInsight, setCustomAiInsight] = useState<string | null>(null);
   const [backupStatusMessage, setBackupStatusMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,17 +74,17 @@ export const AnalyticsDashboard: React.FC = () => {
   ) / 10;
 
   // Universal Tag Time Allocation Breakdown
-  const tagBreakdown = tags.map(tag => {
-    const matchingSessions = sessions.filter(s => s.tagId === tag.id || s.subjectId === tag.id);
+  const tagBreakdown = tags.filter(Boolean).map(tag => {
+    const matchingSessions = sessions.filter(s => s && (s.tagId === tag.id || s.subjectId === tag.id));
     const totalMinutes = matchingSessions.reduce((acc, s) => acc + (s.durationMinutes || (s.durationHours || 0) * 60), 0);
     const hours = Math.round((totalMinutes / 60) * 10) / 10;
-    const matchingTopics = topics.filter(t => (t.tags && t.tags.includes(tag.id)) || t.subjectId === tag.id);
+    const matchingTopics = topics.filter(t => t && ((t.tags && t.tags.includes(tag.id)) || t.subjectId === tag.id));
     const doneTopics = matchingTopics.filter(t => t.status === 'completed');
     return {
       id: tag.id,
       name: tag.name,
-      color: tag.color,
-      icon: tag.icon,
+      color: tag.color || '#0C66E4',
+      icon: tag.icon || '🏷️',
       hours,
       taskCount: matchingTopics.length,
       doneCount: doneTopics.length,
@@ -97,24 +95,6 @@ export const AnalyticsDashboard: React.FC = () => {
   // Deep work focus ratio (sessions with duration >= 25 mins)
   const deepWorkSessions = sessions.filter(s => (s.durationMinutes || (s.durationHours || 0) * 60) >= 25);
   const deepWorkRatio = sessions.length > 0 ? Math.round((deepWorkSessions.length / sessions.length) * 100) : 85;
-
-  const handleGenerateAiInsight = () => {
-    Haptics.notification();
-    setIsGeneratingAiInsight(true);
-    setTimeout(() => {
-      setIsGeneratingAiInsight(false);
-      // Smart algorithmic productivity synthesis
-      const topDomain = tagBreakdown[0]?.name || 'dev';
-      const pendingUrgent = topics.filter(t => t.status !== 'completed' && (t.priority === 'urgent' || t.name.toLowerCase().includes('urgent'))).length;
-      
-      setCustomAiInsight(
-        `AI Cognitive Audit: You have invested ${hoursThisWeek}h this week, with ${deepWorkRatio}% concentrated in deep-work blocks. Primary velocity is centered in #${topDomain}. ` +
-        (pendingUrgent > 0 
-          ? `⚠️ Alert: Detected ${pendingUrgent} urgent pending task(s). Recommended to schedule a 35m sprint before noon.`
-          : `⚡ Flow state is optimal. To maintain momentum, continue scheduling 35-45m focused blocks with 5m eye-relaxation rest intervals.`)
-      );
-    }, 800);
-  };
 
   const handleFileRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -553,62 +533,41 @@ export const AnalyticsDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ── AI Productivity Intelligence & Cognitive Coach ───── */}
+      {/* ── Efficiency & Work Patterns ───── */}
       <div
         className="card p-5 space-y-4"
         style={{
-          background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-alt) 100%)',
+          background: 'var(--bg-card)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-sm)'
         }}
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-violet-500/10 text-violet-600 border border-violet-500/20">
-              <Brain className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                AI Time Intelligence & Productivity Coach
-              </h3>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Zero-friction cognitive audit and time optimization recommendations
-              </p>
-            </div>
+        <div className="flex items-center gap-2.5 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 border border-blue-500/20">
+            <Zap className="w-5 h-5" />
           </div>
-
-          <button
-            type="button"
-            onClick={handleGenerateAiInsight}
-            disabled={isGeneratingAiInsight}
-            className="btn-primary text-xs px-3.5 py-1.5 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            {isGeneratingAiInsight ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Analyzing Work Patterns…</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Run AI Deep Audit</span>
-              </>
-            )}
-          </button>
+          <div>
+            <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              Efficiency & Focus Distribution
+            </h3>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Quantitative breakdown of your deep work habits and domain velocity
+            </p>
+          </div>
         </div>
 
-        {/* Key AI Metrics Grid */}
+        {/* Key Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
             <span className="text-[10px] font-bold uppercase text-slate-400">Deep Focus Ratio</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-xl font-black font-mono text-emerald-500">{deepWorkRatio}%</span>
               <span className="text-[11px] text-slate-400">sessions &ge; 25m</span>
             </div>
-            <p className="text-[10px] text-slate-400">Optimal cognitive retention threshold</p>
+            <p className="text-[10px] text-slate-400">Ratio of long uninterrupted focus sprints</p>
           </div>
 
-          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
             <span className="text-[10px] font-bold uppercase text-slate-400">Primary Domain Velocity</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-xl font-black font-mono text-blue-600">
@@ -619,49 +578,43 @@ export const AnalyticsDashboard: React.FC = () => {
             <p className="text-[10px] text-slate-400">Largest time concentration this week</p>
           </div>
 
-          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <span className="text-[10px] font-bold uppercase text-slate-400">Gamification Rank</span>
+          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+            <span className="text-[10px] font-bold uppercase text-slate-400">Experience & Level</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-xl font-black font-mono text-amber-500">Lvl {userGamification.level}</span>
               <span className="text-[11px] font-semibold text-slate-500">{userGamification.levelTitle}</span>
             </div>
-            <p className="text-[10px] text-slate-400">{userGamification.xp} total XP earned</p>
+            <p className="text-[10px] text-slate-400">{userGamification.xp} total XP accumulated</p>
           </div>
         </div>
 
-        {/* AI Recommendations Output Box */}
+        {/* Productivity Guidelines */}
         <div
-          className="p-3.5 rounded-xl text-xs space-y-2"
+          className="p-3.5 rounded-xl text-xs space-y-2.5"
           style={{
-            background: 'var(--bg-card)',
+            background: 'var(--bg-card-alt)',
             border: '1px solid var(--border)'
           }}
         >
           <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-            <Cpu className="w-4 h-4 text-violet-600" />
-            <span>Productivity Coach Recommendations:</span>
+            <TrendingUp className="w-4 h-4 text-blue-600" />
+            <span>Productivity Best Practices:</span>
           </div>
 
-          {customAiInsight ? (
-            <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 font-medium">
-              {customAiInsight}
-            </p>
-          ) : (
-            <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-500 font-bold">•</span>
-                <span><strong>Sustained Focus:</strong> You achieve peak velocity in 35-45 minute blocks. Keep utilizing the focus timer to maintain uninterrupted concentration.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-blue-500 font-bold">•</span>
-                <span><strong>Domain Balance:</strong> Consider allocating at least 1 focus block daily to each active domain (e.g. internship applications, hackathon prototypes, or study notes) to avoid deadline cramming.</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-amber-500 font-bold">•</span>
-                <span><strong>Distraction Defense:</strong> Use the strict focus lockdown mode during critical sprint intervals to eliminate context switching.</span>
-              </div>
+          <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+            <div className="flex items-start gap-2">
+              <span className="text-emerald-500 font-bold">•</span>
+              <span><strong>Sustained Focus:</strong> Peak cognitive velocity is achieved in 35–45 minute blocks. Use the Pomodoro timer to maintain clean sprints.</span>
             </div>
-          )}
+            <div className="flex items-start gap-2">
+              <span className="text-blue-500 font-bold">•</span>
+              <span><strong>Domain Balance:</strong> Allocate at least 1 focus session daily to each high-priority project to maintain steady forward momentum.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-amber-500 font-bold">•</span>
+              <span><strong>Distraction Defense:</strong> Use the strict focus lockdown mode during critical sprint intervals to eliminate context switching.</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1011,7 +964,7 @@ export const AnalyticsDashboard: React.FC = () => {
                               <div className="flex items-center gap-2 mt-1">
                                 {sub && (
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white"
-                                    style={{ backgroundColor: sub.color }}>
+                                    style={{ backgroundColor: sub?.color || '#0d9488' }}>
                                     {sub.name}
                                   </span>
                                 )}

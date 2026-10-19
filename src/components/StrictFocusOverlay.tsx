@@ -43,7 +43,7 @@ export const StrictFocusOverlay: React.FC = () => {
   const [holdProgress, setHoldProgress] = useState(0);
   const holdIntervalRef = useRef<any>(null);
 
-  const currentSubject = subjects.find(s => s.id === activeFocusTopic?.subjectId) || subjects[0];
+  const currentSubject = subjects.filter(Boolean).find(s => s?.id === activeFocusTopic?.subjectId) || subjects.filter(Boolean)[0] || { id: 'default', name: 'Focus', color: '#0d9488' };
 
   // 1. Enter Fullscreen on activation
   useEffect(() => {
@@ -208,9 +208,9 @@ export const StrictFocusOverlay: React.FC = () => {
         <div className="text-center space-y-2">
           {currentSubject && (
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentSubject.color }} />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentSubject?.color || '#0d9488' }} />
               <span className="text-xs font-bold tracking-wider uppercase text-slate-300">
-                {currentSubject.name}
+                {currentSubject?.name || 'Deep Study'}
               </span>
             </div>
           )}

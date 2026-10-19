@@ -13,6 +13,7 @@ import {
   WhiteboardElement,
   GATE_STREAM_SYLLABUS
 } from '../types';
+import { STARTER_TEMPLATES } from './templates';
 
 const SCHEMA_VERSION = 2;
 
@@ -137,11 +138,14 @@ export function getDefaultBoards(): StudyBoard[] {
   ];
 }
 
+let hasInitializedInMemory = false;
+
 export const StorageService = {
   /**
    * Initializes and safely migrates legacy data without any data loss.
    */
   ensureInitialized() {
+    if (hasInitializedInMemory) return;
     try {
       const isInit = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
       const currentVersion = parseInt(localStorage.getItem(STORAGE_KEYS.SCHEMA_VERSION) || '1', 10);
@@ -154,27 +158,29 @@ export const StorageService = {
       // Check for tags
       const rawTags = localStorage.getItem(STORAGE_KEYS.TAGS);
       if (!rawTags) {
-        // If legacy subjects exist, convert them to tags!
-        const rawSubjects = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
-        let migratedTags: Tag[] = getDefaultTags();
-        if (rawSubjects) {
-          try {
-            const parsedSubjects: Subject[] = JSON.parse(rawSubjects);
-            if (Array.isArray(parsedSubjects) && parsedSubjects.length > 0) {
-              const converted: Tag[] = parsedSubjects.map(s => ({
-                id: s.id,
-                name: s.name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().toLowerCase().replace(/\s+/g, '-'),
-                color: s.color || '#0C66E4',
-                icon: '🏷️',
-                createdAt: s.createdAt || new Date().toISOString()
+        // Keep initial UI blank with no forced tags
+        this.saveTags([]);
+      } else {
+        // Repair tags if contaminated with nulls
+        try {
+          const parsed = JSON.parse(rawTags);
+          if (Array.isArray(parsed)) {
+            const sanitized = parsed
+              .filter((t): t is Tag => Boolean(t && typeof t === 'object' && t.id))
+              .map(t => ({
+                id: t.id,
+                name: t.name || 'tag',
+                color: t.color || '#0C66E4',
+                icon: t.icon || '🏷️',
+                createdAt: t.createdAt || new Date().toISOString()
               }));
-              migratedTags = [...converted, ...migratedTags];
+            if (sanitized.length !== parsed.length) {
+              this.saveTags(sanitized.length > 0 ? sanitized : getDefaultTags());
             }
-          } catch {
-            // fallback
           }
+        } catch {
+          // ignore
         }
-        this.saveTags(migratedTags);
       }
 
       // Ensure topics have tags populated from subjectId if missing
@@ -184,7 +190,9 @@ export const StorageService = {
           const parsedTopics = JSON.parse(rawTopics);
           if (Array.isArray(parsedTopics)) {
             let updated = false;
-            const migratedTopics = parsedTopics.map((t: any) => {
+            const validTopics = parsedTopics.filter((t): t is Task => Boolean(t && typeof t === 'object' && t.id));
+            if (validTopics.length !== parsedTopics.length) updated = true;
+            const migratedTopics = validTopics.map((t: any) => {
               if (!t.tags || t.tags.length === 0) {
                 updated = true;
                 return {
@@ -204,12 +212,38 @@ export const StorageService = {
         }
       }
 
-      // Ensure default boards
+      // Ensure default boards and clean any null members
       const rawBoards = localStorage.getItem(STORAGE_KEYS.BOARDS);
       if (!rawBoards) {
         const defBoards = getDefaultBoards();
         this.saveBoards(defBoards);
         this.saveActiveBoardId(defBoards[0].id);
+      } else {
+        try {
+          const parsedBoards = JSON.parse(rawBoards);
+          if (Array.isArray(parsedBoards)) {
+            const sanitized = parsedBoards
+              .filter((b): b is StudyBoard => Boolean(b && typeof b === 'object' && b.id))
+              .map(b => ({
+                ...b,
+                color: b.color || '#0C66E4',
+                members: Array.isArray(b.members)
+                  ? b.members.filter(Boolean).map(m => ({
+                      id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
+                      name: m?.name || 'Member',
+                      email: m?.email || '',
+                      color: m?.color || '#0C66E4',
+                      role: m?.role || 'editor'
+                    }))
+                  : []
+              }));
+            if (sanitized.length !== parsedBoards.length) {
+              this.saveBoards(sanitized.length > 0 ? sanitized : getDefaultBoards());
+            }
+          }
+        } catch {
+          // ignore
+        }
       }
 
       // Ensure Gamification
@@ -226,8 +260,10 @@ export const StorageService = {
       // Mark initialized & current schema version
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, SCHEMA_VERSION.toString());
+      hasInitializedInMemory = true;
     } catch (e) {
       console.warn('StorageService.ensureInitialized warning:', e);
+      hasInitializedInMemory = true;
     }
   },
 
@@ -259,30 +295,45 @@ export const StorageService = {
     try {
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((t): t is Tag => Boolean(t && typeof t === 'object' && t.id))
+            .map(t => ({
+              ...t,
+              color: t.color || '#0C66E4',
+              icon: t.icon || '🏷️'
+            }));
+        }
       }
-      const def = getDefaultTags();
-      this.saveTags(def);
-      return def;
+      return [];
     } catch {
-      return getDefaultTags();
+      return [];
     }
   },
 
   saveTags(tags: Tag[]) {
-    localStorage.setItem(STORAGE_KEYS.TAGS, JSON.stringify(tags));
+    const clean = Array.isArray(tags)
+      ? tags.filter((t): t is Tag => Boolean(t && typeof t === 'object' && t.id))
+      : [];
+    localStorage.setItem(STORAGE_KEYS.TAGS, JSON.stringify(clean));
   },
 
-  addTag(name: string, color = '#0C66E4', icon = '🏷️'): Tag {
-    const cleanName = name.trim().toLowerCase().replace(/^#+/, '');
+  addTag(name: string, color?: string, icon = '🏷️'): Tag {
+    const cleanName = name.trim().toLowerCase().replace(/^#+/, '').replace(/\s+/g, '-');
+    if (!cleanName) {
+      return { id: 'tag_default', name: 'general', color: '#0C66E4', icon: '🏷️', createdAt: new Date().toISOString() };
+    }
     const tags = this.getTags();
-    const existing = tags.find(t => t.name === cleanName);
+    const existing = tags.find(t => t.name.toLowerCase() === cleanName.toLowerCase());
     if (existing) return existing;
+
+    const palette = ['#0C66E4', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#14B8A6'];
+    const chosenColor = color || palette[tags.length % palette.length];
 
     const newTag: Tag = {
       id: 'tag_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       name: cleanName,
-      color,
+      color: chosenColor,
       icon,
       createdAt: new Date().toISOString()
     };
@@ -300,14 +351,24 @@ export const StorageService = {
     this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
     try {
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+            .filter((s): s is Subject => Boolean(s && typeof s === 'object' && s.id))
+            .map(s => ({
+              ...s,
+              color: s.color || '#0d9488'
+            }));
+        }
+      }
       // Fallback: derive from tags
       return this.getTags().map(t => ({
-        id: t.id,
-        name: t.name,
-        color: t.color,
-        icon: t.icon,
-        createdAt: t.createdAt
+        id: t?.id || 'tag_default',
+        name: t?.name || 'Tag',
+        color: t?.color || '#0C66E4',
+        icon: t?.icon || '🏷️',
+        createdAt: t?.createdAt || new Date().toISOString()
       }));
     } catch {
       return [];
@@ -323,7 +384,10 @@ export const StorageService = {
     this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.TOPICS);
     try {
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((t): t is Task => Boolean(t && typeof t === 'object' && t.id));
     } catch {
       return [];
     }
@@ -338,7 +402,10 @@ export const StorageService = {
     this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     try {
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((s): s is StudySession => Boolean(s && typeof s === 'object' && s.id));
     } catch {
       return [];
     }
@@ -384,7 +451,24 @@ export const StorageService = {
     try {
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sanitizedBoards = parsed
+            .filter((b): b is StudyBoard => Boolean(b && typeof b === 'object' && b.id))
+            .map(b => ({
+              ...b,
+              color: b.color || '#0C66E4',
+              members: Array.isArray(b.members)
+                ? b.members.filter(Boolean).map(m => ({
+                    id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
+                    name: m?.name || 'Member',
+                    email: m?.email || '',
+                    color: m?.color || '#0C66E4',
+                    role: m?.role || 'editor'
+                  }))
+                : []
+            }));
+          if (sanitizedBoards.length > 0) return sanitizedBoards;
+        }
       }
       const def = getDefaultBoards();
       this.saveBoards(def);
@@ -534,14 +618,83 @@ export const StorageService = {
   getWhiteboardElements(boardId = 'default'): WhiteboardElement[] {
     const raw = localStorage.getItem(`${STORAGE_KEYS.WHITEBOARD}_${boardId}`);
     try {
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const clean = parsed
+        .filter((el): el is WhiteboardElement => Boolean(el && typeof el === 'object' && el.id))
+        .map(el => ({
+          ...el,
+          color: el.color || '#0C66E4',
+          strokeWidth: typeof el.strokeWidth === 'number' ? el.strokeWidth : 3
+        }));
+      if (clean.length !== parsed.length) {
+        this.saveWhiteboardElements(boardId, clean);
+      }
+      return clean;
     } catch {
       return [];
     }
   },
 
   saveWhiteboardElements(boardId = 'default', elements: WhiteboardElement[]) {
-    localStorage.setItem(`${STORAGE_KEYS.WHITEBOARD}_${boardId}`, JSON.stringify(elements));
+    const clean = Array.isArray(elements)
+      ? elements.filter((el): el is WhiteboardElement => Boolean(el && typeof el === 'object' && el.id))
+      : [];
+    localStorage.setItem(`${STORAGE_KEYS.WHITEBOARD}_${boardId}`, JSON.stringify(clean));
+  },
+
+  /* ── Starter Templates ─────────────────────────────────────── */
+  applyStarterTemplate(templateId: string, targetBoardId?: string): { createdTags: Tag[]; createdTasks: Task[] } {
+    const template = STARTER_TEMPLATES.find(t => t.id === templateId);
+    if (!template) return { createdTags: [], createdTasks: [] };
+
+    const createdTags: Tag[] = [];
+    const tagMap = new Map<string, string>();
+
+    template.tags.forEach(t => {
+      const tag = this.addTag(t.name, t.color, t.icon);
+      createdTags.push(tag);
+      tagMap.set(t.name.toLowerCase(), tag.id);
+    });
+
+    const activeBoardId = targetBoardId || this.getActiveBoardId();
+    const existingTopics = this.getTopics();
+    const createdTasks: Task[] = [];
+    const today = new Date().toISOString().split('T')[0];
+
+    template.tasks.forEach((item, idx) => {
+      const tagMatches = item.name.match(/#([a-zA-Z0-9_\-]+)/g) || [];
+      const matchedTagIds: string[] = [];
+      tagMatches.forEach(m => {
+        const clean = m.slice(1).toLowerCase();
+        const tid = tagMap.get(clean) || this.getTags().find(t => t.name.toLowerCase() === clean)?.id;
+        if (tid && !matchedTagIds.includes(tid)) matchedTagIds.push(tid);
+      });
+
+      const primaryTagId = matchedTagIds[0] || createdTags[0]?.id || 'tag_default';
+
+      const newTask: Task = {
+        id: 'top_' + (Date.now() + idx) + '_' + Math.random().toString(36).substring(2, 6),
+        boardId: activeBoardId,
+        subjectId: primaryTagId,
+        tags: matchedTagIds.length > 0 ? matchedTagIds : [primaryTagId],
+        name: item.name,
+        category: item.category || 'concept',
+        approxHours: item.approxHours || 1.5,
+        scheduledDate: today,
+        scheduledTime: idx % 2 === 0 ? '10:00' : '14:00',
+        status: item.status || 'todo',
+        notes: item.notes || '',
+        completedHours: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      createdTasks.push(newTask);
+    });
+
+    this.saveTopics([...existingTopics, ...createdTasks]);
+    return { createdTags, createdTasks };
   },
 
   /* ── Full Backup Export & Import ───────────────────────────── */
@@ -566,11 +719,35 @@ export const StorageService = {
       // Create rollback snapshot before overwriting
       this.createAutomaticSnapshot('pre_manual_import');
 
-      if (jsonData.tags) this.saveTags(jsonData.tags);
-      if (jsonData.boards) this.saveBoards(jsonData.boards);
-      if (jsonData.tasks) this.saveTopics(jsonData.tasks);
-      if (jsonData.topics && !jsonData.tasks) this.saveTopics(jsonData.topics);
-      if (jsonData.sessions) this.saveSessions(jsonData.sessions);
+      if (jsonData.tags && Array.isArray(jsonData.tags)) {
+        this.saveTags(jsonData.tags.filter((t: any) => t && typeof t === 'object' && t.id).map((t: any) => ({
+          ...t,
+          color: t.color || '#0C66E4',
+          icon: t.icon || '🏷️'
+        })));
+      }
+      if (jsonData.boards && Array.isArray(jsonData.boards)) {
+        this.saveBoards(jsonData.boards.filter((b: any) => b && typeof b === 'object' && b.id).map((b: any) => ({
+          ...b,
+          color: b.color || '#0C66E4',
+          members: Array.isArray(b.members) ? b.members.filter(Boolean).map((m: any) => ({
+            id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
+            name: m?.name || 'Member',
+            email: m?.email || '',
+            color: m?.color || '#0C66E4',
+            role: m?.role || 'editor'
+          })) : []
+        })));
+      }
+      if (jsonData.tasks && Array.isArray(jsonData.tasks)) {
+        this.saveTopics(jsonData.tasks.filter((t: any) => t && typeof t === 'object' && t.id));
+      }
+      if (jsonData.topics && !jsonData.tasks && Array.isArray(jsonData.topics)) {
+        this.saveTopics(jsonData.topics.filter((t: any) => t && typeof t === 'object' && t.id));
+      }
+      if (jsonData.sessions && Array.isArray(jsonData.sessions)) {
+        this.saveSessions(jsonData.sessions.filter((s: any) => s && typeof s === 'object' && s.id));
+      }
       if (jsonData.settings) this.saveSettings(jsonData.settings);
       if (jsonData.profile) this.saveProfile(jsonData.profile);
       if (jsonData.streaks) this.saveStreaks(jsonData.streaks);

@@ -97,7 +97,7 @@ export const SmartRecommendationBanner: React.FC = () => {
                 </div>
               ) : (
                 <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }} className="group-hover:underline flex items-center gap-1 mt-0.5">
-                  + Set Exam Date
+                  + Set Deadline Date
                 </div>
               )}
             </div>

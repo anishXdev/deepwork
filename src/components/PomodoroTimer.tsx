@@ -67,10 +67,10 @@ export const PomodoroTimer: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const currentTag = tags.find(t => t.id === timerSelectedSubjectId);
+  const currentTag = tags.filter(Boolean).find(t => t?.id === timerSelectedSubjectId);
   const currentSubject = currentTag 
-    ? { id: currentTag.id, name: `#${currentTag.name}`, color: currentTag.color } 
-    : subjects.find(s => s.id === timerSelectedSubjectId);
+    ? { id: currentTag.id, name: `#${currentTag.name}`, color: currentTag.color || '#0C66E4' } 
+    : (subjects.filter(Boolean).find(s => s?.id === timerSelectedSubjectId) || { id: 'default', name: 'Focus', color: '#0C66E4' });
   const availableTopics = topics.filter(t => 
     (t.tags && t.tags.includes(timerSelectedSubjectId)) || t.subjectId === timerSelectedSubjectId
   );
@@ -418,8 +418,9 @@ export const PomodoroTimer: React.FC = () => {
         {/* Quick Tag Selector Chips */}
         {tags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pb-1">
-            {tags.map(tag => {
+            {tags.filter(Boolean).map(tag => {
               const isSelected = timerSelectedSubjectId === tag.id;
+              const tagColor = tag?.color || '#0C66E4';
               return (
                 <button
                   key={tag.id}
@@ -431,9 +432,9 @@ export const PomodoroTimer: React.FC = () => {
                   }}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer"
                   style={{
-                    background: isSelected ? `${tag.color}25` : 'var(--bg-card-alt)',
-                    color: isSelected ? tag.color : 'var(--text-secondary)',
-                    border: isSelected ? `1.5px solid ${tag.color}` : '1px solid var(--border)',
+                    background: isSelected ? `${tagColor}25` : 'var(--bg-card-alt)',
+                    color: isSelected ? tagColor : 'var(--text-secondary)',
+                    border: isSelected ? `1.5px solid ${tagColor}` : '1px solid var(--border)',
                     transform: isSelected ? 'scale(1.05)' : 'scale(1)',
                   }}
                 >

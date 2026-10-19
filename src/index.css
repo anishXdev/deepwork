@@ -153,22 +153,25 @@ body {
 
 .trello-card {
   background: var(--bg-card);
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-xs);
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  padding: 11px 13px;
+  cursor: grab;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, border-color 0.16s ease;
   user-select: none;
+  position: relative;
 }
 
 .trello-card:hover {
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.04);
   border-color: var(--border-focus);
+  transform: translateY(-1.5px);
 }
 
 .trello-card:active {
-  transform: scale(0.99);
+  cursor: grabbing;
+  transform: scale(0.985);
 }
 
 /* ── UI Utility Classes ─────────────────────────────────────── */

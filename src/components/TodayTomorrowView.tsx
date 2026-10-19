@@ -23,7 +23,8 @@ import {
   Users,
   UserPlus,
   LayoutGrid,
-  Hash
+  Hash,
+  FolderDown
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { CreateBoardModal } from './CreateBoardModal';
@@ -36,6 +37,7 @@ export const TodayTomorrowView: React.FC = () => {
     topics,
     subjects,
     tags,
+    addTag,
     settings,
     updateSettings,
     toggleTopicCompletion,
@@ -52,7 +54,8 @@ export const TodayTomorrowView: React.FC = () => {
     activeBoardId,
     activeBoard,
     setActiveBoardId,
-    delegateTopic
+    delegateTopic,
+    setIsTemplatesModalOpen
   } = useApp();
 
   const isGatePrep = Boolean(settings.isGatePrep);
@@ -189,14 +192,39 @@ export const TodayTomorrowView: React.FC = () => {
     setDraggedTopicId(null);
   };
 
-  // Inline Card Creation inside a Column
+  // Inline Card Creation inside a Column with Automatic #tag Creation
   const handleInlineAddSubmit = async (colId: ColumnId) => {
     if (!inlineTitle.trim()) {
       setActiveInlineAddColumn(null);
       return;
     }
 
-    const targetTagId = inlineTagId || (selectedTagFilter !== 'all' ? selectedTagFilter : tags[0]?.id);
+    // Extract all hashtags written as #tag
+    const hashtagMatches = (inlineTitle.match(/#([a-zA-Z0-9_\-]+)/g) || []).map(m => m.slice(1).toLowerCase());
+    const matchedOrCreatedTagIds: string[] = [];
+
+    for (const rawTag of hashtagMatches) {
+      const clean = rawTag.trim().toLowerCase();
+      if (!clean) continue;
+      const existing = tags.find(t => t.name.toLowerCase() === clean);
+      if (existing) {
+        if (!matchedOrCreatedTagIds.includes(existing.id)) {
+          matchedOrCreatedTagIds.push(existing.id);
+        }
+      } else {
+        const created = addTag(clean);
+        if (!matchedOrCreatedTagIds.includes(created.id)) {
+          matchedOrCreatedTagIds.push(created.id);
+        }
+      }
+    }
+
+    if (inlineTagId && !matchedOrCreatedTagIds.includes(inlineTagId)) {
+      matchedOrCreatedTagIds.push(inlineTagId);
+    }
+
+    const targetTagId = matchedOrCreatedTagIds[0] || (selectedTagFilter !== 'all' ? selectedTagFilter : tags[0]?.id);
+    const finalTags = matchedOrCreatedTagIds.length > 0 ? matchedOrCreatedTagIds : (targetTagId ? [targetTagId] : undefined);
 
     let scheduledDate = todayStr;
     if (colId === 'tomorrow') scheduledDate = tomorrowStr;
@@ -207,12 +235,13 @@ export const TodayTomorrowView: React.FC = () => {
     }
 
     const assignedMember = (activeBoard?.members || []).find(m => m.id === inlineAssigneeId);
+    const cleanTitle = inlineTitle.replace(/#([a-zA-Z0-9_\-]+)/g, '').trim() || inlineTitle.trim();
 
     await addTopic({
       boardId: activeBoardId,
-      name: inlineTitle.trim(),
-      tags: targetTagId ? [targetTagId] : undefined,
-      subjectId: targetTagId, // backward compatibility
+      name: cleanTitle,
+      tags: finalTags,
+      subjectId: targetTagId || 'tag_default',
       category: isGatePrep ? inlineCategory : undefined,
       approxHours: Number(inlineHours) || 1.5,
       scheduledDate,
@@ -312,14 +341,14 @@ export const TodayTomorrowView: React.FC = () => {
           {/* Collaborator Avatars & Share/Invite Button */}
           <div className="flex items-center gap-1.5">
             <div className="flex items-center -space-x-1.5">
-              {(activeBoard?.members || []).slice(0, 4).map(m => (
+              {(activeBoard?.members || []).filter(Boolean).slice(0, 4).map(m => (
                 <div
-                  key={m.id}
+                  key={m?.id || Math.random().toString()}
                   className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900"
-                  style={{ backgroundColor: m.color }}
-                  title={`${m.name} (${m.role})`}
+                  style={{ backgroundColor: m?.color || '#0C66E4' }}
+                  title={`${m?.name || 'Member'} (${m?.role || 'editor'})`}
                 >
-                  {m.name.substring(0, 2).toUpperCase()}
+                  {(m?.name || 'M').substring(0, 2).toUpperCase()}
                 </div>
               ))}
             </div>
@@ -350,14 +379,14 @@ export const TodayTomorrowView: React.FC = () => {
               color: 'var(--accent)',
               border: '1px solid var(--accent-border)',
             }}
-            title="Click to change target exam date or stream"
+            title="Click to change target deadline date"
           >
-            <GraduationCap className="w-3.5 h-3.5" />
+            <Clock className="w-3.5 h-3.5" />
             <span>
               {daysUntilExam !== null ? (
-                <><strong>{daysUntilExam}d</strong> left</>
+                <><strong>{daysUntilExam}d</strong> to deadline</>
               ) : (
-                <>+ Set Exam Date</>
+                <>+ Set Deadline Date</>
               )}
             </span>
           </button>
@@ -403,13 +432,23 @@ export const TodayTomorrowView: React.FC = () => {
             ))}
           </select>
 
+          {/* Templates Trigger */}
+          <button
+            onClick={() => setIsTemplatesModalOpen(true)}
+            className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 cursor-pointer"
+            title="Download or load starter workflow templates"
+          >
+            <FolderDown className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Templates</span>
+          </button>
+
           {/* Add Task Button */}
           <button
             onClick={() => openAddTopicModal(todayStr)}
             className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Task</span>
+            <span>Add Card</span>
           </button>
         </div>
       </div>
@@ -640,7 +679,7 @@ export const TodayTomorrowView: React.FC = () => {
         onClose={() => setIsCollabModalOpen(false)}
       />
 
-      {/* ── Exam Date Settings Modal ─────────────────────────────── */}
+      {/* ── Deadline Date Settings Modal ─────────────────────────────── */}
       {isEditingExamModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
           <div
@@ -650,9 +689,9 @@ export const TodayTomorrowView: React.FC = () => {
           >
             <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-2">
-                <GraduationCap className="w-4 h-4 text-blue-600" />
+                <Clock className="w-4 h-4 text-blue-600" />
                 <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Exam Countdown & Stream
+                  Target Deadline Date
                 </h3>
               </div>
               <button
@@ -666,7 +705,7 @@ export const TodayTomorrowView: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Target Exam Date
+                  Target Deadline Date
                 </label>
                 <input
                   type="date"
@@ -810,69 +849,121 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
         {items.map(topic => renderCard(topic))}
 
         {/* Inline Card Creation Form */}
-        {activeInlineAdd && (
-          <div
-            className="p-3 rounded-lg flex flex-col gap-2.5 shadow-sm"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <input
-              type="text"
-              autoFocus
-              placeholder="Enter a title for this card..."
-              value={inlineTitle}
-              onChange={e => setInlineTitle(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') onInlineSubmit();
-                if (e.key === 'Escape') onCloseInlineAdd();
+        {activeInlineAdd && (() => {
+          const extractedTags = (inlineTitle.match(/#([a-zA-Z0-9_\-]+)/g) || []).map(m => m.slice(1).toLowerCase());
+          return (
+            <div
+              className="p-3 rounded-xl flex flex-col gap-2.5 shadow-md border animate-in fade-in"
+              style={{
+                background: 'var(--bg-card)',
+                borderColor: 'var(--accent)',
               }}
-              className="input-base text-xs py-1.5"
-            />
+            >
+              <div>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Task title (type #tag to create tags on the fly)..."
+                  value={inlineTitle}
+                  onChange={e => setInlineTitle(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') onInlineSubmit();
+                    if (e.key === 'Escape') onCloseInlineAdd();
+                  }}
+                  className="input-base text-xs py-2 w-full font-medium"
+                />
 
-            <div className="flex items-center gap-2">
-              <select
-                value={inlineTagId}
-                onChange={e => setInlineTagId(e.target.value)}
-                className="input-base text-xs py-1 flex-1 truncate"
-              >
-                {tags.map(t => (
-                  <option key={t.id} value={t.id}>#{t.name}</option>
-                ))}
-              </select>
+                {/* Live Detected Tags from #hashtag */}
+                {extractedTags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tags:</span>
+                    {extractedTags.map(tName => {
+                      const existing = tags.find(t => t.name.toLowerCase() === tName);
+                      return (
+                        <span
+                          key={tName}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                          style={{
+                            background: existing ? `${existing.color}20` : 'rgba(59,130,246,0.15)',
+                            color: existing ? existing.color : '#3B82F6',
+                            border: `1px solid ${existing ? existing.color + '40' : 'rgba(59,130,246,0.3)'}`
+                          }}
+                        >
+                          #{tName}
+                          {!existing && <span className="text-[9px] opacity-75 font-normal">✨ new tag</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
-              <select
-                value={inlineHours}
-                onChange={e => setInlineHours(parseFloat(e.target.value) || 1.5)}
-                className="input-base text-xs py-1 w-20"
-              >
-                <option value={0.5}>0.5h</option>
-                <option value={1.0}>1.0h</option>
-                <option value={1.5}>1.5h</option>
-                <option value={2.0}>2.0h</option>
-                <option value={3.0}>3.0h</option>
-              </select>
+              {/* Quick existing tag chips if available */}
+              {tags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                  <span className="text-[10px] text-slate-400 font-semibold">Quick tags:</span>
+                  {tags.slice(0, 5).map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        if (!inlineTitle.toLowerCase().includes(`#${t.name.toLowerCase()}`)) {
+                          setInlineTitle(inlineTitle ? `${inlineTitle.trim()} #${t.name}` : `#${t.name} `);
+                        }
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-pointer hover:opacity-85 transition-transform active:scale-95"
+                      style={{
+                        background: `${t.color}15`,
+                        color: t.color,
+                        borderColor: `${t.color}35`
+                      }}
+                    >
+                      #{t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Target Duration Selector & Controls */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-1">
+                  {[0.5, 1.0, 1.5, 2.0, 3.0].map(h => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setInlineHours(h)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                        inlineHours === h
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={onInlineSubmit}
+                    disabled={!inlineTitle.trim()}
+                    className="btn-primary text-xs py-1 px-3 font-semibold disabled:opacity-40"
+                  >
+                    Add Card
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onCloseInlineAdd}
+                    className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-
-            <div className="flex items-center gap-1.5 pt-1">
-              <button
-                type="button"
-                onClick={onInlineSubmit}
-                className="btn-primary text-xs py-1 px-3"
-              >
-                Add card
-              </button>
-              <button
-                type="button"
-                onClick={onCloseInlineAdd}
-                className="p-1 rounded text-slate-500 hover:text-slate-800"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Column Footer: + Add a card */}
@@ -945,81 +1036,103 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
   const catMeta = isGatePrep && topic.category ? GATE_TASK_CATEGORIES[topic.category] : null;
 
   const topicTags = (topic.tags || [])
-    .map(tid => tags.find(t => t.id === tid))
-    .filter((t): t is Tag => Boolean(t));
+    .map(tid => tags.find(t => t?.id === tid))
+    .filter((t): t is Tag => Boolean(t && t.id));
+
+  const primaryColor = topicTags[0]?.color || subject?.color || '#0C66E4';
 
   return (
     <div
       draggable
       onDragStart={onDragStart}
-      className={`trello-card group flex flex-col gap-2 relative ${isCompleted ? 'opacity-70' : ''}`}
+      className={`trello-card group flex flex-col justify-between gap-2 relative transition-all ${
+        isCompleted ? 'opacity-65' : ''
+      }`}
+      style={{
+        borderLeft: `3.5px solid ${isCompleted ? '#10B981' : primaryColor}`,
+      }}
     >
-      {/* Top Labels: Tags Badge / Subject Badge & Delegated Member Avatar */}
-      <div className="flex items-center justify-between gap-1.5">
+      {/* Top Row: Tags & Assignee Avatar */}
+      <div className="flex items-center justify-between gap-1.5 min-h-[20px]">
         <div className="flex flex-wrap items-center gap-1 min-w-0">
-          {topicTags.map(t => (
-            <span
-              key={t.id}
-              className="trello-badge"
-              style={{
-                backgroundColor: `${t.color}15`,
-                color: t.color,
-                border: `1px solid ${t.color}35`,
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: t.color }} />
-              <span className="truncate max-w-[120px]">#{t.name}</span>
-            </span>
-          ))}
+          {topicTags.map(t => {
+            const tagColor = t?.color || '#0C66E4';
+            return (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide transition-colors"
+                style={{
+                  backgroundColor: `${tagColor}15`,
+                  color: tagColor,
+                  border: `1px solid ${tagColor}30`,
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tagColor }} />
+                <span className="truncate max-w-[110px]">#{t.name}</span>
+              </span>
+            );
+          })}
 
           {topicTags.length === 0 && subject && (
             <span
-              className="trello-badge"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide"
               style={{
-                backgroundColor: `${subject.color}15`,
-                color: subject.color,
-                border: `1px solid ${subject.color}35`,
+                backgroundColor: `${subject.color || '#0d9488'}15`,
+                color: subject.color || '#0d9488',
+                border: `1px solid ${subject.color || '#0d9488'}30`,
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: subject.color }} />
-              <span className="truncate max-w-[120px]">{subject.name}</span>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: subject.color || '#0d9488' }} />
+              <span className="truncate max-w-[110px]">{subject.name}</span>
             </span>
           )}
 
           {catMeta && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${catMeta.bgClass}`}>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${catMeta.bgClass}`}>
               {catMeta.emoji} {catMeta.label}
+            </span>
+          )}
+
+          {/* Priority indicator badge */}
+          {topic.priority === 'urgent' && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+              🔥 Urgent
+            </span>
+          )}
+          {topic.priority === 'high' && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              ⚡ High
             </span>
           )}
         </div>
 
         {/* Assignee / Delegation Chip */}
-        <div className="relative">
+        <div className="relative shrink-0">
           {topic.assigneeName ? (
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onToggleDelegate(); }}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition-all hover:scale-105 cursor-pointer"
+              className="inline-flex items-center gap-1 p-0.5 pr-2 rounded-full text-[10px] font-semibold transition-all hover:scale-105 cursor-pointer shadow-xs"
               style={{
-                background: `${topic.assigneeColor || '#0C66E4'}15`,
+                background: `${topic.assigneeColor || '#0C66E4'}18`,
                 color: topic.assigneeColor || '#0C66E4',
-                border: `1px solid ${topic.assigneeColor || '#0C66E4'}30`
+                border: `1px solid ${topic.assigneeColor || '#0C66E4'}35`
               }}
               title={`Assigned to ${topic.assigneeName} • Click to change`}
             >
               <span
-                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-xs"
                 style={{ backgroundColor: topic.assigneeColor || '#0C66E4' }}
               >
                 {topic.assigneeName.substring(0, 2).toUpperCase()}
               </span>
-              <span className="truncate max-w-[70px]">{topic.assigneeName.split(' ')[0]}</span>
+              <span className="truncate max-w-[65px] font-medium">{topic.assigneeName.split(' ')[0]}</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onToggleDelegate(); }}
-              className="text-[10px] text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+              className="w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
               title="Delegate to a collaborator"
             >
               <UserPlus className="w-3.5 h-3.5" />
@@ -1030,36 +1143,40 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
           {isDelegating && (
             <div
               onClick={e => e.stopPropagation()}
-              className="absolute right-0 top-6 z-40 p-1.5 rounded-xl shadow-2xl w-44"
+              className="absolute right-0 top-7 z-40 p-2 rounded-xl shadow-2xl w-48 animate-in fade-in zoom-in-95 duration-100"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
             >
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1">Delegate Task</p>
-              <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                {members.map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => onAssign(m)}
-                    className="w-full text-left px-2 py-1 rounded-md text-xs font-medium flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span
-                        className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white font-bold flex-shrink-0"
-                        style={{ backgroundColor: m.color }}
-                      >
-                        {m.name.substring(0, 2).toUpperCase()}
-                      </span>
-                      <span className="truncate text-slate-700 dark:text-slate-200">{m.name}</span>
-                    </div>
-                    {topic.assigneeId === m.id && <Check className="w-3 h-3 text-blue-600" />}
-                  </button>
-                ))}
+              <div className="space-y-0.5 max-h-44 overflow-y-auto">
+                {members.filter(Boolean).map(m => {
+                  const mColor = m?.color || '#0C66E4';
+                  const mName = m?.name || 'Member';
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onAssign(m)}
+                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] text-white font-bold shrink-0"
+                          style={{ backgroundColor: mColor }}
+                        >
+                          {mName.substring(0, 2).toUpperCase()}
+                        </span>
+                        <span className="truncate text-slate-700 dark:text-slate-200">{mName}</span>
+                      </div>
+                      {topic.assigneeId === m.id && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+                  );
+                })}
               </div>
               {topic.assigneeId && (
                 <button
                   type="button"
                   onClick={() => onAssign(null)}
-                  className="w-full text-left px-2 py-1 mt-1 border-t text-[10px] text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded cursor-pointer"
+                  className="w-full text-left px-2 py-1.5 mt-1 border-t text-[11px] font-medium text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer"
                   style={{ borderColor: 'var(--border)' }}
                 >
                   ✕ Unassign
@@ -1070,92 +1187,104 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
         </div>
       </div>
 
-      {/* Card Title */}
-      <div className="text-xs sm:text-sm font-semibold leading-snug" style={{
-        color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
-        textDecoration: isCompleted ? 'line-through' : 'none',
-      }}>
-        {topic.name}
+      {/* Card Title & Checkbox */}
+      <div className="flex items-start gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onComplete(); }}
+          className={`mt-0.5 shrink-0 transition-colors cursor-pointer ${
+            isCompleted
+              ? 'text-emerald-500 hover:text-emerald-600'
+              : 'text-slate-300 dark:text-slate-600 hover:text-emerald-500'
+          }`}
+          title={isCompleted ? 'Mark as Incomplete' : 'Mark Completed'}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <h4
+            className="text-[13px] font-medium leading-snug tracking-tight select-text"
+            style={{
+              color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
+              textDecoration: isCompleted ? 'line-through' : 'none',
+            }}
+          >
+            {topic.name}
+          </h4>
+
+          {topic.notes && (
+            <p className="text-[11px] line-clamp-1 mt-0.5 text-slate-400 dark:text-slate-500 select-text">
+              {topic.notes}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Bottom Metadata & Quick Actions */}
-      <div className="flex items-center justify-between pt-1 border-t mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
-        
-        {/* Badges: Hours & Due */}
+      {/* Footer Metadata & Micro-Actions */}
+      <div
+        className="flex items-center justify-between pt-1.5 border-t mt-0.5"
+        style={{ borderColor: 'var(--border-subtle)' }}
+      >
         <div className="flex items-center gap-2 text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1">
+            <Clock className="w-3 h-3 text-slate-400" />
             <span>{topic.approxHours || 1}h</span>
           </span>
 
           {topic.scheduledDate && (
-            <span className="hidden sm:inline">
-              {topic.scheduledDate.slice(5)}
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-slate-400">
+              📅 {topic.scheduledDate.slice(5)}
             </span>
           )}
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Controls */}
         <div className="flex items-center gap-1">
-          {/* Quick Focus Button */}
           {!isCompleted && (
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); onFocus(); }}
-              className="p-1 rounded text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-              title="Focus with Timer"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 transition-colors cursor-pointer"
+              title="Start Focus Timer"
             >
-              <Play className="w-3.5 h-3.5 fill-current" />
+              <Play className="w-2.5 h-2.5 fill-current" />
+              <span>Focus</span>
             </button>
           )}
 
-          {/* Quick Move Button */}
           {primaryAction && (
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); primaryAction.action(); }}
-              className="text-[10px] font-bold px-1.5 py-0.5 rounded transition-colors"
+              className="text-[10px] font-bold px-2 py-0.5 rounded-md transition-colors cursor-pointer"
               style={{
                 background: 'var(--bg-subtle)',
                 color: 'var(--text-secondary)',
               }}
               title={`Move to ${primaryAction.label}`}
             >
-              {primaryAction.label === 'Reopen' ? <RotateCcw className="w-2.5 h-2.5 inline mr-0.5" /> : null}
+              {primaryAction.label === 'Reopen' ? <RotateCcw className="w-2.5 h-2.5 inline mr-1" /> : null}
               {primaryAction.label}
             </button>
           )}
 
-          {/* Complete Checkbox Button */}
           <button
-            onClick={e => { e.stopPropagation(); onComplete(); }}
-            className={`p-1 rounded transition-colors ${
-              isCompleted
-                ? 'text-emerald-500'
-                : 'text-slate-400 hover:text-emerald-500'
-            }`}
-            title={isCompleted ? 'Mark as Incomplete' : 'Mark Complete'}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Reschedule */}
-          <button
+            type="button"
             onClick={e => { e.stopPropagation(); onReschedule(); }}
-            className="p-1 rounded text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
             title="Reschedule Date"
           >
-            <CalendarClock className="w-3 h-3" />
+            <CalendarClock className="w-3.5 h-3.5" />
           </button>
 
-          {/* Delete */}
           <button
-            onClick={e => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-1 rounded text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+            type="button"
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+            className="p-1 rounded text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
             title="Delete Card"
           >
-            <Trash2 className="w-3 h-3" />
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

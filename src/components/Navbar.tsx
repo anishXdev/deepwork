@@ -40,7 +40,8 @@ export const Navbar: React.FC = () => {
     isTimerRunning,
     timeLeft,
     userGamification,
-    setIsShortcutsModalOpen
+    setIsShortcutsModalOpen,
+    setIsMcpModalOpen
   } = useApp();
 
   const isDark = settings.theme === 'dark';
@@ -66,11 +67,11 @@ export const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    { id: 'study',      label: 'Board',      icon: LayoutGrid },
-    { id: 'tags',       label: 'Tags',       icon: Hash       },
-    { id: 'timer',      label: 'Focus',      icon: Timer      },
-    { id: 'whiteboard', label: 'Whiteboard', icon: PenTool    },
-    { id: 'analytics',  label: 'Analytics',  icon: BarChart3  },
+    { id: 'study',      label: 'Board',       icon: LayoutGrid },
+    { id: 'tags',       label: 'Tags',        icon: Hash       },
+    { id: 'timer',      label: 'Focus',       icon: Timer      },
+    { id: 'whiteboard', label: 'White Board', icon: PenTool    },
+    { id: 'analytics',  label: 'Analytics',   icon: BarChart3  },
   ] as const;
 
   return (
@@ -108,11 +109,11 @@ export const Navbar: React.FC = () => {
               padding: 0,
             }}
           >
-            <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-xs">
-              d
+            <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-white font-extrabold text-[11px] shadow-xs tracking-tighter">
+              dw
             </div>
             <span className="font-bold text-sm tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              dstudy
+              deepwork
             </span>
           </button>
 
@@ -166,6 +167,21 @@ export const Navbar: React.FC = () => {
             <span className="text-slate-300 dark:text-slate-600">•</span>
             <span className="font-mono text-blue-600">{userGamification.xp} XP</span>
           </div>
+
+          {/* MCP Server Integration Trigger */}
+          <button
+            onClick={() => { Haptics.tap(); setIsMcpModalOpen(true); }}
+            title="Model Context Protocol (MCP) Integration"
+            className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer border"
+            style={{
+              background: 'rgba(16,185,129,0.08)',
+              borderColor: 'rgba(16,185,129,0.25)',
+              color: '#10B981'
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-mono text-[11px] font-bold">MCP</span>
+          </button>
 
           {/* Keyboard Shortcuts Trigger */}
           <button

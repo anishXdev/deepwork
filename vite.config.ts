@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -56,15 +58,27 @@ export default defineConfig(({ mode }) => {
           const devSyncStore = new Map();
           const mongoUri = env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
           let devMongoClient: any = null;
+          let mongoFailed = false;
 
           const getDevCollection = async () => {
+            if (mongoFailed) return null;
             if (!devMongoClient) {
-              const { MongoClient } = await import('mongodb');
-              devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 5000 });
-              await devMongoClient.connect();
-              console.log('[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.user_data)');
+              try {
+                const { MongoClient } = await import('mongodb');
+                devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 1000, connectTimeoutMS: 1000 });
+                await devMongoClient.connect();
+                console.log('[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.user_data)');
+              } catch (e: any) {
+                mongoFailed = true;
+                console.warn('[StudyPulse Dev] MongoDB unavailable, using fast in-memory store:', e?.message);
+                return null;
+              }
             }
-            return devMongoClient.db('studypulse').collection('user_data');
+            try {
+              return devMongoClient.db('studypulse').collection('user_data');
+            } catch {
+              return null;
+            }
           };
 
           server.middlewares.use('/api/sync', async (req, res) => {
@@ -86,19 +100,23 @@ export default defineConfig(({ mode }) => {
             if (status === '1') {
               try {
                 const col = await getDevCollection();
-                const count = await col.countDocuments();
-                res.statusCode = 200;
-                res.end(JSON.stringify({
-                  connected: true,
-                  cluster: 'cluster0.pmmziei.mongodb.net',
-                  database: 'studypulse',
-                  collection: 'user_data',
-                  totalUsers: count
-                }));
+                if (col) {
+                  const count = await col.countDocuments();
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({
+                    connected: true,
+                    cluster: 'cluster0.pmmziei.mongodb.net',
+                    database: 'studypulse',
+                    collection: 'user_data',
+                    totalUsers: count
+                  }));
+                  return;
+                }
               } catch (err: any) {
-                res.statusCode = 200;
-                res.end(JSON.stringify({ connected: false, error: err?.message, fallbackMode: true }));
+                // fall through
               }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ connected: false, error: 'MongoDB Atlas unavailable in current network', fallbackMode: true }));
               return;
             }
 
@@ -111,11 +129,13 @@ export default defineConfig(({ mode }) => {
 
               try {
                 const col = await getDevCollection();
-                const doc = await col.findOne({ _id: key });
-                if (doc && doc.data) {
-                  res.statusCode = 200;
-                  res.end(JSON.stringify({ found: true, data: doc.data, updatedAt: doc.updatedAt, storage: 'mongodb' }));
-                  return;
+                if (col) {
+                  const doc = await col.findOne({ _id: key });
+                  if (doc && doc.data) {
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({ found: true, data: doc.data, updatedAt: doc.updatedAt, storage: 'mongodb' }));
+                    return;
+                  }
                 }
               } catch (err: any) {
                 console.warn('[StudyPulse Dev] MongoDB query fallback:', err?.message);
@@ -148,25 +168,293 @@ export default defineConfig(({ mode }) => {
 
                   try {
                     const col = await getDevCollection();
-                    await col.updateOne(
-                      { _id: targetKey },
-                      { $set: { data: parsed.data, updatedAt } },
-                      { upsert: true }
-                    );
-                    devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
-                    res.statusCode = 200;
-                    res.end(JSON.stringify({ success: true, storage: 'mongodb', updatedAt }));
-                    return;
+                    if (col) {
+                      await col.updateOne(
+                        { _id: targetKey },
+                        { $set: { data: parsed.data, updatedAt } },
+                        { upsert: true }
+                      );
+                      devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({ success: true, storage: 'mongodb', updatedAt }));
+                      return;
+                    }
                   } catch (err: any) {
                     console.warn('[StudyPulse Dev] MongoDB save fallback:', err?.message);
-                    devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
-                    res.statusCode = 200;
-                    res.end(JSON.stringify({ success: true, storage: 'fallback', updatedAt, warning: err?.message }));
-                    return;
                   }
+
+                  devSyncStore.set(targetKey, { data: parsed.data, updatedAt });
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({ success: true, storage: 'memory', updatedAt }));
+                  return;
                 } catch (e) {
                   res.statusCode = 400;
                   res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                }
+              });
+              return;
+            }
+
+            res.statusCode = 405;
+            res.end();
+          });
+
+          // Model Context Protocol (MCP) JSON-RPC Endpoint for external AI assistants (Cursor, Claude, Antigravity)
+          server.middlewares.use('/api/mcp', async (req, res) => {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            res.setHeader('Content-Type', 'application/json');
+
+            if (req.method === 'OPTIONS') {
+              res.statusCode = 200;
+              res.end();
+              return;
+            }
+
+            if (req.method === 'GET') {
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                name: 'deepwork-mcp',
+                version: '1.0.0',
+                status: 'online',
+                protocol: 'Model Context Protocol (JSON-RPC 2.0)',
+                endpoint: 'http://localhost:5173/api/mcp',
+                stdioScript: 'node scripts/deepwork-mcp.cjs',
+                tools: [
+                  'deepwork_list_tasks',
+                  'deepwork_create_task',
+                  'deepwork_update_task',
+                  'deepwork_list_boards',
+                  'deepwork_get_analytics',
+                  'deepwork_log_focus_session'
+                ]
+              }, null, 2));
+              return;
+            }
+
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const payload = JSON.parse(body || '{}');
+                  const { method, id, params } = payload;
+
+                  if (method === 'initialize') {
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({
+                      jsonrpc: '2.0',
+                      id,
+                      result: {
+                        protocolVersion: '2024-11-05',
+                        capabilities: { tools: {} },
+                        serverInfo: { name: 'deepwork-mcp', version: '1.0.0' }
+                      }
+                    }));
+                    return;
+                  }
+
+                  const storeFile = path.resolve(process.cwd(), 'deepwork-mcp-store.json');
+                  let store: any = { boards: [], tags: [], tasks: [], sessions: [], streak: { currentStreak: 0 } };
+                  try {
+                    if (fs.existsSync(storeFile)) {
+                      store = JSON.parse(fs.readFileSync(storeFile, 'utf-8'));
+                    }
+                  } catch {}
+
+                  const saveStore = () => {
+                    try {
+                      fs.writeFileSync(storeFile, JSON.stringify(store, null, 2), 'utf-8');
+                    } catch {}
+                  };
+
+                  if (method === 'tools/list') {
+                    const tools = [
+                      {
+                        name: 'deepwork_list_tasks',
+                        description: 'Retrieve all tasks and cards from Deepwork with optional filters (status, tag, or boardId)',
+                        inputSchema: {
+                          type: 'object',
+                          properties: {
+                            status: { type: 'string', enum: ['all', 'todo', 'completed'] },
+                            tag: { type: 'string' },
+                            boardId: { type: 'string' }
+                          }
+                        }
+                      },
+                      {
+                        name: 'deepwork_create_task',
+                        description: 'Create a new card/task in Deepwork. Automatically extracts #tags from the title, creates missing tags, and assigns deadline and focus duration.',
+                        inputSchema: {
+                          type: 'object',
+                          properties: {
+                            title: { type: 'string' },
+                            approxHours: { type: 'number' },
+                            deadlineDate: { type: 'string' },
+                            priority: { type: 'string', enum: ['normal', 'high', 'urgent'] },
+                            notes: { type: 'string' },
+                            boardId: { type: 'string' }
+                          },
+                          required: ['title']
+                        }
+                      },
+                      {
+                        name: 'deepwork_update_task',
+                        description: 'Update an existing task in Deepwork (change status to completed, reschedule date, or edit notes)',
+                        inputSchema: {
+                          type: 'object',
+                          properties: {
+                            taskId: { type: 'string' },
+                            status: { type: 'string', enum: ['todo', 'completed'] },
+                            deadlineDate: { type: 'string' },
+                            notes: { type: 'string' }
+                          },
+                          required: ['taskId']
+                        }
+                      },
+                      {
+                        name: 'deepwork_list_boards',
+                        description: 'List all project and task boards in Deepwork along with their collaborators',
+                        inputSchema: { type: 'object', properties: {} }
+                      },
+                      {
+                        name: 'deepwork_get_analytics',
+                        description: 'Get deep work productivity metrics: total focus hours logged, completed tasks count, active streak, and tag breakdown',
+                        inputSchema: { type: 'object', properties: {} }
+                      },
+                      {
+                        name: 'deepwork_log_focus_session',
+                        description: 'Log completed focus time or Pomodoro session to Deepwork',
+                        inputSchema: {
+                          type: 'object',
+                          properties: {
+                            durationMinutes: { type: 'number' },
+                            taskId: { type: 'string' },
+                            mode: { type: 'string', enum: ['pomodoro', 'custom', 'short_break'] }
+                          },
+                          required: ['durationMinutes']
+                        }
+                      }
+                    ];
+                    res.statusCode = 200;
+                    res.end(JSON.stringify({ jsonrpc: '2.0', id, result: { tools } }));
+                    return;
+                  }
+
+                  if (method === 'tools/call') {
+                    const toolName = params?.name;
+                    const toolArgs = params?.arguments || {};
+
+                    if (toolName === 'deepwork_list_tasks') {
+                      let tasks = store.tasks || [];
+                      if (toolArgs.status && toolArgs.status !== 'all') {
+                        tasks = tasks.filter((t: any) => t.status === toolArgs.status);
+                      }
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({
+                        jsonrpc: '2.0',
+                        id,
+                        result: { content: [{ type: 'text', text: JSON.stringify(tasks, null, 2) }] }
+                      }));
+                      return;
+                    }
+
+                    if (toolName === 'deepwork_create_task') {
+                      const title = toolArgs.title || '';
+                      const tagMatches = (title.match(/#([a-zA-Z0-9_\-]+)/g) || []).map((m: string) => m.slice(1).toLowerCase());
+                      const matchedTagIds: string[] = [];
+                      for (const tName of tagMatches) {
+                        let existing = (store.tags || []).find((t: any) => t.name.toLowerCase() === tName);
+                        if (!existing) {
+                          existing = { id: 'tag_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6), name: tName, color: '#0C66E4' };
+                          store.tags = store.tags || [];
+                          store.tags.push(existing);
+                        }
+                        if (!matchedTagIds.includes(existing.id)) matchedTagIds.push(existing.id);
+                      }
+                      const cleanTitle = title.replace(/#([a-zA-Z0-9_\-]+)/g, '').trim() || title.trim();
+                      const newTask = {
+                        id: 'top_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                        boardId: toolArgs.boardId || 'board_default',
+                        name: cleanTitle,
+                        tags: matchedTagIds,
+                        approxHours: Number(toolArgs.approxHours) || 1.5,
+                        scheduledDate: toolArgs.deadlineDate || new Date().toISOString().split('T')[0],
+                        status: 'todo',
+                        priority: toolArgs.priority || 'normal',
+                        notes: toolArgs.notes || '',
+                        createdAt: new Date().toISOString()
+                      };
+                      store.tasks = store.tasks || [];
+                      store.tasks.push(newTask);
+                      saveStore();
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({
+                        jsonrpc: '2.0',
+                        id,
+                        result: { content: [{ type: 'text', text: `✅ Created card "${cleanTitle}" [ID: ${newTask.id}]` }] }
+                      }));
+                      return;
+                    }
+
+                    if (toolName === 'deepwork_update_task') {
+                      const task = (store.tasks || []).find((t: any) => t.id === toolArgs.taskId);
+                      if (!task) {
+                        res.statusCode = 200;
+                        res.end(JSON.stringify({ jsonrpc: '2.0', id, result: { isError: true, content: [{ type: 'text', text: 'Task not found' }] } }));
+                        return;
+                      }
+                      if (toolArgs.status) task.status = toolArgs.status;
+                      if (toolArgs.deadlineDate) task.scheduledDate = toolArgs.deadlineDate;
+                      if (toolArgs.notes !== undefined) task.notes = toolArgs.notes;
+                      saveStore();
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({
+                        jsonrpc: '2.0',
+                        id,
+                        result: { content: [{ type: 'text', text: `✅ Updated task "${task.name}"` }] }
+                      }));
+                      return;
+                    }
+
+                    if (toolName === 'deepwork_get_analytics') {
+                      const tasks = store.tasks || [];
+                      const completed = tasks.filter((t: any) => t.status === 'completed');
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({
+                        jsonrpc: '2.0',
+                        id,
+                        result: {
+                          content: [{
+                            type: 'text',
+                            text: JSON.stringify({
+                              totalTasks: tasks.length,
+                              completedTasks: completed.length,
+                              streakDays: store.streak?.currentStreak || 0
+                            }, null, 2)
+                          }]
+                        }
+                      }));
+                      return;
+                    }
+
+                    if (toolName === 'deepwork_list_boards') {
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({
+                        jsonrpc: '2.0',
+                        id,
+                        result: { content: [{ type: 'text', text: JSON.stringify(store.boards || [], null, 2) }] }
+                      }));
+                      return;
+                    }
+                  }
+
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } }));
+                } catch (e: any) {
+                  res.statusCode = 400;
+                  res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: e?.message } }));
                 }
               });
               return;
