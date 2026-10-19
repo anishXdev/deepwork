@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { key, status, users, lookupEmail, boardCode } = req.query;
+  const { key, status, users, lookupEmail, boardCode, notifications, email } = req.query;
 
   // Health/status check for MongoDB
   if (status === '1') {
@@ -117,7 +117,45 @@ export default async function handler(req, res) {
     }
   }
 
-  // 3. Board Invite Code Lookup (Resolve DW-XXXXXX or board ID)
+  // 3. Remote Notifications for User
+  if (notifications === '1') {
+    const targetEmail = String(email || '').trim().toLowerCase();
+    if (!targetEmail) {
+      return res.status(200).json({ notifications: [] });
+    }
+    try {
+      const collection = await getCollection();
+      const notifDocs = await collection.find({
+        recipientEmail: targetEmail
+      }).sort({ timestamp: -1 }).limit(50).toArray();
+
+      const notifs = notifDocs.map(d => ({
+        id: d._id,
+        type: d.type || 'collab_invite',
+        title: d.title,
+        message: d.message,
+        recipientEmail: d.recipientEmail,
+        senderEmail: d.senderEmail,
+        senderName: d.senderName,
+        senderAvatar: d.senderAvatar,
+        senderColor: d.senderColor,
+        boardId: d.boardId,
+        boardName: d.boardName,
+        inviteCode: d.inviteCode,
+        taskId: d.taskId,
+        taskTitle: d.taskTitle,
+        timestamp: d.timestamp,
+        read: Boolean(d.read),
+        status: d.status || 'pending'
+      }));
+
+      return res.status(200).json({ notifications: notifs });
+    } catch (err) {
+      return res.status(200).json({ notifications: [] });
+    }
+  }
+
+  // 4. Board Invite Code Lookup (Resolve DW-XXXXXX or board ID)
   if (boardCode) {
     const rawCode = String(boardCode).trim().toUpperCase();
     const cleanLower = rawCode.toLowerCase();
@@ -171,7 +209,6 @@ export default async function handler(req, res) {
       const doc = await collection.findOne({ _id: key });
 
       if (!doc || !doc.data) {
-        // Check fallback map
         const fb = memoryFallback.get(key);
         if (fb) {
           return res.status(200).json({ found: true, data: fb.data, updatedAt: fb.updatedAt, storage: 'memory' });
@@ -196,9 +233,140 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { key: bodyKey, data } = req.body || {};
-    const targetKey = bodyKey || key;
+    const body = req.body || {};
+    const { action, notification, notifId, status: updateStatus, read: updateRead, boardCode: joinCode, user: joinUser, key: bodyKey, data } = body;
 
+    // A. Send Notification to Recipient
+    if (action === 'send_notification' && notification && notification.recipientEmail) {
+      try {
+        const collection = await getCollection();
+        const cleanRecipient = String(notification.recipientEmail).trim().toLowerCase();
+        const id = notification.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const doc = {
+          _id: id,
+          recipientEmail: cleanRecipient,
+          senderEmail: notification.senderEmail || '',
+          senderName: notification.senderName || 'Teammate',
+          senderAvatar: notification.senderAvatar || '',
+          senderColor: notification.senderColor || '#0C66E4',
+          type: notification.type || 'collab_invite',
+          title: notification.title,
+          message: notification.message,
+          boardId: notification.boardId,
+          boardName: notification.boardName,
+          inviteCode: notification.inviteCode,
+          taskId: notification.taskId,
+          taskTitle: notification.taskTitle,
+          status: notification.status || 'pending',
+          read: false,
+          timestamp: notification.timestamp || new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        };
+        await collection.updateOne({ _id: id }, { $set: doc }, { upsert: true });
+        return res.status(200).json({ success: true, notifId: id });
+      } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
+    // B. Update Notification Status (Accept / Decline / Read)
+    if (action === 'update_notification' && notifId) {
+      try {
+        const collection = await getCollection();
+        const update = { updatedAt: new Date().toISOString() };
+        if (updateStatus) update.status = updateStatus;
+        if (updateRead !== undefined) update.read = updateRead;
+        await collection.updateOne({ _id: notifId }, { $set: update });
+        return res.status(200).json({ success: true });
+      } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
+    // C. Join Board Remote
+    if (action === 'join_board' && joinCode && joinUser) {
+      const rawCode = String(joinCode).trim().toUpperCase();
+      try {
+        const collection = await getCollection();
+        let inviteDoc = await collection.findOne({ _id: `invite_${rawCode}` });
+        let targetBoard = inviteDoc?.board;
+        let ownerEmail = inviteDoc?.ownerEmail;
+
+        if (!targetBoard) {
+          const userDoc = await collection.findOne({ 'data.boards.inviteCode': rawCode });
+          if (userDoc && Array.isArray(userDoc.data?.boards)) {
+            targetBoard = userDoc.data.boards.find(b => b.inviteCode?.toUpperCase() === rawCode);
+            ownerEmail = userDoc.data?.profile?.email;
+          }
+        }
+
+        if (targetBoard) {
+          const members = Array.isArray(targetBoard.members) ? [...targetBoard.members] : [];
+          const cleanEmail = String(joinUser.email || '').trim().toLowerCase();
+          if (cleanEmail && !members.some(m => (m.email || '').trim().toLowerCase() === cleanEmail)) {
+            members.push({
+              id: joinUser.id || `m_${Date.now()}`,
+              name: joinUser.name || cleanEmail.split('@')[0],
+              email: joinUser.email,
+              color: joinUser.color || '#10B981',
+              avatar: joinUser.avatar || '',
+              role: 'editor',
+              joinedAt: new Date().toISOString()
+            });
+            targetBoard.members = members;
+          }
+
+          // Update invite record
+          await collection.updateOne(
+            { _id: `invite_${rawCode}` },
+            { $set: { board: targetBoard, updatedAt: new Date().toISOString() } },
+            { upsert: true }
+          );
+
+          // Update owner's board copy in Atlas and notify owner
+          if (ownerEmail) {
+            await collection.updateOne(
+              { 'data.profile.email': ownerEmail, 'data.boards.inviteCode': rawCode },
+              { $set: { 'data.boards.$.members': members } }
+            );
+
+            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            await collection.updateOne(
+              { _id: notifId },
+              {
+                $set: {
+                  _id: notifId,
+                  recipientEmail: ownerEmail.toLowerCase(),
+                  senderEmail: joinUser.email,
+                  senderName: joinUser.name || joinUser.email.split('@')[0],
+                  senderAvatar: joinUser.avatar || '',
+                  senderColor: '#10B981',
+                  type: 'collab_invite',
+                  title: 'New Member Joined Board',
+                  message: `${joinUser.name || joinUser.email} joined your board "${targetBoard.name}"!`,
+                  boardId: targetBoard.id,
+                  boardName: targetBoard.name,
+                  inviteCode: rawCode,
+                  status: 'accepted',
+                  read: false,
+                  timestamp: new Date().toISOString(),
+                  createdAt: new Date().toISOString()
+                }
+              },
+              { upsert: true }
+            );
+          }
+
+          return res.status(200).json({ success: true, board: targetBoard });
+        }
+        return res.status(404).json({ success: false, message: `Board with code "${rawCode}" not found` });
+      } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
+    // D. Normal sync snapshot (user data)
+    const targetKey = bodyKey || key;
     if (!targetKey || !data) {
       return res.status(400).json({ error: 'Missing sync key or data payload' });
     }
@@ -219,7 +387,26 @@ export default async function handler(req, res) {
         { upsert: true }
       );
 
-      // Keep fallback in sync
+      // Index each board's invite code in MongoDB Atlas
+      if (Array.isArray(data?.boards)) {
+        for (const b of data.boards) {
+          if (b.inviteCode) {
+            await collection.updateOne(
+              { _id: `invite_${b.inviteCode.toUpperCase()}` },
+              {
+                $set: {
+                  board: b,
+                  inviter: data.profile?.name || data.profile?.email || 'Teammate',
+                  ownerEmail: data.profile?.email || null,
+                  updatedAt
+                }
+              },
+              { upsert: true }
+            );
+          }
+        }
+      }
+
       memoryFallback.set(targetKey, { data, updatedAt });
 
       return res.status(200).json({

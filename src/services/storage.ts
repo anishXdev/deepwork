@@ -89,24 +89,31 @@ export function getDefaultTags(): Tag[] {
   return [];
 }
 
-export function generateBoardInviteCode(boardId: string): string {
-  const clean = (boardId || '').replace(/^board_/, '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
-  if (clean && clean.length >= 3) {
-    return `DW-${clean}`;
+export function generateUniqueBoardInviteCode(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `DW-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  return `DW-${result}`;
+}
+
+export function generateBoardInviteCode(_boardId?: string): string {
+  return generateUniqueBoardInviteCode();
 }
 
 export function getDefaultBoards(): StudyBoard[] {
+  const uniqueCode = generateUniqueBoardInviteCode();
+  const uniqueBoardId = 'board_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
   return [
     {
-      id: 'board_main',
+      id: uniqueBoardId,
       name: 'Main Board',
       description: 'Personal task and project management',
       color: '#0C66E4',
       icon: '⚡',
       isDefault: true,
-      inviteCode: 'DW-MAIN',
+      inviteCode: uniqueCode,
       members: [],
       createdAt: new Date().toISOString(),
     }
@@ -187,7 +194,7 @@ export const StorageService = {
         }
       }
 
-      // Ensure default boards and clean any null members
+      // Ensure default boards, sanitize unique invite codes, and clean any null members
       const rawBoards = localStorage.getItem(STORAGE_KEYS.BOARDS);
       if (!rawBoards) {
         const defBoards = getDefaultBoards();
@@ -197,22 +204,32 @@ export const StorageService = {
         try {
           const parsedBoards = JSON.parse(rawBoards);
           if (Array.isArray(parsedBoards)) {
+            let boardsModified = false;
             const sanitized = parsedBoards
               .filter((b): b is StudyBoard => Boolean(b && typeof b === 'object' && b.id))
-              .map(b => ({
-                ...b,
-                color: b.color || '#0C66E4',
-                members: Array.isArray(b.members)
-                  ? b.members.filter(Boolean).map(m => ({
-                      id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
-                      name: m?.name || 'Member',
-                      email: m?.email || '',
-                      color: m?.color || '#0C66E4',
-                      role: m?.role || 'editor'
-                    }))
-                  : []
-              }));
-            if (sanitized.length !== parsedBoards.length) {
+              .map(b => {
+                let code = b.inviteCode;
+                // Migrate any legacy generic or missing invite codes to isolated unique codes
+                if (!code || code === 'DW-MAIN' || code === 'DW-DEFAULT' || code === 'DW-STUDY') {
+                  code = generateUniqueBoardInviteCode();
+                  boardsModified = true;
+                }
+                return {
+                  ...b,
+                  inviteCode: code,
+                  color: b.color || '#0C66E4',
+                  members: Array.isArray(b.members)
+                    ? b.members.filter(Boolean).map(m => ({
+                        id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
+                        name: m?.name || 'Member',
+                        email: m?.email || '',
+                        color: m?.color || '#0C66E4',
+                        role: m?.role || 'editor'
+                      }))
+                    : []
+                };
+              });
+            if (boardsModified || sanitized.length !== parsedBoards.length) {
               this.saveBoards(sanitized.length > 0 ? sanitized : getDefaultBoards());
             }
           }
@@ -409,17 +426,70 @@ export const StorageService = {
     const raw = localStorage.getItem(STORAGE_KEYS.PROFILE);
     if (!raw) return DEFAULT_PROFILE;
     try {
-      return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      // Migrate to DeepworkUser v2 schema
+      const upgraded: UserProfile = {
+        ...DEFAULT_PROFILE,
+        ...parsed,
+        schemaVersion: 2,
+        role: parsed.role || 'user',
+        authProvider: parsed.authProvider || (parsed.googleConnected ? 'google' : (parsed.email ? 'email' : 'guest')),
+        emailVerified: Boolean(parsed.googleConnected || parsed.email),
+        updatedAt: parsed.updatedAt || new Date().toISOString(),
+        createdAt: parsed.createdAt || new Date().toISOString()
+      };
+      return upgraded;
     } catch {
       return DEFAULT_PROFILE;
     }
   },
 
   saveProfile(profile: UserProfile) {
-    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
-    this.registerUser(profile);
-    if (profile && profile.email) {
-      this.reconcileBoardOwner(profile);
+    const upgraded: UserProfile = {
+      ...profile,
+      schemaVersion: 2,
+      role: profile.role || 'user',
+      authProvider: profile.authProvider || (profile.googleConnected ? 'google' : (profile.email ? 'email' : 'guest')),
+      emailVerified: Boolean(profile.googleConnected || profile.email),
+      updatedAt: new Date().toISOString(),
+      createdAt: profile.createdAt || new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(upgraded));
+    this.registerUser(upgraded);
+    if (upgraded && upgraded.email) {
+      this.reconcileBoardOwner(upgraded);
+    }
+  },
+
+  signOut(): void {
+    try {
+      localStorage.removeItem('dstudy_has_authenticated');
+      localStorage.removeItem(STORAGE_KEYS.SYNC_ROOM);
+      localStorage.removeItem('studypulse_sync_key');
+      localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+
+      const guestProfile: UserProfile = {
+        id: 'usr_guest_' + Date.now(),
+        name: 'Guest Scholar',
+        email: '',
+        googleConnected: false,
+        googleCalendarSyncEnabled: false,
+        syncKey: '',
+        schemaVersion: 2,
+        role: 'user',
+        authProvider: 'guest',
+        emailVerified: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(guestProfile));
+
+      // Reset boards to a fresh isolated board
+      const freshBoards = getDefaultBoards();
+      this.saveBoards(freshBoards);
+      this.saveActiveBoardId(freshBoards[0].id);
+    } catch (e) {
+      console.warn('Sign out failed:', e);
     }
   },
 
@@ -1017,15 +1087,24 @@ export const StorageService = {
   },
 
   addNotification(notif: Omit<CollabNotification, 'id' | 'timestamp' | 'read'>): CollabNotification {
-    const list = this.getNotifications();
+    const current = this.getProfile();
+    const currentEmail = (current.email || '').trim().toLowerCase();
+    const recipientEmail = (notif.recipientEmail || '').trim().toLowerCase();
+
     const created: CollabNotification = {
       ...notif,
-      id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: (notif as any).id || 'notif_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       timestamp: new Date().toISOString(),
       read: false
     };
-    const updated = [created, ...list];
-    this.saveNotifications(updated);
+
+    // Only append to local list if meant for current user or general system notification
+    if (!recipientEmail || recipientEmail === currentEmail) {
+      const list = this.getNotifications();
+      const updated = [created, ...list];
+      this.saveNotifications(updated);
+    }
+
     return created;
   },
 

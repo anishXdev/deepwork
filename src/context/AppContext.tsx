@@ -172,6 +172,7 @@ interface AppContextType {
   openStreakModal: () => void;
   closeStreakModal: () => void;
   setIsSyncModalOpen: (open: boolean) => void;
+  signOut: () => void;
 
   // Streak & Preset Data Controls
   resetStreak: (keepLongest?: boolean) => void;
@@ -235,14 +236,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     Notifications.toast('info', 'All notifications marked as read.');
   };
 
-  const respondToNotification = (id: string, action: 'accept' | 'decline') => {
+  const respondToNotification = async (id: string, action: 'accept' | 'decline') => {
+    const notif = notifications.find(n => n.id === id);
     StorageService.respondToNotification(id, action);
     setNotifications(StorageService.getNotifications());
-    setBoards(StorageService.getBoards());
+
+    // Update in MongoDB Atlas
+    CloudSyncService.updateRemoteNotification(id, action === 'accept' ? 'accepted' : 'declined', true);
+
     if (action === 'accept') {
       sound.playCompletionChime();
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-      Notifications.toast('success', '🎉 Invite accepted! You joined the board.');
+
+      if (notif?.inviteCode) {
+        await joinBoardByCode(notif.inviteCode);
+      } else if (notif?.boardId) {
+        setActiveBoardIdState(notif.boardId);
+        StorageService.saveActiveBoardId(notif.boardId);
+      }
+
+      setBoards(StorageService.getBoards());
+      Notifications.toast('success', `🎉 Invite accepted! You joined "${notif?.boardName || 'the board'}".`);
     } else {
       Notifications.toast('info', 'Invite declined.');
     }
@@ -254,10 +268,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const sendCollabNotification = (notif: Omit<CollabNotification, 'id' | 'timestamp' | 'read'>): CollabNotification => {
+    const myEmail = (profile.email || '').trim().toLowerCase();
+    const recipientEmail = (notif.recipientEmail || '').trim().toLowerCase();
+
     const created = StorageService.addNotification(notif);
-    setNotifications(StorageService.getNotifications());
-    Notifications.toast('info', `🔔 ${notif.title}: ${notif.message}`);
+
+    // If sending to another user via email, dispatch to MongoDB Atlas so the recipient gets it!
+    if (recipientEmail && recipientEmail !== myEmail) {
+      CloudSyncService.sendRemoteNotification(created);
+      Notifications.toast('success', `👥 Invite dispatched to ${recipientEmail}! They will see it in their Notification Center.`);
+    } else {
+      // Local self notification
+      setNotifications(StorageService.getNotifications());
+      Notifications.toast('info', `🔔 ${notif.title}: ${notif.message}`);
+    }
+
     return created;
+  };
+
+  // Live remote notifications synchronization from MongoDB Atlas
+  useEffect(() => {
+    const userEmail = (profile.email || '').trim().toLowerCase();
+    if (!userEmail) return;
+
+    const pullRemoteNotifs = async () => {
+      try {
+        const remoteList = await CloudSyncService.fetchRemoteNotifications(userEmail);
+        if (remoteList && remoteList.length > 0) {
+          const localList = StorageService.getNotifications();
+          const localIds = new Set(localList.map(n => n.id));
+          let hasNew = false;
+          const merged = [...localList];
+
+          for (const rn of remoteList) {
+            if (!localIds.has(rn.id)) {
+              merged.unshift(rn);
+              localIds.add(rn.id);
+              hasNew = true;
+            }
+          }
+
+          if (hasNew) {
+            StorageService.saveNotifications(merged);
+            setNotifications(merged);
+            sound.playCompletionChime();
+            Notifications.toast('info', `🔔 New collaboration invite received!`);
+          }
+        }
+      } catch (err) {
+        console.warn('Notification sync error:', err);
+      }
+    };
+
+    pullRemoteNotifs();
+    const interval = setInterval(pullRemoteNotifs, 15000);
+    return () => clearInterval(interval);
+  }, [profile.email]);
+
+  const signOut = () => {
+    Haptics.tap();
+    StorageService.signOut();
+    const guest = StorageService.getProfile();
+    setProfile(guest);
+    setBoards(StorageService.getBoards());
+    setActiveBoardIdState(StorageService.getActiveBoardId());
+    setNotifications([]);
+    setIsAuthModalOpen(false);
+    Notifications.toast('info', '👋 You have been signed out successfully.');
   };
 
   // Team Room & Audio/Video Call State
@@ -612,8 +689,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 1. Check local boards
     const local = boards.find(b =>
       b.inviteCode?.toUpperCase() === rawCode ||
-      b.id.toUpperCase() === rawCode ||
-      b.id.toUpperCase() === `BOARD_${rawCode.replace(/^DW-/, '')}`
+      b.id.toUpperCase() === rawCode
     );
 
     if (local) {
@@ -624,21 +700,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true, message: `Switched to "${local.name}"`, board: local };
     }
 
-    // 2. Query remote MongoDB Atlas
+    // 2. Query & Join remote in MongoDB Atlas
     try {
+      const userMember = {
+        id: profile.id || 'member_' + Date.now(),
+        name: profile.name || 'Collaborator',
+        email: profile.email || '',
+        color: '#10B981',
+        role: 'editor' as const
+      };
+
+      const joinRes = await CloudSyncService.joinBoardRemote(rawCode, userMember);
+      if (joinRes.success && joinRes.board) {
+        const boardToAdd: StudyBoard = joinRes.board;
+        setBoards(prev => {
+          const exists = prev.some(b => b.id === boardToAdd.id);
+          if (exists) {
+            return prev.map(b => b.id === boardToAdd.id ? boardToAdd : b);
+          }
+          return [...prev, boardToAdd];
+        });
+
+        setActiveBoardIdState(boardToAdd.id);
+        StorageService.saveActiveBoardId(boardToAdd.id);
+        sound.playCompletionChime();
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+        Notifications.toast('success', `🎉 Joined "${boardToAdd.name}"!`);
+        return { success: true, message: `Successfully joined "${boardToAdd.name}"`, board: boardToAdd };
+      }
+
+      // Fallback direct boardCode query
       const res = await fetch(`/api/sync?boardCode=${encodeURIComponent(rawCode)}`);
       if (res.ok) {
         const data = await res.json();
         if (data.found && data.board) {
           const remoteBoard: StudyBoard = data.board;
-          const userMember: BoardMember = {
-            id: profile.id || 'member_' + Date.now(),
-            name: profile.name || 'Collaborator',
-            email: profile.email || '',
-            color: '#10B981',
-            role: 'editor'
-          };
-
           const members = Array.isArray(remoteBoard.members) ? [...remoteBoard.members] : [];
           if (profile.email && !members.some(m => m.email.toLowerCase() === profile.email.toLowerCase())) {
             members.push(userMember);
@@ -662,18 +758,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           StorageService.saveActiveBoardId(boardToAdd.id);
           sound.playCompletionChime();
           Haptics.success();
-          Notifications.toast('success', `🎉 Joined "${boardToAdd.name}" invited by ${data.inviter || 'team'}!`);
+          Notifications.toast('success', `🎉 Joined "${boardToAdd.name}"!`);
           CloudSyncService.pushToCloudImmediate();
           return { success: true, message: `Successfully joined "${boardToAdd.name}"`, board: boardToAdd };
         } else {
           return { success: false, message: data.message || `No board found with code "${rawCode}"` };
         }
       }
-    } catch (e: any) {
-      return { success: false, message: 'Could not connect to cloud: ' + e?.message };
+      return { success: false, message: 'Could not connect to cloud workspace' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Error joining board' };
     }
-
-    return { success: false, message: `No board found with code "${rawCode}"` };
   };
 
   const createBoard = (name: string, description = '', color = '#0C66E4', icon = '📋'): StudyBoard => {
@@ -1708,7 +1803,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logStudySession,
         updateSettings,
         updateProfile,
-        toggleTheme
+        toggleTheme,
+        signOut
       }}
     >
       {children}

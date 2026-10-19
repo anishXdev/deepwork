@@ -177,5 +177,72 @@ export const CloudSyncService = {
       console.error('Failed to parse import file:', e);
       return false;
     }
+  },
+
+  /**
+   * Dispatches a collaboration notification to a recipient via MongoDB Atlas
+   */
+  async sendRemoteNotification(notif: any): Promise<boolean> {
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send_notification', notification: notif })
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn('Failed to send remote notification:', e);
+      return false;
+    }
+  },
+
+  /**
+   * Fetches latest notifications for this user from MongoDB Atlas
+   */
+  async fetchRemoteNotifications(email: string): Promise<any[]> {
+    if (!email) return [];
+    try {
+      const res = await fetch(`/api/sync?notifications=1&email=${encodeURIComponent(email.toLowerCase())}`);
+      if (res.ok) {
+        const json = await res.json();
+        return Array.isArray(json.notifications) ? json.notifications : [];
+      }
+    } catch (e) {
+      console.warn('Failed to fetch remote notifications:', e);
+    }
+    return [];
+  },
+
+  /**
+   * Updates notification state in MongoDB Atlas
+   */
+  async updateRemoteNotification(notifId: string, status?: 'accepted' | 'declined', read?: boolean): Promise<boolean> {
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_notification', notifId, status, read })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Joins a board in MongoDB Atlas and registers the member
+   */
+  async joinBoardRemote(boardCode: string, user: { id: string; name: string; email: string; avatar?: string; color?: string }): Promise<{ success: boolean; board?: any; message?: string }> {
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'join_board', boardCode, user })
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Network error' };
+    }
   }
 };

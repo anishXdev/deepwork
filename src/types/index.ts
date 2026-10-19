@@ -141,11 +141,14 @@ export interface CollabNotification {
   type: CollabNotificationType;
   title: string;
   message: string;
+  recipientEmail?: string;
+  senderEmail?: string;
   senderName: string;
   senderAvatar?: string;
   senderColor: string;
   boardId?: string;
   boardName?: string;
+  inviteCode?: string;
   taskId?: string;
   taskTitle?: string;
   timestamp: string;
@@ -288,18 +291,61 @@ export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 export type TimerMode = 'work' | 'break' | 'long_break';
 export type AmbientSoundType = 'none' | 'ocean' | 'stream' | 'rain';
 
-export interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  avatarUrl?: string;
+/**
+ * Redesigned Scalable Deepwork User Schema (v2)
+ * Supports multi-tenancy, board memberships, preferences, audit logging, and security
+ */
+export interface DeepworkUser {
+  id: string; // Unique identifier (e.g. usr_1792412171986)
+  email: string; // Normalized lowercase email
+  name: string; // Display name
+  displayName?: string; // Full preferred name
+  username?: string; // Handle (e.g. @abhishek)
+  avatarUrl?: string; // Avatar URL
   avatar?: string;
+  role?: 'user' | 'admin' | 'owner';
+  authProvider?: 'google' | 'email' | 'guest';
+  emailVerified?: boolean;
   googleConnected: boolean;
   googleCalendarSyncEnabled: boolean;
   googleAccessToken?: string;
   syncKey?: string; // 6-character room key for instant cross-device sync
   lastSyncedAt?: string;
+
+  // Board memberships mapping for scalable multi-tenancy
+  boards?: {
+    boardId: string;
+    role: 'owner' | 'editor' | 'viewer';
+    joinedAt: string;
+  }[];
+
+  // User preferences
+  preferences?: {
+    theme: 'dark' | 'light';
+    soundEnabled: boolean;
+    ambientSound: 'none' | 'rain' | 'whitenoise' | 'deepfocus';
+    notificationsEnabled: boolean;
+    weekStartsOnMonday: boolean;
+  };
+
+  // Performance & Gamification Metrics
+  metrics?: {
+    totalFocusMinutes: number;
+    tasksCompleted: number;
+    currentStreak: number;
+    longestStreak: number;
+    level: number;
+    xp: number;
+  };
+
+  // Audit timestamps
+  createdAt?: string;
+  updatedAt?: string;
+  lastLoginAt?: string;
+  schemaVersion?: number; // Schema v2
 }
+
+export type UserProfile = DeepworkUser;
 
 export interface UserSettings {
   weeklyHoursTarget: number; // e.g. 20 general, 28 for GATE
