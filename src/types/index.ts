@@ -84,14 +84,32 @@ export const SUBJECT_PALETTE: SubjectColor[] = [
 
 export const PRESET_COLORS = SUBJECT_PALETTE.map(c => c.hex);
 
+export interface Tag {
+  id: string;
+  name: string; // e.g. "internship", "hackathon", "frontend", "deep-work"
+  color: string; // hex color
+  icon?: string;
+  createdAt: string;
+}
+
+export const DEFAULT_TAG_PALETTE = [
+  { id: 'tag_internship', name: 'internship', color: '#0C66E4', icon: '💼' },
+  { id: 'tag_hackathon', name: 'hackathon', color: '#8B5CF6', icon: '🚀' },
+  { id: 'tag_dev', name: 'dev & code', color: '#06B6D4', icon: '💻' },
+  { id: 'tag_project', name: 'project', color: '#10B981', icon: '⚡' },
+  { id: 'tag_deepwork', name: 'deep-work', color: '#F59E0B', icon: '🧠' },
+  { id: 'tag_study', name: 'study & research', color: '#EC4899', icon: '📚' },
+  { id: 'tag_urgent', name: 'urgent', color: '#EF4444', icon: '🔥' },
+];
+
 export interface Subject {
   id: string;
   name: string;
-  color: string; // Hex color or Tailwind accent
+  color: string;
   icon?: string;
   weeklyTargetHours?: number;
-  examWeightageMarks?: number; // Approximate marks in GATE (out of 100)
-  highYieldTopics?: string[]; // Quick-add high-weightage GATE subtopics
+  examWeightageMarks?: number;
+  highYieldTopics?: string[];
   createdAt: string;
 }
 
@@ -115,18 +133,23 @@ export interface StudyBoard {
   createdAt: string;
 }
 
-export interface Topic {
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface Task {
   id: string;
   boardId?: string; // ID of the board this card belongs to
-  subjectId: string;
   name: string;
+  tags?: string[]; // array of tag IDs (e.g. ['tag_internship', 'tag_dev'])
+  subjectId?: string; // legacy support for backward compatibility
   approxHours: number; // e.g. 1.5
   scheduledDate: string; // YYYY-MM-DD
   scheduledTime?: string; // HH:mm
   completedHours: number; // accumulated hours
   status: TaskStatus;
+  priority?: TaskPriority;
   category?: GateTaskCategory; // Concept, PYQ, Mock Test, Revision, Notes
   notes?: string;
+  checklist?: { id: string; text: string; done: boolean }[];
   assigneeId?: string; // Collaborator member ID delegated to this task
   assigneeName?: string; // Collaborator display name
   assigneeColor?: string; // Collaborator avatar color
@@ -136,10 +159,16 @@ export interface Topic {
   updatedAt: string;
 }
 
+export type Topic = Task;
+
 export interface StudySession {
   id: string;
-  subjectId: string;
+  boardId?: string;
+  tagId?: string; // Primary tag tracked for this session
+  tags?: string[]; // All tags associated with this session
+  subjectId?: string; // legacy support
   topicId?: string;
+  taskTitle?: string;
   startTime: string; // ISO string
   endTime: string; // ISO string
   durationMinutes: number; // exact minutes
@@ -147,6 +176,41 @@ export interface StudySession {
   mode: 'pomodoro' | 'short_break' | 'long_break' | 'custom';
   completed: boolean;
   notes?: string;
+}
+
+export interface UserGamification {
+  xp: number;
+  level: number;
+  levelTitle: string;
+  totalMinutesFocused: number;
+  totalTasksCompleted: number;
+}
+
+export interface AIProductivityInsight {
+  id: string;
+  type: 'optimization' | 'burnout_alert' | 'peak_hours' | 'time_drift' | 'achievement';
+  title: string;
+  description: string;
+  actionRecommendation: string;
+  tagId?: string;
+  severity: 'info' | 'positive' | 'warning';
+  createdAt: string;
+}
+
+export type WhiteboardTool = 'select' | 'pen' | 'highlighter' | 'eraser' | 'rect' | 'circle' | 'arrow' | 'line' | 'text';
+
+export interface WhiteboardElement {
+  id: string;
+  type: WhiteboardTool;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  points?: { x: number; y: number }[];
+  color: string;
+  strokeWidth: number;
+  fill?: string;
+  text?: string;
 }
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';

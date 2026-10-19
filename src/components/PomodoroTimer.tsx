@@ -23,8 +23,10 @@ import { Haptics } from '../utils/haptics';
 
 export const PomodoroTimer: React.FC = () => {
   const {
+    tags,
     subjects,
     topics,
+    userGamification,
     settings,
     timerMode,
     timeLeft,
@@ -65,8 +67,13 @@ export const PomodoroTimer: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const currentSubject = subjects.find(s => s.id === timerSelectedSubjectId);
-  const availableTopics = topics.filter(t => t.subjectId === timerSelectedSubjectId);
+  const currentTag = tags.find(t => t.id === timerSelectedSubjectId);
+  const currentSubject = currentTag 
+    ? { id: currentTag.id, name: `#${currentTag.name}`, color: currentTag.color } 
+    : subjects.find(s => s.id === timerSelectedSubjectId);
+  const availableTopics = topics.filter(t => 
+    (t.tags && t.tags.includes(timerSelectedSubjectId)) || t.subjectId === timerSelectedSubjectId
+  );
   const currentTopic = topics.find(t => t.id === timerSelectedTopicId);
 
   const isGatePrep = Boolean(settings.isGatePrep);
@@ -374,24 +381,74 @@ export const PomodoroTimer: React.FC = () => {
         )}
       </div>
 
+      {/* ── Gamification XP & Level Status Banner ───────── */}
+      <div className="flex items-center justify-center mb-5">
+        <div
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold select-none shadow-xs"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)'
+          }}
+        >
+          <span className="text-amber-500 font-bold">⭐ Lvl {userGamification.level}</span>
+          <span className="text-slate-300 dark:text-slate-600">•</span>
+          <span className="text-xs text-slate-500">{userGamification.levelTitle}</span>
+          <span className="text-slate-300 dark:text-slate-600">•</span>
+          <span className="font-mono text-blue-600 font-bold">{userGamification.xp} XP</span>
+          <span className="text-slate-300 dark:text-slate-600">•</span>
+          <span className="text-[11px] text-emerald-600 font-semibold">+50 XP per block</span>
+        </div>
+      </div>
+
       {/* ── Focus Target & Ambient Sound Card ──────────────── */}
       <div className="rounded-xl p-4 space-y-3.5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-1.5">
             <BookOpen className="w-4 h-4 text-blue-600" />
             <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-              Linked Study Target
+              Linked Focus Workspace
             </h3>
           </div>
           <span className="text-[10px] font-mono text-slate-400">
-            {studiedSecondsInSession > 0 ? `Session: ${Math.round(studiedSecondsInSession / 60)}m logged` : 'Select target topic'}
+            {studiedSecondsInSession > 0 ? `Session: ${Math.round(studiedSecondsInSession / 60)}m logged` : 'Select tag or topic'}
           </span>
         </div>
+
+        {/* Quick Tag Selector Chips */}
+        {tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+            {tags.map(tag => {
+              const isSelected = timerSelectedSubjectId === tag.id;
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    Haptics.tap();
+                    setTimerSelectedSubjectId(tag.id);
+                    setTimerSelectedTopicId('');
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer"
+                  style={{
+                    background: isSelected ? `${tag.color}25` : 'var(--bg-card-alt)',
+                    color: isSelected ? tag.color : 'var(--text-secondary)',
+                    border: isSelected ? `1.5px solid ${tag.color}` : '1px solid var(--border)',
+                    transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                  }}
+                >
+                  <span>{tag.icon || '🏷️'}</span>
+                  <span>#{tag.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <div>
             <label className="block mb-1 text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>
-              Subject
+              Tag / Category
             </label>
             <select
               value={timerSelectedSubjectId}
@@ -401,7 +458,11 @@ export const PomodoroTimer: React.FC = () => {
               }}
               className="input-base w-full text-xs py-1.5"
             >
-              {subjects.map(s => (
+              <option value="">-- Choose Tag or Category --</option>
+              {tags.map(t => (
+                <option key={t.id} value={t.id}>#{t.name}</option>
+              ))}
+              {subjects.filter(s => !tags.some(t => t.id === s.id)).map(s => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -409,14 +470,14 @@ export const PomodoroTimer: React.FC = () => {
 
           <div>
             <label className="block mb-1 text-[11px] font-bold" style={{ color: 'var(--text-secondary)' }}>
-              Topic (Optional)
+              Topic / Task (Optional)
             </label>
             <select
               value={timerSelectedTopicId}
               onChange={e => setTimerSelectedTopicId(e.target.value)}
               className="input-base w-full text-xs py-1.5"
             >
-              <option value="">-- General Subject Study --</option>
+              <option value="">-- General Category Focus --</option>
               {availableTopics.map(t => (
                 <option key={t.id} value={t.id}>{t.name} ({t.approxHours}h)</option>
               ))}

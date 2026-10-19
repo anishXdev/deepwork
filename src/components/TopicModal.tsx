@@ -10,6 +10,7 @@ export const TopicModal: React.FC = () => {
     closeTopicModal,
     topicModalDefaultDate,
     subjects,
+    tags,
     settings,
     addTopic,
     openCreateSubjectModal,
@@ -18,6 +19,7 @@ export const TopicModal: React.FC = () => {
   } = useApp();
 
   const isGatePrep = Boolean(settings.isGatePrep);
+  const [selectedTagId, setSelectedTagId] = useState<string>(tags[0]?.id || '');
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
   const [category, setCategory] = useState<GateTaskCategory>('pyq');
   const [name, setName] = useState<string>('');
@@ -35,12 +37,14 @@ export const TopicModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetSubId = subjectId || subjects[0]?.id;
-    if (!name.trim() || !targetSubId) return;
+    const targetTagId = selectedTagId || tags[0]?.id;
+    const targetSubId = subjectId || subjects[0]?.id || targetTagId;
+    if (!name.trim()) return;
 
     setIsSubmitting(true);
     try {
       await addTopic({
+        tags: targetTagId ? [targetTagId] : undefined,
         subjectId: targetSubId,
         name: name.trim(),
         category: isGatePrep ? category : undefined,
@@ -157,31 +161,64 @@ export const TopicModal: React.FC = () => {
               </div>
             )}
 
-            {/* Subject Selector */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Subject</label>
-                <button
-                  type="button"
-                  onClick={openCreateSubjectModal}
-                  className="text-xs font-bold hover:underline"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  + New Subject
-                </button>
+            {/* Tag / Domain Selector */}
+            {tags.length > 0 && (
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Tag / Domain
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {tags.map(tag => {
+                    const isSelected = selectedTagId === tag.id;
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => setSelectedTagId(tag.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer"
+                        style={{
+                          background: isSelected ? `${tag.color}25` : 'var(--bg-card-alt)',
+                          color: isSelected ? tag.color : 'var(--text-secondary)',
+                          border: isSelected ? `1.5px solid ${tag.color}` : '1px solid var(--border)',
+                          transform: isSelected ? 'scale(1.03)' : 'scale(1)',
+                        }}
+                      >
+                        <span>{tag.icon || '🏷️'}</span>
+                        <span>#{tag.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <select
-                value={subjectId || subjects[0]?.id || ''}
-                onChange={e => setSubjectId(e.target.value)}
-                className="input-base w-full"
-              >
-                {subjects.map(sub => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}{isGatePrep && sub.examWeightageMarks ? ` — 🎯 ${sub.examWeightageMarks} Marks` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+            )}
+
+            {/* Subject Selector (shown if subjects exist and preparing for GATE or explicit subjects) */}
+            {subjects.length > 0 && isGatePrep && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Subject Syllabus</label>
+                  <button
+                    type="button"
+                    onClick={openCreateSubjectModal}
+                    className="text-xs font-bold hover:underline"
+                    style={{ color: 'var(--accent)' }}
+                  >
+                    + New Subject
+                  </button>
+                </div>
+                <select
+                  value={subjectId || subjects[0]?.id || ''}
+                  onChange={e => setSubjectId(e.target.value)}
+                  className="input-base w-full"
+                >
+                  {subjects.map(sub => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}{sub.examWeightageMarks ? ` — 🎯 ${sub.examWeightageMarks} Marks` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Topic Name */}
             <div>

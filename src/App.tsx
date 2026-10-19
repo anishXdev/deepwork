@@ -2,10 +2,11 @@ import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { TodayTomorrowView } from './components/TodayTomorrowView';
-import { SubjectManager } from './components/SubjectManager';
+import { TagsManager } from './components/TagsManager';
 import { PomodoroTimer } from './components/PomodoroTimer';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { ExcalidrawWhiteboard } from './components/ExcalidrawWhiteboard';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { TopicModal } from './components/TopicModal';
 import { RescheduleModal } from './components/RescheduleModal';
 import { GoogleSyncModal } from './components/GoogleSyncModal';
@@ -30,7 +31,7 @@ const MainContent: React.FC = () => {
 
         <div className="flex-1">
           {activeTab === 'study' && <TodayTomorrowView />}
-          {activeTab === 'subjects' && <SubjectManager />}
+          {(activeTab === 'tags' || activeTab === 'subjects') && <TagsManager />}
           {activeTab === 'timer' && <PomodoroTimer />}
           {activeTab === 'whiteboard' && <ExcalidrawWhiteboard />}
           {activeTab === 'analytics' && <AnalyticsDashboard />}
@@ -52,6 +53,7 @@ const MainContent: React.FC = () => {
         <TaskCelebrationOverlay />
         <StreakModal isOpen={isStreakModalOpen} onClose={closeStreakModal} />
         <StrictFocusOverlay />
+        <KeyboardShortcutsModal />
         <ToastContainer />
       </div>
     </main>

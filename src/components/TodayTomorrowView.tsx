@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { Topic, Subject, GateTaskCategory, GATE_TASK_CATEGORIES, GATE_STREAM_SYLLABUS, BoardMember } from '../types';
+import { Topic, Subject, Tag, GateTaskCategory, GATE_TASK_CATEGORIES, GATE_STREAM_SYLLABUS, BoardMember } from '../types';
 import {
   Play,
   Plus,
@@ -22,7 +22,8 @@ import {
   Filter,
   Users,
   UserPlus,
-  LayoutGrid
+  LayoutGrid,
+  Hash
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { CreateBoardModal } from './CreateBoardModal';
@@ -34,6 +35,7 @@ export const TodayTomorrowView: React.FC = () => {
   const {
     topics,
     subjects,
+    tags,
     settings,
     updateSettings,
     toggleTopicCompletion,
@@ -58,7 +60,7 @@ export const TodayTomorrowView: React.FC = () => {
   const targetStream = settings.gateTargetStream || 'CSE';
   const customExamName = settings.examName || 'Target Exam';
 
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string>('all');
   const [isEditingExamModal, setIsEditingExamModal] = useState<boolean>(false);
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState<boolean>(false);
@@ -68,7 +70,7 @@ export const TodayTomorrowView: React.FC = () => {
   // Active inline add card per column
   const [activeInlineAddColumn, setActiveInlineAddColumn] = useState<ColumnId | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
-  const [inlineSubjectId, setInlineSubjectId] = useState('');
+  const [inlineTagId, setInlineTagId] = useState('');
   const [inlineHours, setInlineHours] = useState(1.5);
   const [inlineCategory, setInlineCategory] = useState<GateTaskCategory>('concept');
   const [inlineAssigneeId, setInlineAssigneeId] = useState<string>('');
@@ -103,17 +105,17 @@ export const TodayTomorrowView: React.FC = () => {
   // Filter topics for the active board
   const boardTopics = topics.filter(t => !t.boardId || t.boardId === activeBoardId);
 
-  // Filter topics by subject
-  const subjectFiltered = selectedSubjectFilter === 'all'
+  // Filter topics by tag (also matches legacy subjectId for backward compatibility)
+  const tagFiltered = selectedTagFilter === 'all'
     ? boardTopics
-    : boardTopics.filter(t => t.subjectId === selectedSubjectFilter);
+    : boardTopics.filter(t => (t.tags && t.tags.includes(selectedTagFilter)) || t.subjectId === selectedTagFilter);
 
   // Filter topics by assignee / collaborator
   const filteredTopics = selectedAssigneeFilter === 'all'
-    ? subjectFiltered
+    ? tagFiltered
     : selectedAssigneeFilter === 'unassigned'
-    ? subjectFiltered.filter(t => !t.assigneeId)
-    : subjectFiltered.filter(t => t.assigneeId === selectedAssigneeFilter);
+    ? tagFiltered.filter(t => !t.assigneeId)
+    : tagFiltered.filter(t => t.assigneeId === selectedAssigneeFilter);
 
   // Group into Trello Kanban columns
   const backlogTopics = filteredTopics.filter(t =>
@@ -134,7 +136,7 @@ export const TodayTomorrowView: React.FC = () => {
 
   const completedTopics = filteredTopics.filter(t => t.status === 'completed');
 
-  const getSubject = (id: string): Subject | undefined => subjects.find(s => s.id === id);
+  const getSubject = (id?: string): Subject | undefined => id ? subjects.find(s => s.id === id) : undefined;
 
   const startFocusOnTopic = (topic: Topic) => {
     Haptics.tap();
@@ -194,11 +196,7 @@ export const TodayTomorrowView: React.FC = () => {
       return;
     }
 
-    let targetSubId = inlineSubjectId || subjects[0]?.id;
-    if (!targetSubId) {
-      const defSub = subjects[0] || { id: 'default' };
-      targetSubId = defSub.id;
-    }
+    const targetTagId = inlineTagId || (selectedTagFilter !== 'all' ? selectedTagFilter : tags[0]?.id);
 
     let scheduledDate = todayStr;
     if (colId === 'tomorrow') scheduledDate = tomorrowStr;
@@ -213,7 +211,8 @@ export const TodayTomorrowView: React.FC = () => {
     await addTopic({
       boardId: activeBoardId,
       name: inlineTitle.trim(),
-      subjectId: targetSubId,
+      tags: targetTagId ? [targetTagId] : undefined,
+      subjectId: targetTagId, // backward compatibility
       category: isGatePrep ? inlineCategory : undefined,
       approxHours: Number(inlineHours) || 1.5,
       scheduledDate,
@@ -386,20 +385,21 @@ export const TodayTomorrowView: React.FC = () => {
             ))}
           </select>
 
-          {/* Subject Filter Dropdown */}
+          {/* Tag Filter Dropdown */}
           <select
-            value={selectedSubjectFilter}
-            onChange={e => setSelectedSubjectFilter(e.target.value)}
+            value={selectedTagFilter}
+            onChange={e => setSelectedTagFilter(e.target.value)}
             className="text-xs font-medium px-2.5 py-1.5 rounded-md cursor-pointer transition-colors"
             style={{
               background: 'var(--bg-card)',
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
             }}
+            title="Filter tasks by tag"
           >
-            <option value="all">Subject: All ({boardTopics.length})</option>
-            {subjects.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+            <option value="all">Tag: All ({boardTopics.length})</option>
+            {tags.map(t => (
+              <option key={t.id} value={t.id}>#{t.name}</option>
             ))}
           </select>
 
@@ -436,9 +436,9 @@ export const TodayTomorrowView: React.FC = () => {
           onInlineSubmit={() => handleInlineAddSubmit('backlog')}
           inlineTitle={inlineTitle}
           setInlineTitle={setInlineTitle}
-          subjects={subjects}
-          inlineSubjectId={inlineSubjectId}
-          setInlineSubjectId={setInlineSubjectId}
+          tags={tags}
+          inlineTagId={inlineTagId}
+          setInlineTagId={setInlineTagId}
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
           isGatePrep={isGatePrep}
@@ -447,6 +447,7 @@ export const TodayTomorrowView: React.FC = () => {
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
+              tags={tags}
               isGatePrep={isGatePrep}
               members={activeBoard?.members || []}
               isDelegating={activeDelegatingTopicId === topic.id}
@@ -488,9 +489,9 @@ export const TodayTomorrowView: React.FC = () => {
           onInlineSubmit={() => handleInlineAddSubmit('today')}
           inlineTitle={inlineTitle}
           setInlineTitle={setInlineTitle}
-          subjects={subjects}
-          inlineSubjectId={inlineSubjectId}
-          setInlineSubjectId={setInlineSubjectId}
+          tags={tags}
+          inlineTagId={inlineTagId}
+          setInlineTagId={setInlineTagId}
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
           isGatePrep={isGatePrep}
@@ -499,6 +500,7 @@ export const TodayTomorrowView: React.FC = () => {
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
+              tags={tags}
               isGatePrep={isGatePrep}
               members={activeBoard?.members || []}
               isDelegating={activeDelegatingTopicId === topic.id}
@@ -539,9 +541,9 @@ export const TodayTomorrowView: React.FC = () => {
           onInlineSubmit={() => handleInlineAddSubmit('tomorrow')}
           inlineTitle={inlineTitle}
           setInlineTitle={setInlineTitle}
-          subjects={subjects}
-          inlineSubjectId={inlineSubjectId}
-          setInlineSubjectId={setInlineSubjectId}
+          tags={tags}
+          inlineTagId={inlineTagId}
+          setInlineTagId={setInlineTagId}
           inlineHours={inlineHours}
           setInlineHours={setInlineHours}
           isGatePrep={isGatePrep}
@@ -550,6 +552,7 @@ export const TodayTomorrowView: React.FC = () => {
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
+              tags={tags}
               isGatePrep={isGatePrep}
               members={activeBoard?.members || []}
               isDelegating={activeDelegatingTopicId === topic.id}
@@ -588,9 +591,9 @@ export const TodayTomorrowView: React.FC = () => {
           onInlineSubmit={() => {}}
           inlineTitle=""
           setInlineTitle={() => {}}
-          subjects={subjects}
-          inlineSubjectId=""
-          setInlineSubjectId={() => {}}
+          tags={tags}
+          inlineTagId=""
+          setInlineTagId={() => {}}
           inlineHours={1.5}
           setInlineHours={() => {}}
           isGatePrep={isGatePrep}
@@ -600,6 +603,7 @@ export const TodayTomorrowView: React.FC = () => {
               key={topic.id}
               topic={topic}
               subject={getSubject(topic.subjectId)}
+              tags={tags}
               isGatePrep={isGatePrep}
               isCompleted
               members={activeBoard?.members || []}
@@ -742,9 +746,9 @@ interface TrelloColumnProps {
   onInlineSubmit: () => void;
   inlineTitle: string;
   setInlineTitle: (val: string) => void;
-  subjects: Subject[];
-  inlineSubjectId: string;
-  setInlineSubjectId: (val: string) => void;
+  tags: Tag[];
+  inlineTagId: string;
+  setInlineTagId: (val: string) => void;
   inlineHours: number;
   setInlineHours: (val: number) => void;
   isGatePrep: boolean;
@@ -767,9 +771,9 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
   onInlineSubmit,
   inlineTitle,
   setInlineTitle,
-  subjects,
-  inlineSubjectId,
-  setInlineSubjectId,
+  tags,
+  inlineTagId,
+  setInlineTagId,
   inlineHours,
   setInlineHours,
   hideAddButton,
@@ -829,12 +833,12 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
 
             <div className="flex items-center gap-2">
               <select
-                value={inlineSubjectId}
-                onChange={e => setInlineSubjectId(e.target.value)}
+                value={inlineTagId}
+                onChange={e => setInlineTagId(e.target.value)}
                 className="input-base text-xs py-1 flex-1 truncate"
               >
-                {subjects.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                {tags.map(t => (
+                  <option key={t.id} value={t.id}>#{t.name}</option>
                 ))}
               </select>
 
@@ -903,6 +907,7 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
 interface TrelloCardProps {
   topic: Topic;
   subject?: Subject;
+  tags: Tag[];
   isGatePrep: boolean;
   isCompleted?: boolean;
   members: BoardMember[];
@@ -923,6 +928,7 @@ interface TrelloCardProps {
 const TrelloCard: React.FC<TrelloCardProps> = ({
   topic,
   subject,
+  tags,
   isGatePrep,
   isCompleted,
   members,
@@ -938,16 +944,35 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
 }) => {
   const catMeta = isGatePrep && topic.category ? GATE_TASK_CATEGORIES[topic.category] : null;
 
+  const topicTags = (topic.tags || [])
+    .map(tid => tags.find(t => t.id === tid))
+    .filter((t): t is Tag => Boolean(t));
+
   return (
     <div
       draggable
       onDragStart={onDragStart}
       className={`trello-card group flex flex-col gap-2 relative ${isCompleted ? 'opacity-70' : ''}`}
     >
-      {/* Top Labels: Subject Badge & Delegated Member Avatar */}
+      {/* Top Labels: Tags Badge / Subject Badge & Delegated Member Avatar */}
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex flex-wrap items-center gap-1 min-w-0">
-          {subject && (
+          {topicTags.map(t => (
+            <span
+              key={t.id}
+              className="trello-badge"
+              style={{
+                backgroundColor: `${t.color}15`,
+                color: t.color,
+                border: `1px solid ${t.color}35`,
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: t.color }} />
+              <span className="truncate max-w-[120px]">#{t.name}</span>
+            </span>
+          ))}
+
+          {topicTags.length === 0 && subject && (
             <span
               className="trello-badge"
               style={{

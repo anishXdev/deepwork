@@ -16,6 +16,9 @@ import {
   Bell,
   BellOff,
   PenTool,
+  Hash,
+  Keyboard,
+  ShieldCheck
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { DStudyLogo } from './DStudyLogo';
@@ -36,6 +39,8 @@ export const Navbar: React.FC = () => {
     toggleTheme,
     isTimerRunning,
     timeLeft,
+    userGamification,
+    setIsShortcutsModalOpen
   } = useApp();
 
   const isDark = settings.theme === 'dark';
@@ -62,7 +67,7 @@ export const Navbar: React.FC = () => {
 
   const navItems = [
     { id: 'study',      label: 'Board',      icon: LayoutGrid },
-    { id: 'subjects',   label: 'Subjects',   icon: BookOpen   },
+    { id: 'tags',       label: 'Tags',       icon: Hash       },
     { id: 'timer',      label: 'Focus',      icon: Timer      },
     { id: 'whiteboard', label: 'Whiteboard', icon: PenTool    },
     { id: 'analytics',  label: 'Analytics',  icon: BarChart3  },
@@ -146,6 +151,31 @@ export const Navbar: React.FC = () => {
 
         {/* ── Right Controls ──────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+
+          {/* Gamification Level & XP pill */}
+          <div
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold select-none"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)'
+            }}
+            title={`${userGamification.levelTitle} • +35 XP per task, +50 XP per focus block`}
+          >
+            <span className="text-amber-500">⭐ Lvl {userGamification.level}</span>
+            <span className="text-slate-300 dark:text-slate-600">•</span>
+            <span className="font-mono text-blue-600">{userGamification.xp} XP</span>
+          </div>
+
+          {/* Keyboard Shortcuts Trigger */}
+          <button
+            onClick={() => { Haptics.tap(); setIsShortcutsModalOpen(true); }}
+            title="Keyboard Shortcuts (Press ?)"
+            className="btn-ghost hidden sm:inline-flex"
+            style={{ padding: '6px' }}
+          >
+            <Keyboard className="w-4 h-4" />
+          </button>
 
           {/* Streak badge */}
           <button

@@ -121,7 +121,7 @@ export const ObsidianGraphView: React.FC = () => {
 
     // Active subjects to include
     const activeSubjectIds = new Set<string>();
-    filteredTopics.forEach(t => activeSubjectIds.add(t.subjectId));
+    filteredTopics.forEach(t => activeSubjectIds.add(t.subjectId || 'default'));
     if (subjectFilter !== 'all') {
       activeSubjectIds.add(subjectFilter);
     }
@@ -156,8 +156,9 @@ export const ObsidianGraphView: React.FC = () => {
     // Group topics by subject for orderly clustered placement
     const topicsBySubj = new Map<string, typeof filteredTopics>();
     filteredTopics.forEach(t => {
-      if (!topicsBySubj.has(t.subjectId)) topicsBySubj.set(t.subjectId, []);
-      topicsBySubj.get(t.subjectId)!.push(t);
+      const sId = t.subjectId || 'default';
+      if (!topicsBySubj.has(sId)) topicsBySubj.set(sId, []);
+      topicsBySubj.get(sId)!.push(t);
     });
 
     topicsBySubj.forEach((topicList, subjId) => {
@@ -165,7 +166,8 @@ export const ObsidianGraphView: React.FC = () => {
       const totalInSubj = topicList.length;
 
       topicList.forEach((topic, idx) => {
-        const parentSubject = subjects.find(s => s.id === topic.subjectId);
+        const sId = topic.subjectId || 'default';
+        const parentSubject = subjects.find(s => s.id === sId);
         const subjectColor = parentSubject?.color || '#00f2fe';
         const isDone = topic.status === 'completed';
         
@@ -187,7 +189,7 @@ export const ObsidianGraphView: React.FC = () => {
           y: ty,
           vx: 0,
           vy: 0,
-          subjectId: topic.subjectId,
+          subjectId: sId,
           topicData: topic,
           status: topic.status
         });
@@ -195,7 +197,7 @@ export const ObsidianGraphView: React.FC = () => {
         // Link topic to its parent subject
         links.push({
           source: topic.id,
-          target: topic.subjectId,
+          target: sId,
           distance: 52,
           strength: 0.15
         });
@@ -205,8 +207,9 @@ export const ObsidianGraphView: React.FC = () => {
     // Link sequential topics within each subject
     const subjectTopicMap = new Map<string, string[]>();
     filteredTopics.forEach(t => {
-      if (!subjectTopicMap.has(t.subjectId)) subjectTopicMap.set(t.subjectId, []);
-      subjectTopicMap.get(t.subjectId)!.push(t.id);
+      const sId = t.subjectId || 'default';
+      if (!subjectTopicMap.has(sId)) subjectTopicMap.set(sId, []);
+      subjectTopicMap.get(sId)!.push(t.id);
     });
 
     subjectTopicMap.forEach(topicIds => {

@@ -13,7 +13,9 @@ import {
   AmbientSoundType,
   GATE_STREAM_SYLLABUS,
   StudyBoard,
-  BoardMember
+  BoardMember,
+  Tag,
+  UserGamification
 } from '../types';
 import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
@@ -31,7 +33,16 @@ interface AppContextType {
   settings: UserSettings;
   profile: UserProfile;
   streaks: StreakData;
-  activeTab: 'study' | 'subjects' | 'timer' | 'analytics' | 'whiteboard' | 'sync';
+  tags: Tag[];
+  addTag: (name: string, color?: string, icon?: string) => Tag;
+  deleteTag: (id: string) => void;
+  userGamification: UserGamification;
+  addXp: (amount: number, reason?: string) => void;
+  isShortcutsModalOpen: boolean;
+  setIsShortcutsModalOpen: (open: boolean) => void;
+  exportBackup: () => void;
+  importBackup: (file: File) => Promise<boolean>;
+  activeTab: 'study' | 'subjects' | 'tags' | 'timer' | 'analytics' | 'whiteboard' | 'sync';
   activeFocusTopic: Topic | null;
   rescheduleTargetTopic: Topic | null;
   isTopicModalOpen: boolean;
@@ -105,7 +116,7 @@ interface AppContextType {
   delegateTopic: (topicId: string, member: BoardMember | null) => void;
 
   // Actions
-  setActiveTab: (tab: 'study' | 'subjects' | 'timer' | 'analytics' | 'whiteboard' | 'sync') => void;
+  setActiveTab: (tab: 'study' | 'subjects' | 'tags' | 'timer' | 'analytics' | 'whiteboard' | 'sync') => void;
   setActiveFocusTopic: (topic: Topic | null) => void;
   openAddTopicModal: (defaultDate?: string) => void;
   closeTopicModal: () => void;
@@ -155,9 +166,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [streaks, setStreaks] = useState<StreakData>(() => StorageService.getStreaks());
   const [boards, setBoards] = useState<StudyBoard[]>(() => StorageService.getBoards());
   const [activeBoardId, setActiveBoardIdState] = useState<string>(() => StorageService.getActiveBoardId());
+  const [tags, setTags] = useState<Tag[]>(() => StorageService.getTags());
+  const [userGamification, setUserGamification] = useState<UserGamification>(() => StorageService.getGamification());
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'study' | 'subjects' | 'timer' | 'analytics' | 'whiteboard' | 'sync'>('study');
+  const [activeTab, setActiveTab] = useState<'study' | 'subjects' | 'tags' | 'timer' | 'analytics' | 'whiteboard' | 'sync'>('study');
   const [activeFocusTopic, setActiveFocusTopicState] = useState<Topic | null>(null);
+
+  useEffect(() => {
+    StorageService.saveTags(tags);
+  }, [tags]);
+
+  const addTag = (name: string, color = '#0C66E4', icon = '🏷️'): Tag => {
+    const created = StorageService.addTag(name, color, icon);
+    setTags(StorageService.getTags());
+    Notifications.toast('success', `🏷️ Tag "#${created.name}" created!`);
+    return created;
+  };
+
+  const deleteTag = (id: string) => {
+    StorageService.deleteTag(id);
+    setTags(StorageService.getTags());
+    Notifications.toast('info', 'Tag deleted.');
+  };
+
+  const addXp = (amount: number, reason = '') => {
+    const res = StorageService.addXp(amount);
+    setUserGamification(res.data);
+    if (res.leveledUp) {
+      sound.playCompletionChime();
+      confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } });
+      Notifications.toast('success', `🎉 LEVEL UP! You reached Level ${res.data.level}: ${res.data.levelTitle}!`);
+    } else if (reason) {
+      Notifications.toast('info', `⭐ +${amount} XP (${reason})`);
+    }
+  };
+
+  const exportBackup = () => {
+    const data = StorageService.exportAllData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dstudy-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Notifications.toast('success', '💾 Full backup exported successfully!');
+  };
+
+  const importBackup = async (file: File): Promise<boolean> => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const success = StorageService.importData(parsed);
+      if (success) {
+        setTags(StorageService.getTags());
+        setBoards(StorageService.getBoards());
+        setTopics(StorageService.getTopics());
+        setSessions(StorageService.getSessions());
+        setSettings(StorageService.getSettings());
+        setProfile(StorageService.getProfile());
+        setStreaks(StorageService.getStreaks());
+        setUserGamification(StorageService.getGamification());
+        Notifications.toast('success', '✅ Backup restored cleanly without data loss!');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      Notifications.toast('warning', '❌ Failed to parse backup file.');
+      return false;
+    }
+  };
 
   useEffect(() => {
     StorageService.saveBoards(boards);
@@ -289,7 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setActiveFocusTopic = (topic: Topic | null) => {
     setActiveFocusTopicState(topic);
     if (topic) {
-      setTimerSelectedSubjectId(topic.subjectId);
+      setTimerSelectedSubjectId(topic.subjectId || '');
       setTimerSelectedTopicId(topic.id);
     }
   };
@@ -811,6 +890,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           sound.playCompletionChime();
           Haptics.success();
+          addXp(35, 'Task Conquered!');
 
           const quotes = [
             "Outstanding focus! Every conquered task strengthens your momentum.",
@@ -886,6 +966,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 1. Add session
     setSessions(prev => [newSession, ...prev]);
+    addXp(Math.max(15, Math.round(durationMinutes * 1.5)), 'Deep Focus Time');
 
     // 2. Increment topic completed hours if associated
     if (topicId) {
@@ -1072,6 +1153,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCustomTimerMinutes,
         addFiveMinutes,
         manualCompleteAndLog,
+        // Tags & Gamification
+        tags,
+        addTag,
+        deleteTag,
+        userGamification,
+        addXp,
+        isShortcutsModalOpen,
+        setIsShortcutsModalOpen,
+        exportBackup,
+        importBackup,
         // Boards & Collaborators
         boards,
         activeBoardId,
