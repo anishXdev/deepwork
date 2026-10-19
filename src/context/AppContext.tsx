@@ -21,9 +21,10 @@ import {
   CollabCallParticipant,
   CallType,
   ActiveCallState,
-  IncomingCall
+  IncomingCall,
+  OutgoingCallState
 } from '../types';
-import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects, generateBoardInviteCode } from '../services/storage';
+import { StorageService, DEFAULT_SETTINGS, DEFAULT_PROFILE, getSimpleStarterSubjects, getGateStarterSubjects, generateBoardInviteCode, generateUniqueBoardInviteCode } from '../services/storage';
 import { AnalyticsService } from '../services/analytics';
 import { GoogleCalendarService } from '../services/googleCalendar';
 import { GoogleAuthService } from '../services/googleAuth';
@@ -31,6 +32,8 @@ import { CloudSyncService } from '../services/cloudSync';
 import { sound } from '../services/audio';
 import { Notifications } from '../services/notifications';
 import { Haptics } from '../utils/haptics';
+import { RealtimeCollab } from '../services/realtimeCall';
+import { RingtoneService } from '../services/ringtone';
 
 interface AppContextType {
   subjects: Subject[];
@@ -148,7 +151,9 @@ interface AppContextType {
   isTeamRoomOpen: boolean;
   setIsTeamRoomOpen: (open: boolean) => void;
   activeCall: ActiveCallState | null;
+  outgoingCall: OutgoingCallState | null;
   startCall: (type: CallType, selectedMemberIds?: string[]) => void;
+  cancelOutgoingCall: () => void;
   endCall: () => void;
   toggleCallMute: () => void;
   toggleCallVideo: () => void;
@@ -157,6 +162,7 @@ interface AppContextType {
   acceptIncomingCall: () => void;
   rejectIncomingCall: () => void;
   simulateIncomingCall: (caller?: { name: string; avatar?: string; color: string }) => void;
+  remoteMediaStream: MediaStream | null;
   chatMessages: ChatMessage[];
   sendChatMessage: (content: string, taskId?: string, taskTitle?: string) => void;
 
@@ -337,12 +343,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     Notifications.toast('info', '👋 You have been signed out successfully.');
   };
 
-  // Team Room & Audio/Video Call State
+  // Team Room & Audio/Video Call State with Realtime WebRTC & Sockets
   const [isTeamRoomOpen, setIsTeamRoomOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => StorageService.getChatMessages());
   const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [outgoingCall, setOutgoingCall] = useState<OutgoingCallState | null>(null);
+  const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
 
+  const outgoingCallRef = useRef<OutgoingCallState | null>(null);
+  outgoingCallRef.current = outgoingCall;
+  const activeCallRef = useRef<ActiveCallState | null>(null);
+  activeCallRef.current = activeCall;
+
+  // Initialize and maintain WebSocket connection
+  useEffect(() => {
+    if (profile.email) {
+      RealtimeCollab.connect(
+        profile.email,
+        activeBoardId,
+        profile.id || 'usr_me',
+        profile.name || profile.email.split('@')[0]
+      );
+    }
+  }, [profile.email, activeBoardId, profile.id, profile.name]);
+
+  // Register Realtime Collab Callbacks
+  useEffect(() => {
+    RealtimeCollab.setCallbacks({
+      onIncomingCall: (call) => {
+        setIncomingCall(call);
+        RingtoneService.playIncomingRing();
+        sound.playNotificationPop();
+      },
+      onCallAccepted: ({ callId, peerId, peerName }) => {
+        RingtoneService.stopOutgoingRing();
+        RingtoneService.playCallConnectedTone();
+        const callType = outgoingCallRef.current?.type || 'video';
+        setOutgoingCall(null);
+        setActiveCall({
+          active: true,
+          callId,
+          type: callType,
+          isMuted: false,
+          isVideoOn: callType === 'video',
+          isScreenSharing: false,
+          durationSeconds: 0,
+          participants: [
+            {
+              id: peerId,
+              name: peerName,
+              color: '#10B981',
+              isMuted: false,
+              isVideoOn: callType === 'video',
+              isSpeaking: false
+            }
+          ],
+          selectedMemberIds: [peerId]
+        });
+        setIsTeamRoomOpen(true);
+        Notifications.toast('success', `🎉 ${peerName} accepted the call! Live meeting started.`);
+      },
+      onCallDeclined: ({ peerName }) => {
+        RingtoneService.stopOutgoingRing();
+        RingtoneService.playCallEndedTone();
+        setOutgoingCall(null);
+        Notifications.toast('info', `📞 ${peerName || 'Teammate'} declined the call.`);
+      },
+      onCallCancelled: () => {
+        RingtoneService.stopIncomingRing();
+        setIncomingCall(null);
+        Notifications.toast('info', 'Call was cancelled by the caller.');
+      },
+      onCallEnded: () => {
+        RingtoneService.stopAll();
+        RingtoneService.playCallEndedTone();
+        setActiveCall(null);
+        setOutgoingCall(null);
+        setIncomingCall(null);
+        setRemoteMediaStream(null);
+        Notifications.toast('info', 'Call ended.');
+      },
+      onRemoteStream: (stream) => {
+        setRemoteMediaStream(stream);
+      },
+      onChatMessage: (msg) => {
+        setChatMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        StorageService.addChatMessage(msg);
+        sound.playNotificationPop();
+      }
+    });
+  }, []);
+
+  // Outgoing call ringing elapsed timer (timeout after 45s)
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (outgoingCall && outgoingCall.status === 'ringing') {
+      timer = setInterval(() => {
+        setOutgoingCall(prev => {
+          if (!prev) return null;
+          const secs = prev.ringingSeconds + 1;
+          if (secs > 45) {
+            RingtoneService.stopOutgoingRing();
+            RingtoneService.playCallEndedTone();
+            RealtimeCollab.cancelRingingCall(prev.callId);
+            Notifications.toast('warning', '⚠️ No response from teammate. Call timed out.');
+            return null;
+          }
+          return { ...prev, ringingSeconds: secs };
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [outgoingCall?.status]);
+
+  // Active call duration counter
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (activeCall?.active) {
@@ -355,61 +475,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [activeCall?.active]);
 
-  const startCall = (type: CallType, selectedMemberIds?: string[]) => {
+  const startCall = async (type: CallType, selectedMemberIds?: string[]) => {
     Haptics.success();
-    sound.playCompletionChime();
     const currentBoard = boards.find(b => b.id === activeBoardId);
     const allMembers = currentBoard?.members || [];
 
-    // Filter only members that were selected to be called
+    // Filter callable members (exclude self)
+    const otherMembers = allMembers.filter(
+      m => (m.email || '').toLowerCase() !== (profile.email || '').toLowerCase()
+    );
+
     const targetMembers = selectedMemberIds && selectedMemberIds.length > 0
-      ? allMembers.filter(m => selectedMemberIds.includes(m.id))
-      : allMembers;
+      ? otherMembers.filter(m => selectedMemberIds.includes(m.id))
+      : otherMembers;
 
-    const callParticipants: CollabCallParticipant[] = targetMembers.map(m => ({
-      id: m.id,
-      name: m.name,
-      color: m.color,
-      isMuted: false,
-      isVideoOn: type === 'video',
-      isSpeaking: false
-    }));
-
-    if (callParticipants.length === 0) {
-      callParticipants.push(
-        { id: profile.id || 'usr_me', name: profile.name || 'You', color: '#0C66E4', isMuted: false, isVideoOn: type === 'video', isSpeaking: false }
-      );
+    if (targetMembers.length === 0) {
+      Notifications.toast('warning', '⚠️ Please invite or select another collaborator to call.');
+      return;
     }
 
-    const memberIds = callParticipants.map(p => p.id);
+    const targetEmails = targetMembers.map(m => m.email).filter(Boolean);
+    const memberIds = targetMembers.map(m => m.id);
 
-    setActiveCall({
-      active: true,
-      type,
-      isMuted: false,
-      isVideoOn: type === 'video',
-      isScreenSharing: false,
-      durationSeconds: 0,
-      participants: callParticipants,
-      selectedMemberIds: memberIds
+    // Setup local media stream (camera/mic)
+    await RealtimeCollab.setupLocalMedia(type);
+
+    const callId = RealtimeCollab.startRingingCall({
+      callType: type,
+      boardId: activeBoardId,
+      boardName: currentBoard?.name || 'Deepwork Board',
+      targetEmails,
+      targetMemberIds: memberIds,
+      callerColor: '#0C66E4',
+      callerAvatar: profile.avatar || profile.avatarUrl
     });
+
+    setOutgoingCall({
+      callId,
+      type,
+      status: 'ringing',
+      targetMemberIds: memberIds,
+      targetNames: targetMembers.map(m => m.name),
+      targetEmails,
+      boardId: activeBoardId,
+      boardName: currentBoard?.name || 'Deepwork Board',
+      ringingSeconds: 0
+    });
+
+    RingtoneService.playOutgoingRing();
     setIsTeamRoomOpen(true);
 
     StorageService.logTelemetryEvent('call_started', {
       callType: type,
-      participantCount: callParticipants.length,
+      participantCount: targetMembers.length,
       boardTitle: currentBoard?.name
     });
 
-    Notifications.toast('success', `📞 Started encrypted ${type === 'video' ? 'Video' : 'Audio'} Call with ${callParticipants.length} selected teammate(s)!`);
+    Notifications.toast('info', `📞 Calling ${targetMembers.map(m => m.name).join(', ')}... Ringing...`);
   };
 
-  const acceptIncomingCall = () => {
+  const cancelOutgoingCall = () => {
+    Haptics.tap();
+    RingtoneService.stopOutgoingRing();
+    RingtoneService.playCallEndedTone();
+    if (outgoingCall) {
+      RealtimeCollab.cancelRingingCall(outgoingCall.callId);
+    }
+    setOutgoingCall(null);
+    Notifications.toast('info', 'Call cancelled.');
+  };
+
+  const acceptIncomingCall = async () => {
     if (!incomingCall) return;
     Haptics.success();
-    sound.playCompletionChime();
+    RingtoneService.stopIncomingRing();
+    RingtoneService.playCallConnectedTone();
+
+    // Prepare local camera/mic stream
+    await RealtimeCollab.setupLocalMedia(incomingCall.type);
+
+    RealtimeCollab.acceptIncomingCall(incomingCall.id, incomingCall.boardId, incomingCall.callerEmail || '');
+
     setActiveCall({
       active: true,
+      callId: incomingCall.id,
       type: incomingCall.type,
       isMuted: false,
       isVideoOn: incomingCall.type === 'video',
@@ -418,14 +567,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       participants: incomingCall.participants,
       selectedMemberIds: incomingCall.participants.map(p => p.id)
     });
+
     setIncomingCall(null);
     setIsTeamRoomOpen(true);
-    Notifications.toast('success', `Connected to call with ${incomingCall.callerName}!`);
+    Notifications.toast('success', `Connected to live call with ${incomingCall.callerName}!`);
   };
 
   const rejectIncomingCall = () => {
     if (!incomingCall) return;
     Haptics.warning();
+    RingtoneService.stopIncomingRing();
+    RealtimeCollab.rejectIncomingCall(incomingCall.id, incomingCall.callerEmail || '');
     Notifications.toast('info', `Call from ${incomingCall.callerName} declined.`);
     setIncomingCall(null);
   };
@@ -433,13 +585,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const simulateIncomingCall = (caller?: { name: string; avatar?: string; color: string }) => {
     const currentBoard = boards.find(b => b.id === activeBoardId);
     const callerName = caller?.name || 'Teammate';
-    sound.playCompletionChime();
+    RingtoneService.playIncomingRing();
     setIncomingCall({
       id: 'call_' + Date.now(),
       boardId: activeBoardId,
       boardName: currentBoard?.name || 'Workspace',
       callerId: 'usr_collab',
       callerName,
+      callerEmail: 'demo@deepwork.app',
       callerColor: caller?.color || '#0C66E4',
       callerAvatar: caller?.avatar || '',
       type: 'video',
@@ -452,37 +605,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const endCall = () => {
     Haptics.tap();
+    RingtoneService.stopAll();
+    RingtoneService.playCallEndedTone();
+    RealtimeCollab.endActiveCall(activeCall?.callId);
     setActiveCall(null);
+    setOutgoingCall(null);
+    setRemoteMediaStream(null);
     Notifications.toast('info', 'Call ended.');
   };
 
   const toggleCallMute = () => {
     Haptics.tap();
-    setActiveCall(prev => prev ? { ...prev, isMuted: !prev.isMuted } : null);
+    setActiveCall(prev => {
+      if (!prev) return null;
+      const nextMuted = !prev.isMuted;
+      RealtimeCollab.setMuted(nextMuted);
+      return { ...prev, isMuted: nextMuted };
+    });
   };
 
   const toggleCallVideo = () => {
     Haptics.tap();
-    setActiveCall(prev => prev ? { ...prev, isVideoOn: !prev.isVideoOn } : null);
+    setActiveCall(prev => {
+      if (!prev) return null;
+      const nextVideo = !prev.isVideoOn;
+      RealtimeCollab.setVideoEnabled(nextVideo);
+      return { ...prev, isVideoOn: nextVideo };
+    });
   };
 
-  const toggleCallScreenShare = () => {
+  const toggleCallScreenShare = async () => {
     Haptics.tap();
-    setActiveCall(prev => prev ? { ...prev, isScreenSharing: !prev.isScreenSharing } : null);
+    if (activeCall?.isScreenSharing) {
+      RealtimeCollab.stopScreenShare();
+      setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
+      Notifications.toast('info', 'Screen sharing stopped.');
+    } else {
+      const stream = await RealtimeCollab.startScreenShare();
+      if (stream) {
+        setActiveCall(prev => prev ? { ...prev, isScreenSharing: true } : null);
+        Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
+        stream.getVideoTracks()[0].onended = () => {
+          RealtimeCollab.stopScreenShare();
+          setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
+          Notifications.toast('info', 'Screen sharing stopped.');
+        };
+      }
+    }
   };
 
   const sendChatMessage = (content: string, taskId?: string, taskTitle?: string) => {
     if (!content.trim()) return;
-    StorageService.addChatMessage({
+    const newMsg = StorageService.addChatMessage({
       boardId: activeBoardId,
       senderId: profile.id || 'user_current',
-      senderName: profile.name || 'Deepwork Member',
+      senderName: profile.name || profile.email.split('@')[0] || 'Deepwork Member',
       senderColor: '#0C66E4',
       content: content.trim(),
       taskId,
       taskTitle
     });
     setChatMessages(StorageService.getChatMessages());
+    RealtimeCollab.broadcastChatMessage(newMsg);
     Haptics.tap();
   };
 
@@ -773,6 +957,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createBoard = (name: string, description = '', color = '#0C66E4', icon = '📋'): StudyBoard => {
     const id = 'board_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const existingCodes = boards.map(b => b.inviteCode).filter(Boolean) as string[];
+    const uniqueCode = generateUniqueBoardInviteCode(existingCodes);
     const newBoard: StudyBoard = {
       id,
       name: name.trim(),
@@ -780,7 +966,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       color,
       icon,
       isDefault: false,
-      inviteCode: generateBoardInviteCode(id),
+      inviteCode: uniqueCode,
       members: [
         { id: profile.id || 'member_me', name: `${profile.name || 'You'} (Owner)`, email: profile.email || '', color, role: 'owner' },
       ],
@@ -789,6 +975,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBoards(prev => [...prev, newBoard]);
     setActiveBoardId(newBoard.id);
     Notifications.toast('success', `📋 Board "${newBoard.name}" created!`);
+    CloudSyncService.pushToCloudImmediate();
     return newBoard;
   };
 
@@ -1760,7 +1947,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isTeamRoomOpen,
         setIsTeamRoomOpen,
         activeCall,
+        outgoingCall,
         startCall,
+        cancelOutgoingCall,
         endCall,
         toggleCallMute,
         toggleCallVideo,
@@ -1769,6 +1958,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         acceptIncomingCall,
         rejectIncomingCall,
         simulateIncomingCall,
+        remoteMediaStream,
         chatMessages,
         sendChatMessage,
         // Cloud Sync

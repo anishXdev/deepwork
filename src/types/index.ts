@@ -189,6 +189,7 @@ export interface IncomingCall {
   boardName: string;
   callerId: string;
   callerName: string;
+  callerEmail?: string;
   callerAvatar?: string;
   callerColor: string;
   type: CallType;
@@ -196,8 +197,21 @@ export interface IncomingCall {
   participants: CollabCallParticipant[];
 }
 
+export interface OutgoingCallState {
+  callId: string;
+  type: CallType;
+  status: 'ringing' | 'connected' | 'rejected' | 'canceled';
+  targetMemberIds: string[];
+  targetNames: string[];
+  targetEmails: string[];
+  boardId: string;
+  boardName: string;
+  ringingSeconds: number;
+}
+
 export interface ActiveCallState {
   active: boolean;
+  callId?: string;
   type: CallType;
   isMuted: boolean;
   isVideoOn: boolean;

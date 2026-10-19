@@ -89,16 +89,24 @@ export function getDefaultTags(): Tag[] {
   return [];
 }
 
-export function generateUniqueBoardInviteCode(): string {
+export function generateUniqueBoardInviteCode(existingCodes?: string[]): string {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `DW-${result}`;
+  const taken = new Set((existingCodes || []).map(c => (c || '').toUpperCase().trim()));
+  let code = '';
+  do {
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    code = `DW-${result}`;
+  } while (taken.has(code));
+  return code;
 }
 
-export function generateBoardInviteCode(_boardId?: string): string {
+export function generateBoardInviteCode(existingCodes?: string[] | string): string {
+  if (Array.isArray(existingCodes)) {
+    return generateUniqueBoardInviteCode(existingCodes);
+  }
   return generateUniqueBoardInviteCode();
 }
 
@@ -205,15 +213,17 @@ export const StorageService = {
           const parsedBoards = JSON.parse(rawBoards);
           if (Array.isArray(parsedBoards)) {
             let boardsModified = false;
+            const seenCodes = new Set<string>();
             const sanitized = parsedBoards
               .filter((b): b is StudyBoard => Boolean(b && typeof b === 'object' && b.id))
               .map(b => {
-                let code = b.inviteCode;
-                // Migrate any legacy generic or missing invite codes to isolated unique codes
-                if (!code || code === 'DW-MAIN' || code === 'DW-DEFAULT' || code === 'DW-STUDY') {
-                  code = generateUniqueBoardInviteCode();
+                let code = (b.inviteCode || '').trim().toUpperCase();
+                // Migrate any legacy generic, missing or duplicate invite codes to unique codes
+                if (!code || code === 'DW-MAIN' || code === 'DW-DEFAULT' || code === 'DW-STUDY' || seenCodes.has(code)) {
+                  code = generateUniqueBoardInviteCode(Array.from(seenCodes));
                   boardsModified = true;
                 }
+                seenCodes.add(code);
                 return {
                   ...b,
                   inviteCode: code,
@@ -694,6 +704,8 @@ export const StorageService = {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          let boardsModified = false;
+          const seenCodes = new Set<string>();
           const sanitizedBoards = parsed
             .filter((b): b is StudyBoard => Boolean(b && typeof b === 'object' && b.id))
             .map(b => {
@@ -729,13 +741,23 @@ export const StorageService = {
                 });
               }
 
+              let code = (b.inviteCode || '').trim().toUpperCase();
+              if (!code || code === 'DW-MAIN' || code === 'DW-DEFAULT' || code === 'DW-STUDY' || seenCodes.has(code)) {
+                code = generateUniqueBoardInviteCode(Array.from(seenCodes));
+                boardsModified = true;
+              }
+              seenCodes.add(code);
+
               return {
                 ...b,
                 color: b.color || '#0C66E4',
-                inviteCode: b.inviteCode || generateBoardInviteCode(b.id),
+                inviteCode: code,
                 members
               };
             });
+          if (boardsModified) {
+            this.saveBoards(sanitizedBoards);
+          }
           if (sanitizedBoards.length > 0) return sanitizedBoards;
         }
       }

@@ -129,14 +129,6 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
     }
   };
 
-  const handleSelectQuickUser = (user: UserProfile) => {
-    setInviteEmail(user.email);
-    setInviteName(user.name || '');
-    setMatchedUser(user);
-    setValidationError('');
-    setInfoMessage('');
-  };
-
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
@@ -204,14 +196,6 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
     Notifications.toast('success', '🔗 Collaboration invite link copied to clipboard!');
     setTimeout(() => setCopiedLink(false), 2500);
   };
-
-  // Candidates among registered users not yet added (strictly exclude current logged-in user!)
-  const myEmail = normalizeEmail(profile.email || '');
-  const availableRegisteredUsers = registeredUsers.filter(
-    u => u.email && 
-         normalizeEmail(u.email) !== myEmail &&
-         !members.some(m => normalizeEmail(m.email) === normalizeEmail(u.email))
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
@@ -350,36 +334,6 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
               </div>
             )}
           </div>
-
-          {/* Quick Add Existing Teammates Chips */}
-          {availableRegisteredUsers.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">
-                Quick Select Registered Users:
-              </p>
-              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                {availableRegisteredUsers.map(u => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => handleSelectQuickUser(u)}
-                    className="px-2 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all hover:scale-[1.02] cursor-pointer"
-                    style={{
-                      background: normalizeEmail(inviteEmail) === normalizeEmail(u.email) ? 'var(--accent-soft)' : 'var(--bg-card)',
-                      borderColor: normalizeEmail(inviteEmail) === normalizeEmail(u.email) ? 'var(--accent)' : 'var(--border)',
-                      color: normalizeEmail(inviteEmail) === normalizeEmail(u.email) ? 'var(--accent)' : 'var(--text-primary)'
-                    }}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center">
-                      {(u.name || u.email).slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="font-semibold">{u.name || u.email.split('@')[0]}</span>
-                    <span className="text-[10px] text-slate-400">({u.email})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex items-center justify-between gap-2 pt-1">
             <div className="flex items-center gap-2">

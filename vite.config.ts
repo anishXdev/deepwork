@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
+import { WebSocketServer, WebSocket } from 'ws';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -53,6 +54,174 @@ export default defineConfig(({ mode }) => {
               backendReady: true
             }));
           });
+
+          // Real-time WebRTC Signaling & Chat WebSocket Server for Deepwork
+          const collabClients = new Map<WebSocket, { email: string; boardId: string; userId: string; name: string }>();
+
+          if (server.httpServer) {
+            const wss = new WebSocketServer({ noServer: true });
+
+            server.httpServer.on('upgrade', (req, socket, head) => {
+              if (req.url && req.url.startsWith('/api/collab-socket')) {
+                wss.handleUpgrade(req, socket, head, (ws) => {
+                  wss.emit('connection', ws, req);
+                });
+              }
+            });
+
+            wss.on('connection', (ws: WebSocket) => {
+              ws.on('message', (messageRaw: any) => {
+                try {
+                  const data = JSON.parse(messageRaw.toString());
+
+                  if (data.type === 'register') {
+                    collabClients.set(ws, {
+                      email: (data.email || '').toLowerCase().trim(),
+                      boardId: data.boardId,
+                      userId: data.userId,
+                      name: data.name
+                    });
+                    return;
+                  }
+
+                  if (data.type === 'update_board') {
+                    const client = collabClients.get(ws);
+                    if (client) {
+                      client.boardId = data.boardId;
+                    }
+                    return;
+                  }
+
+                  // 1. Chat Message Broadcast
+                  if (data.type === 'chat_message') {
+                    const sender = collabClients.get(ws);
+                    const targetBoardId = data.boardId || sender?.boardId;
+                    for (const [clientWs, client] of collabClients.entries()) {
+                      if (clientWs !== ws && client.boardId === targetBoardId && clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify(data));
+                      }
+                    }
+                    return;
+                  }
+
+                  // 2. Call Ringing: Send incoming_call to targeted users
+                  if (data.type === 'call_ring') {
+                    const targetEmails = (data.targetEmails || []).map((e: string) => (e || '').toLowerCase().trim());
+                    const callerEmail = (data.callerEmail || '').toLowerCase().trim();
+
+                    for (const [clientWs, client] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        const isTargetEmail = targetEmails.length === 0 || targetEmails.includes(client.email);
+                        const isSameBoard = client.boardId === data.boardId;
+                        const notCaller = client.email !== callerEmail;
+
+                        if (notCaller && (isTargetEmail || isSameBoard)) {
+                          clientWs.send(JSON.stringify({
+                            type: 'incoming_call',
+                            callId: data.callId,
+                            callerId: data.callerId,
+                            callerName: data.callerName,
+                            callerEmail: data.callerEmail,
+                            callerColor: data.callerColor,
+                            callerAvatar: data.callerAvatar,
+                            boardId: data.boardId,
+                            boardName: data.boardName,
+                            callType: data.callType
+                          }));
+                        }
+                      }
+                    }
+                    return;
+                  }
+
+                  // 3. Call Accepted: At least one person accepted!
+                  if (data.type === 'call_accept') {
+                    for (const [clientWs] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify({
+                          type: 'call_accepted',
+                          callId: data.callId,
+                          accepterId: data.accepterId,
+                          accepterEmail: data.accepterEmail,
+                          accepterName: data.accepterName,
+                          boardId: data.boardId
+                        }));
+                      }
+                    }
+                    return;
+                  }
+
+                  // 4. Call Rejected
+                  if (data.type === 'call_reject') {
+                    const targetEmail = (data.targetEmail || '').toLowerCase().trim();
+                    for (const [clientWs, client] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        if (!targetEmail || client.email === targetEmail) {
+                          clientWs.send(JSON.stringify({
+                            type: 'call_rejected',
+                            callId: data.callId,
+                            rejecterId: data.rejecterId,
+                            rejecterEmail: data.rejecterEmail,
+                            rejecterName: data.rejecterName
+                          }));
+                        }
+                      }
+                    }
+                    return;
+                  }
+
+                  // 5. Call Cancelled (caller hung up before acceptance)
+                  if (data.type === 'call_cancel') {
+                    for (const [clientWs] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify({
+                          type: 'call_cancelled',
+                          callId: data.callId
+                        }));
+                      }
+                    }
+                    return;
+                  }
+
+                  // 6. Call Ended
+                  if (data.type === 'call_end') {
+                    for (const [clientWs] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(JSON.stringify({
+                          type: 'call_ended',
+                          callId: data.callId
+                        }));
+                      }
+                    }
+                    return;
+                  }
+
+                  // 7. WebRTC Signaling Relays (Offer, Answer, ICE)
+                  if (data.type === 'webrtc_offer' || data.type === 'webrtc_answer' || data.type === 'webrtc_ice') {
+                    const targetEmail = (data.targetEmail || '').toLowerCase().trim();
+                    for (const [clientWs, client] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        if (!targetEmail || client.email === targetEmail) {
+                          clientWs.send(JSON.stringify(data));
+                        }
+                      }
+                    }
+                    return;
+                  }
+                } catch (err) {
+                  console.warn('[Vite Collab Socket] Error processing message:', err);
+                }
+              });
+
+              ws.on('close', () => {
+                collabClients.delete(ws);
+              });
+
+              ws.on('error', () => {
+                collabClients.delete(ws);
+              });
+            });
+          }
 
           // Cross-device Cloud Sync Dev Middleware powered by MongoDB Atlas
           const devSyncStore = new Map();

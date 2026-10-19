@@ -32,12 +32,15 @@ export const TeamCollaborationRoom: React.FC = () => {
     isTeamRoomOpen,
     setIsTeamRoomOpen,
     activeCall,
+    outgoingCall,
     startCall,
+    cancelOutgoingCall,
     endCall,
     toggleCallMute,
     toggleCallVideo,
     toggleCallScreenShare,
     simulateIncomingCall,
+    remoteMediaStream,
     chatMessages,
     sendChatMessage,
     profile,
@@ -49,6 +52,7 @@ export const TeamCollaborationRoom: React.FC = () => {
   const [selectedTaskToShare, setSelectedTaskToShare] = useState<string>('');
   const [isTaskPickerOpen, setIsTaskPickerOpen] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -79,12 +83,19 @@ export const TeamCollaborationRoom: React.FC = () => {
     setSelectedMemberIds(effectiveCallable.map(m => m.id));
   }, [effectiveCallable.length]);
 
-  // If a call is started, auto-switch to call tab
+  // If a call or ring is started, auto-switch to call tab
   useEffect(() => {
-    if (activeCall?.active) {
+    if (activeCall?.active || outgoingCall) {
       setActiveTab('call');
     }
-  }, [activeCall?.active]);
+  }, [activeCall?.active, outgoingCall]);
+
+  // Attach remote stream to remote video element
+  useEffect(() => {
+    if (remoteMediaStream && remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteMediaStream;
+    }
+  }, [remoteMediaStream]);
 
   // Handle local user webcam stream for real video
   useEffect(() => {
@@ -282,7 +293,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                 }`}
               >
                 <Video className="w-3.5 h-3.5" />
-                <span>Call {activeCall?.active && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}</span>
+                <span>Call {(activeCall?.active || outgoingCall) && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}</span>
               </button>
             </div>
 
@@ -534,13 +545,37 @@ export const TeamCollaborationRoom: React.FC = () => {
                           key={p.id}
                           className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shadow-lg p-4 min-h-[160px]"
                         >
-                          <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl ${
-                            p.isSpeaking ? 'ring-4 ring-emerald-500 animate-pulse' : ''
-                          }`} style={{ background: p.color || '#EC4899' }}>
-                            {p.name.slice(0, 2).toUpperCase()}
-                          </div>
-                          <span className="text-xs font-bold text-white mt-2">{p.name}</span>
-                          <span className="text-[10px] text-emerald-400 font-mono">Connected</span>
+                          {remoteMediaStream && remoteMediaStream.getVideoTracks().length > 0 ? (
+                            <video
+                              ref={remoteVideoRef}
+                              autoPlay
+                              playsInline
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center gap-2 p-4">
+                              <div
+                                className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl ${
+                                  p.isSpeaking ? 'ring-4 ring-emerald-500 animate-pulse' : ''
+                                }`}
+                                style={{ background: p.color || '#EC4899' }}
+                              >
+                                {p.name.slice(0, 2).toUpperCase()}
+                              </div>
+                              <span className="text-xs font-bold text-white mt-2">{p.name}</span>
+                              <span className="text-[10px] text-emerald-400 font-mono">Connected</span>
+                            </div>
+                          )}
+
+                          {/* Hidden audio element ensuring remote audio plays */}
+                          <audio
+                            autoPlay
+                            ref={el => {
+                              if (el && remoteMediaStream && el.srcObject !== remoteMediaStream) {
+                                el.srcObject = remoteMediaStream;
+                              }
+                            }}
+                          />
 
                           <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1.5">
                             <span>{p.name}</span>
@@ -601,6 +636,50 @@ export const TeamCollaborationRoom: React.FC = () => {
                         <span className="text-xs">End Call</span>
                       </button>
                     </div>
+                  </div>
+                ) : outgoingCall && outgoingCall.status === 'ringing' ? (
+                  /* Calling / Outgoing Ringing Screen */
+                  <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-white relative bg-slate-950 animate-in fade-in">
+                    {/* Animated radar pulse rings */}
+                    <div className="relative my-6 flex items-center justify-center">
+                      <span className="absolute w-44 h-44 rounded-full bg-blue-500/15 animate-ping duration-1000" />
+                      <span className="absolute w-32 h-32 rounded-full bg-blue-500/25 animate-pulse" />
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-3xl font-black text-white shadow-2xl relative z-10 border-4 border-blue-400/40">
+                        {outgoingCall.targetNames[0] ? outgoingCall.targetNames[0].slice(0, 2).toUpperCase() : 'DW'}
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 z-20 w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg animate-bounce">
+                        <PhoneCall className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-8 max-w-sm">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                        <span>Ringing Teammate • {formatCallTime(outgoingCall.ringingSeconds)}</span>
+                      </div>
+
+                      <h3 className="text-2xl font-black text-white tracking-tight">
+                        {outgoingCall.targetNames.join(', ')}
+                      </h3>
+
+                      <p className="text-xs text-slate-400 font-medium">
+                        Calling on workspace: <strong className="text-slate-200">"{outgoingCall.boardName}"</strong>
+                      </p>
+
+                      <p className="text-[11px] text-slate-500 pt-1 leading-relaxed">
+                        Waiting for teammate to accept... Meeting will connect as soon as at least one person answers.
+                      </p>
+                    </div>
+
+                    {/* Cancel Calling Button */}
+                    <button
+                      type="button"
+                      onClick={cancelOutgoingCall}
+                      className="px-6 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-xl shadow-rose-600/30 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <PhoneOff className="w-4 h-4" />
+                      <span>Cancel Call</span>
+                    </button>
                   </div>
                 ) : (
                   /* No call in progress - Lobby with Participant Selection */
