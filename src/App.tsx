@@ -16,7 +16,6 @@ import { TeamCollaborationRoom } from './components/TeamCollaborationRoom';
 import { IncomingCallModal } from './components/IncomingCallModal';
 import { TopicModal } from './components/TopicModal';
 import { RescheduleModal } from './components/RescheduleModal';
-import { GoogleSyncModal } from './components/GoogleSyncModal';
 import { CreateSubjectModal } from './components/CreateSubjectModal';
 import { StreakModal } from './components/StreakModal';
 import { AuthModal } from './components/AuthModal';
@@ -62,7 +61,6 @@ const MainContent: React.FC = () => {
         {/* Global Modals */}
         <TopicModal />
         <RescheduleModal />
-        <GoogleSyncModal />
         <CreateSubjectModal />
         <AuthModal />
         <InteractiveTourCoach />

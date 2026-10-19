@@ -24,15 +24,20 @@ export const CloudSyncService = {
    * Gets current active sync key
    */
   getSyncKey(): string {
+    const profile = StorageService.getProfile();
+    if (profile.email) {
+      const key = `user_${profile.email.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      this.setSyncKey(key);
+      return key;
+    }
+    if (profile.id) {
+      const key = `user_${profile.id.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      this.setSyncKey(key);
+      return key;
+    }
     let key = localStorage.getItem(SYNC_KEY_STORAGE);
     if (!key) {
-      // Check user profile
-      const profile = StorageService.getProfile();
-      if (profile.googleConnected && profile.email) {
-        key = `user_${profile.email.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-      } else {
-        key = this.generateRandomSyncKey();
-      }
+      key = 'user_default_workspace';
       this.setSyncKey(key);
     }
     return key;

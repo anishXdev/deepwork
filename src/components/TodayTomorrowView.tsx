@@ -27,7 +27,8 @@ import {
   FolderDown,
   Video,
   MessageSquare,
-  AtSign
+  AtSign,
+  Search
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { CreateBoardModal } from './CreateBoardModal';
@@ -57,6 +58,7 @@ export const TodayTomorrowView: React.FC = () => {
     activeBoardId,
     activeBoard,
     setActiveBoardId,
+    deleteBoard,
     delegateTopic,
     setIsTemplatesModalOpen,
     setIsTeamRoomOpen,
@@ -76,6 +78,7 @@ export const TodayTomorrowView: React.FC = () => {
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState<boolean>(false);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState<boolean>(false);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState<boolean>(false);
+  const [boardSearchQuery, setBoardSearchQuery] = useState<string>('');
 
   // Active inline add card per column
   const [activeInlineAddColumn, setActiveInlineAddColumn] = useState<ColumnId | null>(null);
@@ -324,35 +327,85 @@ export const TodayTomorrowView: React.FC = () => {
             {/* Dropdown Menu */}
             {isBoardDropdownOpen && (
               <div
-                className="absolute left-0 top-10 z-40 w-64 rounded-xl p-2 shadow-2xl space-y-1"
+                className="absolute left-0 top-10 z-40 w-72 rounded-xl p-2 shadow-2xl space-y-2 animate-in fade-in zoom-in-95 duration-100"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
               >
                 <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b" style={{ borderColor: 'var(--border)' }}>
-                  <span>Study Boards</span>
+                  <span>Work Boards</span>
                   <span>{boards.length}</span>
                 </div>
 
+                {/* Search Boards Input */}
+                <div className="px-1">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs border border-transparent focus-within:border-blue-500">
+                    <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Search boards..."
+                      value={boardSearchQuery}
+                      onChange={e => setBoardSearchQuery(e.target.value)}
+                      className="w-full bg-transparent border-0 outline-none text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                    />
+                    {boardSearchQuery && (
+                      <button type="button" onClick={() => setBoardSearchQuery('')} className="text-slate-400 hover:text-slate-600">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Boards List */}
                 <div className="space-y-0.5 max-h-56 overflow-y-auto">
-                  {boards.map(b => (
-                    <button
-                      key={b.id}
-                      onClick={() => {
-                        setActiveBoardId(b.id);
-                        setIsBoardDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                      style={{
-                        background: b.id === activeBoardId ? 'var(--accent-soft)' : 'transparent',
-                        color: b.id === activeBoardId ? 'var(--accent)' : 'var(--text-primary)',
-                      }}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span>{b.icon || '📋'}</span>
-                        <span className="truncate">{b.name}</span>
+                  {boards
+                    .filter(b => b.name.toLowerCase().includes(boardSearchQuery.toLowerCase()))
+                    .map(b => (
+                      <div
+                        key={b.id}
+                        onClick={() => {
+                          setActiveBoardId(b.id);
+                          setIsBoardDropdownOpen(false);
+                        }}
+                        className="group w-full px-2.5 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                        style={{
+                          background: b.id === activeBoardId ? 'var(--accent-soft)' : 'transparent',
+                          color: b.id === activeBoardId ? 'var(--accent)' : 'var(--text-primary)',
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span>{b.icon || '📋'}</span>
+                          <span className="truncate max-w-[130px]">{b.name}</span>
+                          {(b.members || []).length > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500">
+                              {b.members.length}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {b.id === activeBoardId && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                          {boards.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Delete board "${b.name}"? All cards on this board will be removed.`)) {
+                                  deleteBoard(b.id);
+                                }
+                              }}
+                              className="p-1 rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete board"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {b.id === activeBoardId && <Check className="w-3.5 h-3.5" />}
-                    </button>
-                  ))}
+                    ))}
+                  {boards.filter(b => b.name.toLowerCase().includes(boardSearchQuery.toLowerCase())).length === 0 && (
+                    <div className="p-3 text-center text-xs text-slate-400">
+                      No boards matching "{boardSearchQuery}"
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-1.5 border-t" style={{ borderColor: 'var(--border)' }}>

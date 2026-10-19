@@ -409,6 +409,45 @@ export const StorageService = {
   saveProfile(profile: UserProfile) {
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
     this.registerUser(profile);
+    if (profile && profile.email) {
+      this.reconcileBoardOwner(profile);
+    }
+  },
+
+  reconcileBoardOwner(profile: UserProfile) {
+    if (!profile || !profile.email) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.BOARDS);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+
+      const updatedBoards = parsed.map((b: any) => {
+        if (!b || typeof b !== 'object') return b;
+        const members = Array.isArray(b.members) ? [...b.members] : [];
+        const ownerIdx = members.findIndex(m => m.role === 'owner' || m.email === 'you@dstudy.app' || m.id === 'member_me');
+        if (ownerIdx >= 0) {
+          members[ownerIdx] = {
+            ...members[ownerIdx],
+            name: `${profile.name || 'You'} (Owner)`,
+            email: profile.email,
+            role: 'owner'
+          };
+        } else {
+          members.unshift({
+            id: profile.id || 'owner_1',
+            name: `${profile.name || 'You'} (Owner)`,
+            email: profile.email,
+            color: '#0C66E4',
+            role: 'owner'
+          });
+        }
+        return { ...b, members };
+      });
+      localStorage.setItem(STORAGE_KEYS.BOARDS, JSON.stringify(updatedBoards));
+    } catch {
+      // ignore
+    }
   },
 
   /* ── Registered Users Directory ────────────────────────────── */
@@ -490,29 +529,67 @@ export const StorageService = {
   getBoards(): StudyBoard[] {
     this.ensureInitialized();
     const raw = localStorage.getItem(STORAGE_KEYS.BOARDS);
+    const profile = this.getProfile();
     try {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const sanitizedBoards = parsed
             .filter((b): b is StudyBoard => Boolean(b && typeof b === 'object' && b.id))
-            .map(b => ({
-              ...b,
-              color: b.color || '#0C66E4',
-              members: Array.isArray(b.members)
-                ? b.members.filter(Boolean).map(m => ({
-                    id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
-                    name: m?.name || 'Member',
-                    email: m?.email || '',
-                    color: m?.color || '#0C66E4',
-                    role: m?.role || 'editor'
-                  }))
-                : []
-            }));
+            .map(b => {
+              const members = Array.isArray(b.members)
+                ? b.members.filter(Boolean).map(m => {
+                    const isOwnerOrDStudy = m?.role === 'owner' || m?.email === 'you@dstudy.app' || m?.id === 'member_me';
+                    if (isOwnerOrDStudy && profile.email) {
+                      return {
+                        id: profile.id || m?.id || 'owner_1',
+                        name: `${profile.name || 'You'} (Owner)`,
+                        email: profile.email,
+                        color: m?.color || '#0C66E4',
+                        role: 'owner' as const
+                      };
+                    }
+                    return {
+                      id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
+                      name: m?.name || 'Member',
+                      email: m?.email === 'you@dstudy.app' ? (profile.email || '') : (m?.email || ''),
+                      color: m?.color || '#0C66E4',
+                      role: m?.role || 'editor'
+                    };
+                  })
+                : [];
+
+              if (profile.email && !members.some(m => m.email.toLowerCase() === profile.email.toLowerCase())) {
+                members.unshift({
+                  id: profile.id || 'owner_1',
+                  name: `${profile.name || 'You'} (Owner)`,
+                  email: profile.email,
+                  color: '#0C66E4',
+                  role: 'owner'
+                });
+              }
+
+              return {
+                ...b,
+                color: b.color || '#0C66E4',
+                members
+              };
+            });
           if (sanitizedBoards.length > 0) return sanitizedBoards;
         }
       }
       const def = getDefaultBoards();
+      if (profile.email && def[0]) {
+        def[0].members = [
+          {
+            id: profile.id || 'owner_1',
+            name: `${profile.name || 'You'} (Owner)`,
+            email: profile.email,
+            color: '#0C66E4',
+            role: 'owner'
+          }
+        ];
+      }
       this.saveBoards(def);
       return def;
     } catch {

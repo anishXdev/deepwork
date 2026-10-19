@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
 import {
@@ -21,11 +21,8 @@ import {
   Hash,
   Brain,
   Sparkles,
-  ShieldCheck,
-  Download,
-  Upload,
-  RefreshCw,
-  Cpu
+  Users,
+  CheckSquare
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
@@ -36,22 +33,21 @@ export const AnalyticsDashboard: React.FC = () => {
     topics,
     tags,
     userGamification,
-    exportBackup,
-    importBackup,
     settings,
     updateSettings,
     streaks,
     setActiveFocusTopic,
     setActiveTab,
     openStreakModal,
-    openAddTopicModal
+    openAddTopicModal,
+    profile,
+    boards,
+    activeBoardId
   } = useApp();
 
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState(settings.weeklyHoursTarget);
   const [heatmapRange, setHeatmapRange] = useState<'30days' | 'yearly'>('30days');
-  const [backupStatusMessage, setBackupStatusMessage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [hoveredDay, setHoveredDay] = useState<{
     date: string;
@@ -118,22 +114,118 @@ export const AnalyticsDashboard: React.FC = () => {
     }).sort((a, b) => b.hours - a.hours);
   }, [tags, tagFilteredSessions, topics, totalTagPeriodHours]);
 
-  // Deep work focus ratio (sessions with duration >= 25 mins)
-  const deepWorkSessions = sessions.filter(s => (s.durationMinutes || (s.durationHours || 0) * 60) >= 25);
-  const deepWorkRatio = sessions.length > 0 ? Math.round((deepWorkSessions.length / sessions.length) * 100) : 85;
+  // Board & Productivity State
+  const [productivityScope, setProductivityScope] = useState<'current' | 'all'>('current');
+  const currentBoard = boards.find(b => b.id === activeBoardId) || boards[0];
 
-  const handleFileRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const ok = await importBackup(file);
-    if (ok) {
-      setBackupStatusMessage('✅ Backup restored successfully! All tasks, boards, and history preserved.');
-      setTimeout(() => setBackupStatusMessage(null), 5000);
-    } else {
-      setBackupStatusMessage('❌ Failed to restore backup. Invalid format.');
-      setTimeout(() => setBackupStatusMessage(null), 5000);
+  const boardTopics = useMemo(() => {
+    if (productivityScope === 'all') return topics;
+    return topics.filter(t => !t.boardId || t.boardId === activeBoardId);
+  }, [topics, productivityScope, activeBoardId]);
+
+  const completedBoardTopics = useMemo(() => boardTopics.filter(t => t.status === 'completed'), [boardTopics]);
+  const inProgressBoardTopics = useMemo(() => boardTopics.filter(t => t.status === 'in_progress'), [boardTopics]);
+  const todoBoardTopics = useMemo(() => boardTopics.filter(t => t.status === 'todo'), [boardTopics]);
+
+  const totalTasksCount = boardTopics.length;
+  const completedTasksCount = completedBoardTopics.length;
+  const completionPercentage = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  const totalCompletedHours = useMemo(() => {
+    return Math.round(completedBoardTopics.reduce((acc, t) => acc + (t.completedHours || t.approxHours || 1), 0) * 10) / 10;
+  }, [completedBoardTopics]);
+
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const completedTodayCount = completedBoardTopics.filter(t =>
+    (t.updatedAt && t.updatedAt.startsWith(todayDateStr)) ||
+    (t.scheduledDate === todayDateStr && t.status === 'completed')
+  ).length;
+
+  // Member Productivity Matrix: "Who has done what"
+  const memberProductivity = useMemo(() => {
+    const userEmail = profile.email || 'abhishekmandaljee4@gmail.com';
+    const userName = profile.name || 'Current User';
+    const currentUserId = profile.id || 'owner_user';
+
+    interface MemberItem {
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      color: string;
+      avatar?: string;
+      isOwner: boolean;
     }
-  };
+
+    const membersMap = new Map<string, MemberItem>();
+
+    // Current user (Owner)
+    membersMap.set(currentUserId, {
+      id: currentUserId,
+      name: userName,
+      email: userEmail,
+      role: 'Owner (You)',
+      color: '#0C66E4',
+      avatar: profile.avatar,
+      isOwner: true,
+    });
+
+    if (currentBoard?.members) {
+      currentBoard.members.forEach(m => {
+        if (!m) return;
+        const isSelf = (m.email && m.email.toLowerCase() === userEmail.toLowerCase()) || m.id === currentUserId;
+        if (!isSelf) {
+          membersMap.set(m.id, {
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            role: m.role || 'Member',
+            color: m.color || '#8B5CF6',
+            avatar: m.avatar,
+            isOwner: m.role === 'owner',
+          });
+        }
+      });
+    }
+
+    return Array.from(membersMap.values()).map(member => {
+      const isCurrentUser = member.id === currentUserId;
+      const assignedTopics = boardTopics.filter(t => {
+        if (t.assigneeId === member.id) return true;
+        if (t.assigneeName && t.assigneeName.toLowerCase() === member.name.toLowerCase()) return true;
+        // Unassigned cards count for the primary user/owner
+        if (isCurrentUser && !t.assigneeId && !t.assigneeName) return true;
+        return false;
+      });
+
+      const completed = assignedTopics.filter(t => t.status === 'completed');
+      const inProgress = assignedTopics.filter(t => t.status === 'in_progress');
+      const todo = assignedTopics.filter(t => t.status === 'todo');
+
+      const hoursLogged = Math.round(
+        completed.reduce((acc, t) => acc + (t.completedHours || t.approxHours || 1), 0) * 10
+      ) / 10;
+
+      const completionRate = assignedTopics.length > 0
+        ? Math.round((completed.length / assignedTopics.length) * 100)
+        : 0;
+
+      return {
+        member,
+        total: assignedTopics.length,
+        completed: completed.length,
+        inProgress: inProgress.length,
+        todo: todo.length,
+        hoursLogged,
+        completionRate,
+        completedTasksList: completed.slice(0, 5)
+      };
+    }).sort((a, b) => {
+      if (a.member.isOwner && !b.member.isOwner) return -1;
+      if (!a.member.isOwner && b.member.isOwner) return 1;
+      return b.completed - a.completed;
+    });
+  }, [profile, currentBoard, boardTopics]);
 
   const subjectBreakdown = AnalyticsService.getSubjectHoursBreakdown(
     subjects,
@@ -589,123 +681,212 @@ export const AnalyticsDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* ── Efficiency & Work Patterns ───── */}
+      {/* ── Team & Individual Productivity (Who Has Done What) ───── */}
       <div
-        className="card p-5 space-y-4"
+        className="card p-5 space-y-5"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-sm)'
         }}
       >
-        <div className="flex items-center gap-2.5 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 border border-blue-500/20">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Efficiency & Focus Distribution
-            </h3>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Quantitative breakdown of your deep work habits and domain velocity
-            </p>
-          </div>
-        </div>
-
-        {/* Key Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-            <span className="text-[10px] font-bold uppercase text-slate-400">Deep Focus Ratio</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black font-mono text-emerald-500">{deepWorkRatio}%</span>
-              <span className="text-[11px] text-slate-400">sessions &ge; 25m</span>
-            </div>
-            <p className="text-[10px] text-slate-400">Ratio of long uninterrupted focus sprints</p>
-          </div>
-
-          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-            <span className="text-[10px] font-bold uppercase text-slate-400">Primary Domain Velocity</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black font-mono text-blue-600">
-                #{tagBreakdown[0]?.name || 'dev'}
-              </span>
-              <span className="text-[11px] text-slate-400">({tagBreakdown[0]?.percentage || 0}%)</span>
-            </div>
-            <p className="text-[10px] text-slate-400">Largest time concentration this week</p>
-          </div>
-
-          <div className="p-3 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-            <span className="text-[10px] font-bold uppercase text-slate-400">Experience & Level</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black font-mono text-amber-500">Lvl {userGamification.level}</span>
-              <span className="text-[11px] font-semibold text-slate-500">{userGamification.levelTitle}</span>
-            </div>
-            <p className="text-[10px] text-slate-400">{userGamification.xp} total XP accumulated</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Rust-Grade Data Safety & JSON Backup Console ─────── */}
-      <div
-        className="card p-5 space-y-3"
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)'
-        }}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-              <ShieldCheck className="w-5 h-5" />
+              <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                Zero Data Loss Storage Engine (V2 Schema Active)
+              <h3 className="text-base font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                Task Productivity & Team Execution
               </h3>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Immutable automated snapshots are preserved before updates. Export or restore your entire data anytime.
+                Comprehensive breakdown of tasks completed, execution velocity, and who has done what
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Scope Selector: Active Board vs All Boards */}
+          <div className="flex items-center p-0.5 rounded-xl text-xs font-semibold"
+            style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
             <button
               type="button"
-              onClick={() => {
-                Haptics.tap();
-                exportBackup();
-              }}
-              className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 cursor-pointer"
-              title="Download complete JSON backup"
+              onClick={() => { Haptics.tap(); setProductivityScope('current'); }}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                productivityScope === 'current' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download JSON Backup</span>
+              {currentBoard?.name || 'Current Board'}
             </button>
-
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 cursor-pointer"
-              title="Restore data from JSON backup"
+              onClick={() => { Haptics.tap(); setProductivityScope('all'); }}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                productivityScope === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <Upload className="w-3.5 h-3.5 text-blue-600" />
-              <span>Restore Backup</span>
+              All Boards ({topics.length})
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileRestore}
-              className="hidden"
-            />
           </div>
         </div>
 
-        {backupStatusMessage && (
-          <div className="p-2.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-            {backupStatusMessage}
+        {/* Top-line Productivity KPI Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3.5 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tasks Completed</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black font-mono text-emerald-600">{completedTasksCount}</span>
+              <span className="text-xs font-medium text-slate-400">/ {totalTasksCount} tasks</span>
+            </div>
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden mt-1">
+              <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%` }} />
+            </div>
           </div>
-        )}
+
+          <div className="p-3.5 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Completion Rate</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black font-mono text-blue-600">{completionPercentage}%</span>
+              <span className="text-xs font-medium text-slate-400">achieved</span>
+            </div>
+            <p className="text-[10px] text-slate-400">{inProgressBoardTopics.length} in progress • {todoBoardTopics.length} pending</p>
+          </div>
+
+          <div className="p-3.5 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Hours Executed</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black font-mono text-violet-600">{totalCompletedHours}h</span>
+              <span className="text-xs font-medium text-slate-400">shipped</span>
+            </div>
+            <p className="text-[10px] text-slate-400">Across all completed cards</p>
+          </div>
+
+          <div className="p-3.5 rounded-xl flex flex-col gap-1" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Completed Today</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black font-mono text-amber-500">{completedTodayCount}</span>
+              <span className="text-xs font-medium text-slate-400">today</span>
+            </div>
+            <p className="text-[10px] text-slate-400">Daily velocity pulse</p>
+          </div>
+        </div>
+
+        {/* Member Breakdown: Who Has Done What */}
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <Users className="w-4 h-4 text-blue-500" />
+              <span>Who Has Done What (Member Breakdown)</span>
+            </h4>
+            <span className="text-[11px] text-slate-400">
+              {memberProductivity.length} contributor{memberProductivity.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {memberProductivity.map(item => (
+              <div
+                key={item.member.id}
+                className="p-4 rounded-xl space-y-3 transition-all"
+                style={{
+                  background: 'var(--bg-card-alt)',
+                  border: '1px solid var(--border)'
+                }}
+              >
+                {/* Member header */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shadow-xs shrink-0"
+                      style={{ background: item.member.color }}
+                    >
+                      {item.member.avatar ? (
+                        <img src={item.member.avatar} alt={item.member.name} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        item.member.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {item.member.name}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
+                          item.member.isOwner ? 'bg-blue-500/10 text-blue-600' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {item.member.role}
+                        </span>
+                      </div>
+                      <p className="text-[11px] truncate text-slate-400">{item.member.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className="text-base font-black font-mono text-emerald-600">
+                      {item.completed} <span className="text-xs font-normal text-slate-400">/ {item.total}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">{item.completionRate}% completed</span>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${item.completionRate}%`,
+                      background: item.member.color
+                    }}
+                  />
+                </div>
+
+                {/* Sub-metrics */}
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                  <div className="p-2 rounded-lg bg-black/5 dark:bg-white/5">
+                    <div className="text-[10px] text-slate-400 font-medium">Completed</div>
+                    <div className="text-xs font-bold text-emerald-600">{item.completed} tasks</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-black/5 dark:bg-white/5">
+                    <div className="text-[10px] text-slate-400 font-medium">In Progress</div>
+                    <div className="text-xs font-bold text-blue-500">{item.inProgress} tasks</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-black/5 dark:bg-white/5">
+                    <div className="text-[10px] text-slate-400 font-medium">Hours Done</div>
+                    <div className="text-xs font-bold text-violet-600">{item.hoursLogged}h</div>
+                  </div>
+                </div>
+
+                {/* Completed tasks list */}
+                {item.completedTasksList.length > 0 ? (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                      Recently Finished Tasks:
+                    </div>
+                    {item.completedTasksList.map(task => (
+                      <div
+                        key={task.id}
+                        className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-white/40 dark:bg-slate-800/40"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span className="truncate font-medium text-slate-700 dark:text-slate-300">
+                            {task.name}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-2">
+                          {task.completedHours || task.approxHours || 1}h
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400 italic text-center">
+                    No completed tasks logged yet.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Activity Heatmap */}

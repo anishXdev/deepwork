@@ -277,32 +277,6 @@ export const Navbar: React.FC = () => {
             }
           </button>
 
-          {/* Cloud sync */}
-          <button
-            onClick={() => { Haptics.tap(); setIsSyncModalOpen(true); }}
-            title={
-              cloudSyncStatus === 'syncing'
-                ? 'Syncing…'
-                : profile.googleConnected
-                ? `Synced: ${profile.email}`
-                : `Sync (${syncKey})`
-            }
-            className="btn-ghost"
-            style={{
-              padding: '6px',
-              color: cloudSyncStatus === 'syncing' || profile.googleConnected || cloudSyncStatus === 'synced'
-                ? 'var(--success)'
-                : 'var(--text-muted)',
-            }}
-          >
-            {cloudSyncStatus === 'syncing'
-              ? <RefreshCw className="w-4 h-4 animate-spin" />
-              : profile.googleConnected || cloudSyncStatus === 'synced'
-              ? <Cloud className="w-4 h-4" />
-              : <CloudOff className="w-4 h-4" />
-            }
-          </button>
-
         </div>
       </div>
     </header>

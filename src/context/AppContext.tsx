@@ -484,6 +484,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     StorageService.saveBoards(boards);
   }, [boards]);
 
+  // Reconcile board owner when user signs in with their real profile
+  useEffect(() => {
+    if (profile.email) {
+      setBoards(prev => {
+        let changed = false;
+        const updated = prev.map(b => {
+          const members = Array.isArray(b.members) ? [...b.members] : [];
+          const ownerIdx = members.findIndex(m => m.role === 'owner' || m.email === 'you@dstudy.app' || m.id === 'member_me');
+          if (ownerIdx >= 0) {
+            if (members[ownerIdx].email !== profile.email || members[ownerIdx].name !== `${profile.name || 'You'} (Owner)`) {
+              changed = true;
+              members[ownerIdx] = {
+                ...members[ownerIdx],
+                name: `${profile.name || 'You'} (Owner)`,
+                email: profile.email,
+                role: 'owner'
+              };
+            }
+          } else {
+            changed = true;
+            members.unshift({
+              id: profile.id || 'owner_1',
+              name: `${profile.name || 'You'} (Owner)`,
+              email: profile.email,
+              color: '#0C66E4',
+              role: 'owner'
+            });
+          }
+          return { ...b, members };
+        });
+        return changed ? updated : prev;
+      });
+    }
+  }, [profile.email, profile.name]);
+
+  // Handle direct invite link navigation (?joinBoard=...&boardName=...&inviter=...)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const joinBoardId = params.get('joinBoard');
+      const joinBoardName = params.get('boardName');
+      const inviter = params.get('inviter');
+
+      if (joinBoardId) {
+        setBoards(prev => {
+          const existing = prev.find(b => b.id === joinBoardId);
+          if (existing) {
+            if (profile.email && !existing.members.some(m => m.email.toLowerCase() === profile.email.toLowerCase())) {
+              return prev.map(b => b.id === joinBoardId ? {
+                ...b,
+                members: [...b.members, {
+                  id: profile.id || 'member_' + Date.now(),
+                  name: profile.name || 'Collaborator',
+                  email: profile.email,
+                  color: '#10B981',
+                  role: 'editor'
+                }]
+              } : b);
+            }
+            return prev;
+          }
+          const newBoard: StudyBoard = {
+            id: joinBoardId,
+            name: joinBoardName ? decodeURIComponent(joinBoardName) : 'Collaborative Board',
+            description: `Shared workspace invited by ${inviter ? decodeURIComponent(inviter) : 'team member'}`,
+            color: '#8B5CF6',
+            icon: '🚀',
+            members: [
+              {
+                id: profile.id || 'member_' + Date.now(),
+                name: profile.name || 'Collaborator',
+                email: profile.email || '',
+                color: '#10B981',
+                role: 'editor'
+              }
+            ],
+            createdAt: new Date().toISOString()
+          };
+          return [...prev, newBoard];
+        });
+
+        setActiveBoardIdState(joinBoardId);
+        StorageService.saveActiveBoardId(joinBoardId);
+        sound.playCompletionChime();
+        Notifications.toast('success', `🎉 Joined board "${joinBoardName ? decodeURIComponent(joinBoardName) : 'Shared Workspace'}"!`);
+
+        const url = new URL(window.location.href);
+        url.searchParams.delete('joinBoard');
+        url.searchParams.delete('boardName');
+        url.searchParams.delete('inviter');
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      }
+    } catch (e) {
+      console.warn('Could not process join board URL param:', e);
+    }
+  }, [profile.email, profile.name]);
+
   const setActiveBoardId = (id: string) => {
     setActiveBoardIdState(id);
     StorageService.saveActiveBoardId(id);
@@ -500,7 +597,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       icon,
       isDefault: false,
       members: [
-        { id: 'member_me', name: 'You (Owner)', email: profile.email || 'you@dstudy.app', color, role: 'owner' },
+        { id: profile.id || 'member_me', name: `${profile.name || 'You'} (Owner)`, email: profile.email || '', color, role: 'owner' },
       ],
       createdAt: new Date().toISOString(),
     };

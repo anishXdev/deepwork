@@ -45,6 +45,8 @@ export const ExcalidrawWhiteboard: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [collabRoomId, setCollabRoomId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [inlineText, setInlineText] = useState<{ x: number; y: number; text: string } | null>(null);
+  const textInputRef = useRef<HTMLInputElement | null>(null);
 
   // Canvas drawing state
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -217,6 +219,105 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     renderCanvas();
   }, [renderCanvas]);
 
+  // Distance from point to line segment
+  const distToSegment = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
+    const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+    if (l2 === 0) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+  };
+
+  // Comprehensive hit test for eraser against any element type
+  const isElementHitByEraser = useCallback((el: WhiteboardElement, ex: number, ey: number, radius = 24): boolean => {
+    if (!el) return false;
+    const strokeW = typeof el.strokeWidth === 'number' ? el.strokeWidth : 3;
+    const hitRadius = radius + strokeW;
+
+    if ((el.type === 'pen' || el.type === 'highlighter') && el.points && el.points.length > 0) {
+      if (el.points.length === 1) {
+        return Math.hypot(ex - el.points[0].x, ey - el.points[0].y) <= hitRadius * (el.type === 'highlighter' ? 3 : 1.2);
+      }
+      for (let i = 0; i < el.points.length - 1; i++) {
+        const p1 = el.points[i];
+        const p2 = el.points[i + 1];
+        const d = distToSegment(ex, ey, p1.x, p1.y, p2.x, p2.y);
+        if (d <= hitRadius * (el.type === 'highlighter' ? 3 : 1.2)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (el.type === 'line' || el.type === 'arrow') {
+      const endX = el.x + (el.width || 0);
+      const endY = el.y + (el.height || 0);
+      return distToSegment(ex, ey, el.x, el.y, endX, endY) <= hitRadius;
+    }
+
+    if (el.type === 'rect') {
+      const minX = Math.min(el.x, el.x + (el.width || 0)) - hitRadius;
+      const maxX = Math.max(el.x, el.x + (el.width || 0)) + hitRadius;
+      const minY = Math.min(el.y, el.y + (el.height || 0)) - hitRadius;
+      const maxY = Math.max(el.y, el.y + (el.height || 0)) + hitRadius;
+      return ex >= minX && ex <= maxX && ey >= minY && ey <= maxY;
+    }
+
+    if (el.type === 'circle') {
+      const rx = Math.abs(el.width || 0) / 2 + hitRadius;
+      const ry = Math.abs(el.height || 0) / 2 + hitRadius;
+      const cx = el.x + (el.width || 0) / 2;
+      const cy = el.y + (el.height || 0) / 2;
+      if (rx <= 0 || ry <= 0) return Math.hypot(ex - el.x, ey - el.y) <= hitRadius;
+      const dx = (ex - cx) / rx;
+      const dy = (ey - cy) / ry;
+      return dx * dx + dy * dy <= 1;
+    }
+
+    if (el.type === 'text') {
+      const textLen = (el.text || '').length || 4;
+      const approxW = Math.max(50, textLen * 10);
+      const minX = el.x - hitRadius;
+      const maxX = el.x + approxW + hitRadius;
+      const minY = el.y - hitRadius;
+      const maxY = el.y + 28 + hitRadius;
+      return ex >= minX && ex <= maxX && ey >= minY && ey <= maxY;
+    }
+
+    return Math.hypot(ex - (el.x || 0), ey - (el.y || 0)) <= hitRadius;
+  }, []);
+
+  // Eraser function with immediate removal and haptic pulse
+  const eraseAt = useCallback((x: number, y: number) => {
+    setElements(prev => {
+      const remaining = (prev || []).filter(el => !isElementHitByEraser(el, x, y));
+      if (remaining.length !== (prev || []).length) {
+        Haptics.tap();
+      }
+      return remaining;
+    });
+  }, [isElementHitByEraser]);
+
+  // Commit typed inline text note
+  const commitInlineText = useCallback(() => {
+    if (inlineText && inlineText.text.trim()) {
+      const newEl: WhiteboardElement = {
+        id: 'el_' + Date.now(),
+        type: 'text',
+        x: inlineText.x,
+        y: inlineText.y,
+        color: selectedColor,
+        strokeWidth,
+        text: inlineText.text.trim()
+      };
+      setHistory(prev => [...prev.slice(-20), elements]);
+      setRedoStack([]);
+      setElements(prev => [...(prev || []), newEl]);
+      Haptics.tap();
+    }
+    setInlineText(null);
+  }, [inlineText, selectedColor, strokeWidth, elements]);
+
   // Pointer Handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -235,31 +336,19 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     setRedoStack([]);
 
     if (activeTool === 'eraser') {
-      // Find element near click and remove it
-      setElements(prev => (prev || []).filter(el => {
-        if (!el) return false;
-        const dist = Math.hypot((el.x || 0) - x, (el.y || 0) - y);
-        return dist > 25;
-      }));
-      Haptics.tap();
-      isDrawingRef.current = false;
+      eraseAt(x, y);
       return;
     }
 
     if (activeTool === 'text') {
-      const text = prompt('Enter note or label text:');
-      if (text && text.trim()) {
-        const newEl: WhiteboardElement = {
-          id: 'el_' + Date.now(),
-          type: 'text',
-          x,
-          y,
-          color: selectedColor,
-          strokeWidth,
-          text: text.trim()
-        };
-        setElements(prev => [...(prev || []), newEl]);
+      // Commit any previously active inline text first
+      if (inlineText && inlineText.text.trim()) {
+        commitInlineText();
       }
+      setInlineText({ x, y, text: '' });
+      setTimeout(() => {
+        textInputRef.current?.focus();
+      }, 40);
       isDrawingRef.current = false;
       return;
     }
@@ -281,12 +370,19 @@ export const ExcalidrawWhiteboard: React.FC = () => {
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current || !currentElementRef.current) return;
+    if (!isDrawingRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    if (activeTool === 'eraser') {
+      eraseAt(x, y);
+      return;
+    }
+
+    if (!currentElementRef.current) return;
 
     const el = currentElementRef.current;
     if (el.type === 'pen' || el.type === 'highlighter') {
@@ -305,6 +401,12 @@ export const ExcalidrawWhiteboard: React.FC = () => {
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {}
     }
+
+    if (activeTool === 'eraser') {
+      isDrawingRef.current = false;
+      return;
+    }
+
     if (isDrawingRef.current && currentElementRef.current) {
       const finished = { ...currentElementRef.current };
       currentElementRef.current = null;
@@ -487,7 +589,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
                 className={`p-1.5 rounded-md transition-all ${
                   activeTool === 'eraser' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                 }`}
-                title="Eraser (Click to delete stroke)"
+                title="Eraser (Click or drag to delete strokes & shapes)"
               >
                 <Eraser className="w-3.5 h-3.5" />
               </button>
@@ -617,15 +719,72 @@ export const ExcalidrawWhiteboard: React.FC = () => {
         }}
       >
         {mode === 'offline' ? (
-          <canvas
-            ref={canvasRef}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="w-full h-full cursor-crosshair touch-none"
-            style={{ minHeight: '650px' }}
-          />
+          <>
+            <canvas
+              ref={canvasRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              className={`w-full h-full touch-none select-none ${
+                activeTool === 'text'
+                  ? 'cursor-text'
+                  : activeTool === 'eraser'
+                  ? 'cursor-cell'
+                  : 'cursor-crosshair'
+              }`}
+              style={{ minHeight: '650px' }}
+            />
+
+            {/* Inline floating text input directly on click position */}
+            {inlineText && (
+              <div
+                className="absolute z-30 flex items-center gap-1.5 shadow-2xl rounded-xl p-1.5 border animate-in fade-in zoom-in-95 duration-100"
+                style={{
+                  left: `${inlineText.x}px`,
+                  top: `${inlineText.y}px`,
+                  background: isDark ? 'rgba(22, 26, 29, 0.96)' : 'rgba(255, 255, 255, 0.96)',
+                  borderColor: 'var(--accent)',
+                  backdropFilter: 'blur(8px)',
+                  transform: 'translate(0, -6px)'
+                }}
+              >
+                <input
+                  ref={textInputRef}
+                  type="text"
+                  value={inlineText.text}
+                  onChange={e => setInlineText(prev => prev ? { ...prev, text: e.target.value } : null)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitInlineText();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setInlineText(null);
+                    }
+                  }}
+                  onBlur={commitInlineText}
+                  placeholder="Type text note..."
+                  autoFocus
+                  className="px-2.5 py-1 text-sm font-bold bg-transparent outline-none"
+                  style={{
+                    color: selectedColor,
+                    minWidth: '180px'
+                  }}
+                />
+                <button
+                  type="button"
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    commitInlineText();
+                  }}
+                  className="px-2 py-1 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <iframe
             src={collabRoomId ? `https://excalidraw.com/#room=${collabRoomId}` : `https://excalidraw.com/${isDark ? '?theme=dark' : '?theme=light'}`}

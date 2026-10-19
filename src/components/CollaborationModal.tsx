@@ -118,17 +118,20 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
   };
 
   const handleCopyInviteLink = () => {
-    const inviteUrl = `${window.location.origin}/board/${encodeURIComponent(activeBoard.id)}?invite=team`;
+    const inviteUrl = `${window.location.origin}/?joinBoard=${encodeURIComponent(activeBoard.id)}&boardName=${encodeURIComponent(activeBoard.name)}&inviter=${encodeURIComponent(profile.name || profile.email || 'Team Lead')}`;
     navigator.clipboard.writeText(inviteUrl);
     setCopiedLink(true);
     Haptics.notification();
-    Notifications.toast('success', '🔗 Collaboration link copied to clipboard!');
+    Notifications.toast('success', '🔗 Collaboration invite link copied to clipboard!');
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  // Candidates among registered users not yet added
+  // Candidates among registered users not yet added (strictly exclude current logged-in user!)
+  const myEmail = (profile.email || '').trim().toLowerCase();
   const availableRegisteredUsers = registeredUsers.filter(
-    u => u.email && !members.some(m => m.email.toLowerCase() === u.email.toLowerCase())
+    u => u.email && 
+         u.email.trim().toLowerCase() !== myEmail &&
+         !members.some(m => m.email.trim().toLowerCase() === u.email.trim().toLowerCase())
   );
 
   return (
@@ -165,7 +168,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direct Invite Link</p>
             <p className="text-xs truncate text-slate-500 font-mono">
-              {window.location.origin}/board/{activeBoard.id.substring(0, 8)}...
+              {window.location.origin}/?joinBoard={activeBoard.id.substring(0, 8)}...
             </p>
           </div>
           <button
@@ -305,10 +308,10 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {member.name}
+                      {member.role === 'owner' ? `${profile.name || member.name.replace(' (Owner)', '') || 'You'} (Owner)` : member.name}
                     </p>
                     <p className="text-[10px] text-slate-400 truncate">
-                      {member.email}
+                      {member.role === 'owner' ? (profile.email || member.email) : member.email}
                     </p>
                   </div>
                 </div>

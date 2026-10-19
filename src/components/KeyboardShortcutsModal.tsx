@@ -43,6 +43,8 @@ export const KeyboardShortcutsModal: React.FC = () => {
       }
 
       if (isInput) return;
+      // Never intercept browser or OS commands (Cmd+C, Ctrl+C, Cmd+V, etc.)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       // Space: Start/Pause Focus Timer
       if (e.code === 'Space') {
@@ -56,8 +58,8 @@ export const KeyboardShortcutsModal: React.FC = () => {
         return;
       }
 
-      // 'c' or 'n': Quick Create Task
-      if (e.key === 'c' || e.key === 'n') {
+      // 'n': Quick Create Task (c shortcut removed per user request)
+      if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
         Haptics.tap();
         const todayStr = new Date().toISOString().split('T')[0];
@@ -124,7 +126,7 @@ export const KeyboardShortcutsModal: React.FC = () => {
 
   const shortcuts = [
     { key: 'Space', desc: 'Start / Pause Focus Timer', badge: 'Global' },
-    { key: 'c or n', desc: 'Quick create task / card', badge: 'Action' },
+    { key: 'n', desc: 'Quick create task / card', badge: 'Action' },
     { key: '1', desc: 'Jump to Kanban Board', badge: 'Nav' },
     { key: '2', desc: 'Jump to Focus Timer', badge: 'Nav' },
     { key: '3', desc: 'Jump to Offline Whiteboard', badge: 'Nav' },
