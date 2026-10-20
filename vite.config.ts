@@ -92,7 +92,7 @@ export default defineConfig(({ mode }) => {
                     return;
                   }
 
-                  // 1. Chat Message Broadcast
+                  // 1. Chat Message Broadcast & DB Persistence
                   if (data.type === 'chat_message') {
                     const sender = collabClients.get(ws);
                     const targetBoardId = data.boardId || sender?.boardId;
@@ -104,6 +104,27 @@ export default defineConfig(({ mode }) => {
                           clientWs.send(JSON.stringify(data));
                         }
                       }
+                    }
+
+                    // Save chat message to MongoDB Atlas asynchronously
+                    if (data.message) {
+                      getDevCollection('chat_messages').then(async (chatCol) => {
+                        if (chatCol) {
+                          const msgDoc = {
+                            _id: data.message.id || `msg_${Date.now()}`,
+                            boardId: targetBoardId || 'default',
+                            senderId: data.message.senderId || 'anon',
+                            senderName: data.message.senderName || 'Teammate',
+                            senderColor: data.message.senderColor || '#0C66E4',
+                            content: data.message.content || '',
+                            taskId: data.message.taskId || null,
+                            taskTitle: data.message.taskTitle || null,
+                            timestamp: data.message.timestamp || new Date().toISOString(),
+                            createdAt: new Date().toISOString()
+                          };
+                          await chatCol.updateOne({ _id: msgDoc._id }, { $set: msgDoc }, { upsert: true });
+                        }
+                      }).catch(() => {});
                     }
                     return;
                   }
@@ -215,6 +236,22 @@ export default defineConfig(({ mode }) => {
                     }
                     return;
                   }
+
+                  // 8. Task Delegation Relay (Reflects directly on recipient's board in real time)
+                  if (data.type === 'task_delegated') {
+                    const recipientEmail = (data.recipientEmail || '').toLowerCase().trim();
+                    for (const [clientWs, client] of collabClients.entries()) {
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        const matchesEmail = Boolean(recipientEmail && (client.email === recipientEmail || client.email.includes(recipientEmail) || recipientEmail.includes(client.email)));
+                        const isSameBoard = Boolean(client.boardId && data.boardId && client.boardId === data.boardId);
+                        const isPeerFallback = collabClients.size <= 4;
+                        if (matchesEmail || isSameBoard || isPeerFallback) {
+                          clientWs.send(JSON.stringify(data));
+                        }
+                      }
+                    }
+                    return;
+                  }
                 } catch (err) {
                   console.warn('[Vite Collab Socket] Error processing message:', err);
                 }
@@ -236,10 +273,10 @@ export default defineConfig(({ mode }) => {
           let devMongoClient: any = null;
           let lastMongoAttempt = 0;
 
-          const getDevCollection = async () => {
+          const getDevCollection = async (collName = 'user_data') => {
             if (devMongoClient) {
               try {
-                return devMongoClient.db('studypulse').collection('user_data');
+                return devMongoClient.db('studypulse').collection(collName);
               } catch {
                 devMongoClient = null;
               }
@@ -252,8 +289,8 @@ export default defineConfig(({ mode }) => {
               const { MongoClient } = await import('mongodb');
               devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 7000, connectTimeoutMS: 7000 });
               await devMongoClient.connect();
-              console.log('[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.user_data)');
-              return devMongoClient.db('studypulse').collection('user_data');
+              console.log(`[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.${collName})`);
+              return devMongoClient.db('studypulse').collection(collName);
             } catch (e: any) {
               devMongoClient = null;
               console.warn('[StudyPulse Dev] MongoDB connect attempt failed:', e?.message);
@@ -281,6 +318,38 @@ export default defineConfig(({ mode }) => {
             const boardCode = url.searchParams.get('boardCode');
             const notifications = url.searchParams.get('notifications');
             const emailParam = url.searchParams.get('email');
+            const chatParam = url.searchParams.get('chat');
+            const chatBoardId = url.searchParams.get('boardId');
+
+            // 0. Board Chat Messages Query (MongoDB Atlas)
+            if (chatParam === '1' && chatBoardId) {
+              try {
+                const col = await getDevCollection('chat_messages');
+                if (col) {
+                  const msgs = await col.find({ boardId: chatBoardId }).sort({ timestamp: 1 }).limit(100).toArray();
+                  res.statusCode = 200;
+                  res.end(JSON.stringify({
+                    messages: msgs.map((m: any) => ({
+                      id: m._id,
+                      boardId: m.boardId,
+                      senderId: m.senderId,
+                      senderName: m.senderName,
+                      senderColor: m.senderColor,
+                      content: m.content,
+                      taskId: m.taskId,
+                      taskTitle: m.taskTitle,
+                      timestamp: m.timestamp
+                    }))
+                  }));
+                  return;
+                }
+              } catch (err: any) {
+                console.warn('[StudyPulse Dev] Chat history query error:', err?.message);
+              }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ messages: [] }));
+              return;
+            }
 
             if (status === '1') {
               try {
@@ -543,9 +612,59 @@ export default defineConfig(({ mode }) => {
                       };
                       if (col) {
                         await col.updateOne({ _id: id }, { $set: doc }, { upsert: true });
+
+                        // If task delegated, also append directly to recipient's tasks list in MongoDB!
+                        if (notification.type === 'task_delegated' && notification.task) {
+                          try {
+                            const userKey = `user_${cleanRecipient.replace(/[@.]/g, '_')}`;
+                            const userDoc = await col.findOne({ _id: userKey });
+                            if (userDoc && userDoc.data) {
+                              const userTasks = Array.isArray(userDoc.data.tasks) ? [...userDoc.data.tasks] : [];
+                              const existingIdx = userTasks.findIndex((t: any) => t.id === notification.task.id);
+                              if (existingIdx >= 0) {
+                                userTasks[existingIdx] = notification.task;
+                              } else {
+                                userTasks.unshift(notification.task);
+                              }
+                              await col.updateOne({ _id: userKey }, { $set: { 'data.tasks': userTasks, updatedAt: new Date().toISOString() } });
+                            }
+                          } catch (errTask: any) {
+                            console.warn('[StudyPulse Dev] Failed to append delegated task to recipient:', errTask?.message);
+                          }
+                        }
                       }
                       res.statusCode = 200;
                       res.end(JSON.stringify({ success: true, notifId: id }));
+                      return;
+                    } catch (err: any) {
+                      res.statusCode = 500;
+                      res.end(JSON.stringify({ success: false, error: err?.message }));
+                      return;
+                    }
+                  }
+
+                  // A2. Send Chat Message (MongoDB Atlas)
+                  if (action === 'send_chat' && parsed.message) {
+                    try {
+                      const chatCol = await getDevCollection('chat_messages');
+                      if (chatCol) {
+                        const m = parsed.message;
+                        const doc = {
+                          _id: m.id || `msg_${Date.now()}`,
+                          boardId: m.boardId || 'default',
+                          senderId: m.senderId || 'anon',
+                          senderName: m.senderName || 'Teammate',
+                          senderColor: m.senderColor || '#0C66E4',
+                          content: m.content || '',
+                          taskId: m.taskId || null,
+                          taskTitle: m.taskTitle || null,
+                          timestamp: m.timestamp || new Date().toISOString(),
+                          createdAt: new Date().toISOString()
+                        };
+                        await chatCol.updateOne({ _id: doc._id }, { $set: doc }, { upsert: true });
+                      }
+                      res.statusCode = 200;
+                      res.end(JSON.stringify({ success: true }));
                       return;
                     } catch (err: any) {
                       res.statusCode = 500;

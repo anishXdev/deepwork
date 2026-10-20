@@ -380,10 +380,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, [profile.email, activeBoardId, profile.id, profile.name, tabClientId]);
 
-  // Keep active board synced on the socket
+  // Keep active board synced on the socket & load remote chat messages
   useEffect(() => {
     if (activeBoardId) {
       RealtimeCollab.updateBoard(activeBoardId);
+      CloudSyncService.fetchRemoteChat(activeBoardId).then(remoteMsgs => {
+        if (remoteMsgs && remoteMsgs.length > 0) {
+          remoteMsgs.forEach(m => StorageService.addChatMessage(m));
+          setChatMessages(StorageService.getChatMessages());
+        }
+      });
     }
   }, [activeBoardId]);
 
@@ -455,6 +461,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sound.playNotificationPop();
         // Toast notification so collaborator is alerted even when room is closed
         Notifications.toast('info', `💬 ${msg.senderName}: "${msg.content.slice(0, 45)}${msg.content.length > 45 ? '...' : ''}"`);
+      },
+      onTaskDelegated: (delegatedTask: any) => {
+        if (!delegatedTask || !delegatedTask.id) return;
+        setTopics(prev => {
+          const exists = prev.some(t => t.id === delegatedTask.id);
+          const next = exists
+            ? prev.map(t => t.id === delegatedTask.id ? { ...t, ...delegatedTask } : t)
+            : [delegatedTask, ...prev];
+          StorageService.saveTopics(next);
+          return next;
+        });
+        sound.playNotificationPop();
+        Notifications.toast('success', `📋 Work delegated directly to your board: "${delegatedTask.name}"`);
       }
     });
   }, []);
@@ -688,6 +707,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setChatMessages(StorageService.getChatMessages());
     RealtimeCollab.broadcastChatMessage(newMsg);
+    CloudSyncService.sendRemoteChat(newMsg);
     Haptics.tap();
   };
 
@@ -1043,28 +1063,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const delegateTopic = (topicId: string, member: BoardMember | null) => {
     const targetTopic = topics.find(t => t.id === topicId);
-    setTopics(prev => prev.map(t => {
-      if (t.id !== topicId) return t;
-      return {
-        ...t,
-        assigneeId: member ? member.id : undefined,
-        assigneeName: member ? member.name : undefined,
-        assigneeColor: member ? member.color : undefined,
-        updatedAt: new Date().toISOString()
-      };
-    }));
-    if (member) {
+    let updatedTopic: any = null;
+    setTopics(prev => {
+      const next = prev.map(t => {
+        if (t.id !== topicId) return t;
+        updatedTopic = {
+          ...t,
+          assigneeId: member ? member.id : undefined,
+          assigneeName: member ? member.name : undefined,
+          assigneeEmail: member ? (member.email || '').toLowerCase() : undefined,
+          assigneeColor: member ? member.color : undefined,
+          delegatedBy: member ? (profile.name || profile.email) : undefined,
+          delegatedAt: member ? new Date().toISOString() : undefined,
+          updatedAt: new Date().toISOString()
+        };
+        return updatedTopic;
+      });
+      StorageService.saveTopics(next);
+      return next;
+    });
+
+    if (member && updatedTopic) {
+      const recipientEmail = (member.email || '').toLowerCase().trim();
       sendCollabNotification({
         type: 'task_delegated',
         title: 'Work Delegated',
-        message: `Card "${targetTopic?.name || 'Task'}" delegated to ${member.name}`,
-        senderName: profile.name || 'Deepwork Member',
+        message: `Task "${updatedTopic.name || 'Task'}" was assigned directly to your board`,
+        senderName: profile.name || profile.email || 'Deepwork Member',
         senderColor: '#0C66E4',
+        boardId: activeBoardId,
+        boardName: activeBoard?.name,
+        recipientEmail,
         taskId: topicId,
-        taskTitle: targetTopic?.name
+        taskTitle: updatedTopic.name,
+        task: updatedTopic
       });
-      Notifications.toast('info', `👤 Delegated task to ${member.name}`);
+      RealtimeCollab.sendTaskDelegation(updatedTopic, recipientEmail);
+      CloudSyncService.scheduleDebouncedPush(500);
+      Notifications.toast('success', `👤 Delegated "${updatedTopic.name}" directly to ${member.name}'s board!`);
     } else {
+      CloudSyncService.scheduleDebouncedPush(500);
       Notifications.toast('info', 'Task unassigned.');
     }
   };

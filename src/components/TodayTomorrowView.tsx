@@ -1,3 +1,5 @@
+import { RealtimeCollab } from '../services/realtimeCall';
+import { CloudSyncService } from '../services/cloudSync';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
@@ -117,8 +119,14 @@ export const TodayTomorrowView: React.FC = () => {
     settings.weekStartsOnMonday
   );
 
-  // Filter topics for the active board
-  const boardTopics = topics.filter(t => !t.boardId || t.boardId === activeBoardId);
+  // Filter topics for the active board or directly delegated to the current user
+  const myEmail = (profile.email || '').trim().toLowerCase();
+  const myId = profile.id;
+  const boardTopics = topics.filter(t => 
+    (!t.boardId || t.boardId === activeBoardId) ||
+    (Boolean(myEmail) && Boolean(t.assigneeEmail) && t.assigneeEmail?.toLowerCase() === myEmail) ||
+    (Boolean(myId) && Boolean(t.assigneeId) && t.assigneeId === myId)
+  );
 
   // Filter topics by tag (also matches legacy subjectId for backward compatibility)
   const tagFiltered = selectedTagFilter === 'all'
@@ -274,21 +282,29 @@ export const TodayTomorrowView: React.FC = () => {
       notes: '',
       assigneeId: assignedMember?.id,
       assigneeName: assignedMember?.name,
+      assigneeEmail: assignedMember ? (assignedMember.email || '').toLowerCase() : undefined,
       assigneeColor: assignedMember?.color,
+      delegatedBy: assignedMember ? (profile.name || profile.email) : undefined,
+      delegatedAt: assignedMember ? new Date().toISOString() : undefined,
     });
 
     if (assignedMember) {
+      const recipientEmail = (assignedMember.email || '').toLowerCase().trim();
       sendCollabNotification({
         type: 'task_delegated',
         title: 'Work Delegated',
-        message: `Card "${cleanTitle}" delegated to ${assignedMember.name}`,
-        senderName: profile.name || 'Deepwork Member',
+        message: `Task "${cleanTitle}" was assigned directly to your board`,
+        senderName: profile.name || profile.email || 'Deepwork Member',
         senderColor: '#0C66E4',
         boardId: activeBoardId,
         boardName: activeBoard?.name,
+        recipientEmail,
         taskId: createdTopic.id,
-        taskTitle: cleanTitle
+        taskTitle: cleanTitle,
+        task: createdTopic
       });
+      RealtimeCollab.sendTaskDelegation(createdTopic, recipientEmail);
+      CloudSyncService.scheduleDebouncedPush(500);
     }
 
     setInlineTitle('');

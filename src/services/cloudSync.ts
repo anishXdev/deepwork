@@ -68,7 +68,7 @@ export const CloudSyncService = {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`/api/sync?key=${encodeURIComponent(key)}`, { signal: controller.signal });
       clearTimeout(timeoutId);
       if (!res.ok) {
@@ -101,7 +101,7 @@ export const CloudSyncService = {
     try {
       const allData = StorageService.exportAllData();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,6 +243,40 @@ export const CloudSyncService = {
       return data;
     } catch (e: any) {
       return { success: false, message: e.message || 'Network error' };
+    }
+  },
+
+  /**
+   * Fetches chat messages for a specific board from MongoDB Atlas
+   */
+  async fetchRemoteChat(boardId: string): Promise<any[]> {
+    if (!boardId) return [];
+    try {
+      const res = await fetch(`/api/sync?chat=1&boardId=${encodeURIComponent(boardId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        return Array.isArray(json.messages) ? json.messages : [];
+      }
+    } catch (e) {
+      console.warn('Failed to fetch remote chat:', e);
+    }
+    return [];
+  },
+
+  /**
+   * Sends a chat message to MongoDB Atlas
+   */
+  async sendRemoteChat(message: any): Promise<boolean> {
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send_chat', message })
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn('Failed to send remote chat:', e);
+      return false;
     }
   }
 };

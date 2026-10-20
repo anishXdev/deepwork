@@ -1032,6 +1032,7 @@ export const StorageService = {
       tags: this.getTags(),
       boards: this.getBoards(),
       tasks: this.getTopics(),
+      chatMessages: this.getChatMessages(),
       sessions: this.getSessions(),
       settings: this.getSettings(),
       profile: this.getProfile(),
@@ -1079,6 +1080,9 @@ export const StorageService = {
       if (jsonData.profile) this.saveProfile(jsonData.profile);
       if (jsonData.streaks) this.saveStreaks(jsonData.streaks);
       if (jsonData.gamification) this.saveGamification(jsonData.gamification);
+      if (jsonData.chatMessages && Array.isArray(jsonData.chatMessages)) {
+        this.saveChatMessages(jsonData.chatMessages);
+      }
 
       localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, SCHEMA_VERSION.toString());
@@ -1205,16 +1209,24 @@ export const StorageService = {
     }
   },
 
-  addChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {
+  addChatMessage(msg: Partial<ChatMessage> & { boardId: string; senderId: string; senderName: string; content: string }): ChatMessage {
     const raw = localStorage.getItem(STORAGE_KEYS.CHAT_MESSAGES);
     const all: ChatMessage[] = raw ? JSON.parse(raw) : [];
-    const newMsg: ChatMessage = {
+    const id = msg.id || 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const timestamp = msg.timestamp || new Date().toISOString();
+    const finalizedMsg: ChatMessage = {
       ...msg,
-      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      timestamp: new Date().toISOString()
+      senderColor: msg.senderColor || '#0C66E4',
+      id,
+      timestamp
     };
-    all.push(newMsg);
+    const existingIndex = all.findIndex(m => m.id === id);
+    if (existingIndex >= 0) {
+      all[existingIndex] = finalizedMsg;
+    } else {
+      all.push(finalizedMsg);
+    }
     this.saveChatMessages(all);
-    return newMsg;
+    return finalizedMsg;
   }
 };

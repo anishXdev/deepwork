@@ -77,7 +77,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
   ];
 
   // Render vector elements on the canvas
-  const renderCanvas = useCallback(() => {
+  const renderCanvas = useCallback((elementsOverride?: WhiteboardElement[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -99,7 +99,8 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     }
 
     // Render all elements
-    const validElements = (elements || []).filter((el): el is WhiteboardElement => Boolean(el && typeof el === 'object' && el.id));
+    const sourceList = elementsOverride || elements || [];
+    const validElements = sourceList.filter((el): el is WhiteboardElement => Boolean(el && typeof el === 'object' && el.id));
     const allElements = currentElementRef.current
       ? [...validElements, currentElementRef.current]
       : validElements;
@@ -287,16 +288,29 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     return Math.hypot(ex - (el.x || 0), ey - (el.y || 0)) <= hitRadius;
   }, []);
 
-  // Eraser function with immediate removal and haptic pulse
+  const elementsRef = useRef<WhiteboardElement[]>(elements);
+  elementsRef.current = elements;
+  const lastErasePosRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Eraser function with immediate removal, interpolation, and synchronous canvas render
   const eraseAt = useCallback((x: number, y: number) => {
-    setElements(prev => {
-      const remaining = (prev || []).filter(el => !isElementHitByEraser(el, x, y));
-      if (remaining.length !== (prev || []).length) {
-        Haptics.tap();
-      }
-      return remaining;
+    const prev = elementsRef.current || [];
+    const lastPos = lastErasePosRef.current;
+    lastErasePosRef.current = { x, y };
+
+    const remaining = prev.filter(el => {
+      if (isElementHitByEraser(el, x, y, 32)) return false;
+      if (lastPos && isElementHitByEraser(el, (x + lastPos.x) / 2, (y + lastPos.y) / 2, 32)) return false;
+      return true;
     });
-  }, [isElementHitByEraser]);
+
+    if (remaining.length !== prev.length) {
+      elementsRef.current = remaining;
+      setElements(remaining);
+      Haptics.tap();
+      renderCanvas(remaining);
+    }
+  }, [isElementHitByEraser, renderCanvas]);
 
   // Commit typed inline text note
   const commitInlineText = useCallback(() => {
@@ -336,6 +350,8 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     setRedoStack([]);
 
     if (activeTool === 'eraser') {
+      lastErasePosRef.current = { x, y };
+      currentElementRef.current = null;
       eraseAt(x, y);
       return;
     }
@@ -378,6 +394,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     const y = e.clientY - rect.top;
 
     if (activeTool === 'eraser') {
+      currentElementRef.current = null;
       eraseAt(x, y);
       return;
     }
@@ -403,6 +420,7 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     }
 
     if (activeTool === 'eraser') {
+      lastErasePosRef.current = null;
       isDrawingRef.current = false;
       return;
     }
@@ -736,17 +754,14 @@ export const ExcalidrawWhiteboard: React.FC = () => {
               style={{ minHeight: '650px' }}
             />
 
-            {/* Inline floating text input directly on click position */}
+            {/* In-canvas inline text typing directly at click position */}
             {inlineText && (
               <div
-                className="absolute z-30 flex items-center gap-1.5 shadow-2xl rounded-xl p-1.5 border animate-in fade-in zoom-in-95 duration-100"
+                className="absolute z-30 pointer-events-auto"
                 style={{
                   left: `${inlineText.x}px`,
                   top: `${inlineText.y}px`,
-                  background: isDark ? 'rgba(22, 26, 29, 0.96)' : 'rgba(255, 255, 255, 0.96)',
-                  borderColor: 'var(--accent)',
-                  backdropFilter: 'blur(8px)',
-                  transform: 'translate(0, -6px)'
+                  transform: 'translate(0, -4px)'
                 }}
               >
                 <input
@@ -764,24 +779,16 @@ export const ExcalidrawWhiteboard: React.FC = () => {
                     }
                   }}
                   onBlur={commitInlineText}
-                  placeholder="Type text note..."
+                  placeholder="Type here..."
                   autoFocus
-                  className="px-2.5 py-1 text-sm font-bold bg-transparent outline-none"
+                  className="bg-transparent border-b-2 border-blue-500 outline-none px-1 py-0.5 font-bold text-[15px]"
                   style={{
                     color: selectedColor,
-                    minWidth: '180px'
+                    caretColor: selectedColor,
+                    minWidth: '140px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                   }}
                 />
-                <button
-                  type="button"
-                  onMouseDown={e => {
-                    e.preventDefault();
-                    commitInlineText();
-                  }}
-                  className="px-2 py-1 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
-                >
-                  Add
-                </button>
               </div>
             )}
           </>

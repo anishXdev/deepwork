@@ -151,6 +151,7 @@ export interface CollabNotification {
   inviteCode?: string;
   taskId?: string;
   taskTitle?: string;
+  task?: any;
   timestamp: string;
   read: boolean;
   status?: 'pending' | 'accepted' | 'declined';
@@ -240,7 +241,10 @@ export interface Task {
   checklist?: { id: string; text: string; done: boolean }[];
   assigneeId?: string; // Collaborator member ID delegated to this task
   assigneeName?: string; // Collaborator display name
+  assigneeEmail?: string; // Collaborator email address
   assigneeColor?: string; // Collaborator avatar color
+  delegatedBy?: string; // Member name or email who delegated this task
+  delegatedAt?: string; // ISO timestamp when task was delegated
   gcalEventId?: string; // Google Calendar Event ID if synced
   gcalLink?: string; // Web link to view event in Google Calendar
   createdAt: string;

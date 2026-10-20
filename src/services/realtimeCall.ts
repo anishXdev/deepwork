@@ -8,6 +8,7 @@ interface RealtimeCallbacks {
   onCallEnded?: (data: { callId: string }) => void;
   onRemoteStream?: (stream: MediaStream) => void;
   onChatMessage?: (msg: ChatMessage) => void;
+  onTaskDelegated?: (data: { task: any; recipientEmail?: string; boardId?: string; boardName?: string; senderName?: string; senderEmail?: string }) => void;
   onConnectionStatus?: (status: 'connected' | 'connecting' | 'disconnected') => void;
 }
 
@@ -234,6 +235,12 @@ export class RealtimeCollabManager {
         }
         break;
 
+      case 'task_delegated':
+        if (data.senderId !== this.currentUserId) {
+          this.callbacks.onTaskDelegated?.(data);
+        }
+        break;
+
       default:
         break;
     }
@@ -334,6 +341,27 @@ export class RealtimeCollabManager {
     });
   }
 
+  sendTaskDelegation(taskOrParams: any, recipientEmail?: string) {
+    if (taskOrParams && taskOrParams.task) {
+      this.send({
+        type: 'task_delegated',
+        ...taskOrParams,
+        senderId: this.currentUserId
+      });
+    } else {
+      this.send({
+        type: 'task_delegated',
+        task: taskOrParams,
+        recipientEmail,
+        senderId: this.currentUserId
+      });
+    }
+  }
+
+  getLocalStream(): MediaStream | null {
+    return this.localStream;
+  }
+
   /* ── WebRTC Peer Connection & Media Streams ───────────────── */
   private getOrCreatePeerConnection(): RTCPeerConnection {
     if (this.peerConnection && this.peerConnection.signalingState !== 'closed') {
@@ -357,7 +385,10 @@ export class RealtimeCollabManager {
 
     pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
-        this.callbacks.onRemoteStream?.(event.streams[0]);
+        const stream = event.streams[0];
+        stream.onaddtrack = () => this.callbacks.onRemoteStream?.(new MediaStream(stream.getTracks()));
+        stream.onremovetrack = () => this.callbacks.onRemoteStream?.(new MediaStream(stream.getTracks()));
+        this.callbacks.onRemoteStream?.(stream);
       }
     };
 

@@ -262,36 +262,26 @@ export const NotificationCenterModal: React.FC = () => {
                   )}
 
                   {notif.type === 'task_delegated' && (
-                    <div className="flex items-center gap-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          markNotificationAsRead(notif.id);
-                          if (notif.taskId) {
-                            const task = topics.find(t => t.id === notif.taskId);
-                            if (task) setActiveFocusTopic(task);
-                          }
-                          setActiveTab('timer');
-                          setIsNotificationCenterOpen(false);
-                        }}
-                        className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>Accept & Focus</span>
-                      </button>
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Added directly to your board</span>
+                      </span>
 
                       <button
                         type="button"
                         onClick={e => {
                           e.stopPropagation();
                           markNotificationAsRead(notif.id);
+                          if (notif.boardId) {
+                            setActiveBoardId(notif.boardId);
+                          }
                           setActiveTab('study');
                           setIsNotificationCenterOpen(false);
                         }}
-                        className="btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1 text-slate-500"
+                        className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 cursor-pointer"
                       >
-                        <ExternalLink className="w-3 h-3" />
+                        <ExternalLink className="w-3.5 h-3.5" />
                         <span>View on Board</span>
                       </button>
                     </div>

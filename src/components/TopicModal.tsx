@@ -1,3 +1,5 @@
+import { RealtimeCollab } from '../services/realtimeCall';
+import { CloudSyncService } from '../services/cloudSync';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
@@ -95,21 +97,29 @@ export const TopicModal: React.FC = () => {
         priority: priority !== 'normal' ? priority : undefined,
         assigneeId: assignedMember?.id,
         assigneeName: assignedMember?.name,
-        assigneeColor: assignedMember?.color
+        assigneeEmail: assignedMember ? (assignedMember.email || '').toLowerCase() : undefined,
+        assigneeColor: assignedMember?.color,
+        delegatedBy: assignedMember ? (profile.name || profile.email) : undefined,
+        delegatedAt: assignedMember ? new Date().toISOString() : undefined
       });
 
       if (assignedMember) {
+        const recipientEmail = (assignedMember.email || '').toLowerCase().trim();
         sendCollabNotification({
           type: 'task_delegated',
           title: 'Work Delegated',
-          message: `Card "${cleanTitle}" delegated to ${assignedMember.name}`,
-          senderName: profile.name || 'Deepwork Member',
+          message: `Task "${cleanTitle}" was assigned directly to your board`,
+          senderName: profile.name || profile.email || 'Deepwork Member',
           senderColor: '#0C66E4',
           boardId: activeBoardId,
           boardName: activeBoard?.name,
+          recipientEmail,
           taskId: createdTopic.id,
-          taskTitle: cleanTitle
+          taskTitle: cleanTitle,
+          task: createdTopic
         });
+        RealtimeCollab.sendTaskDelegation(createdTopic, recipientEmail);
+        CloudSyncService.scheduleDebouncedPush(500);
       }
 
       Haptics.success();

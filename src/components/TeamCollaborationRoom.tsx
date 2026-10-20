@@ -1,3 +1,4 @@
+import { RealtimeCollab } from '../services/realtimeCall';
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
@@ -55,10 +56,13 @@ export const TeamCollaborationRoom: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [selectedTaskToShare, setSelectedTaskToShare] = useState<string>('');
   const [isTaskPickerOpen, setIsTaskPickerOpen] = useState(false);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const screenVideoRef = useRef<HTMLVideoElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Filter chat messages strictly for the active board
+  const boardMessages = chatMessages.filter(m => !m.boardId || m.boardId === activeBoard?.id);
 
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
@@ -102,27 +106,14 @@ export const TeamCollaborationRoom: React.FC = () => {
     }
   }, [remoteMediaStream]);
 
-  // Handle local user webcam stream for real video
+  // Sync local stream with local video element using singleton RealtimeCollab stream
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    if (activeCall?.active && activeCall.isVideoOn) {
-      navigator.mediaDevices?.getUserMedia?.({ video: true, audio: true })
-        .then(s => {
-          stream = s;
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = s;
-          }
-        })
-        .catch(err => {
-          console.warn('Webcam stream not permitted or unavailable, falling back to avatar tile:', err);
-        });
-    }
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+    if (activeCall?.active && activeCall.isVideoOn && localVideoRef.current) {
+      const s = RealtimeCollab.getLocalStream();
+      if (s && localVideoRef.current.srcObject !== s) {
+        localVideoRef.current.srcObject = s;
       }
-    };
+    }
   }, [activeCall?.active, activeCall?.isVideoOn]);
 
   // Handle screen stream attachment to screen video element
@@ -134,7 +125,7 @@ export const TeamCollaborationRoom: React.FC = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  }, [boardMessages]);
 
   const isVisible = isTeamRoomOpen || activeCall?.active || Boolean(outgoingCall);
   if (!isVisible) return null;
@@ -446,7 +437,7 @@ export const TeamCollaborationRoom: React.FC = () => {
               <div className="flex-1 flex flex-col justify-between overflow-hidden">
                 {/* Chat Messages Log */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {chatMessages.length === 0 ? (
+                  {boardMessages.length === 0 ? (
                     <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
                       <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
                         <Lock className="w-5 h-5" />
@@ -459,7 +450,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                       </p>
                     </div>
                   ) : (
-                    chatMessages.map(msg => {
+                    boardMessages.map(msg => {
                       const isMe = msg.senderId === (profile.id || 'user_current');
                       return (
                         <div
@@ -641,7 +632,13 @@ export const TeamCollaborationRoom: React.FC = () => {
                       <div className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center shadow-lg min-h-[160px]">
                         {activeCall.isVideoOn ? (
                           <video
-                            ref={localVideoRef}
+                            ref={el => {
+                              localVideoRef.current = el;
+                              const s = RealtimeCollab.getLocalStream();
+                              if (el && s && el.srcObject !== s) {
+                                el.srcObject = s;
+                              }
+                            }}
                             autoPlay
                             playsInline
                             muted
@@ -678,7 +675,12 @@ export const TeamCollaborationRoom: React.FC = () => {
                         >
                           {remoteMediaStream && remoteMediaStream.getVideoTracks().length > 0 ? (
                             <video
-                              ref={remoteVideoRef}
+                              ref={el => {
+                                remoteVideoRef.current = el;
+                                if (el && remoteMediaStream && el.srcObject !== remoteMediaStream) {
+                                  el.srcObject = remoteMediaStream;
+                                }
+                              }}
                               autoPlay
                               playsInline
                               className="w-full h-full object-cover"
@@ -698,14 +700,17 @@ export const TeamCollaborationRoom: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Hidden audio element ensuring remote audio plays */}
+                          {/* Hidden unmuted audio element ensuring remote audio ALWAYS plays */}
                           <audio
                             autoPlay
+                            playsInline
                             ref={el => {
                               if (el && remoteMediaStream && el.srcObject !== remoteMediaStream) {
                                 el.srcObject = remoteMediaStream;
+                                el.play().catch(() => {});
                               }
                             }}
+                            className="hidden"
                           />
 
                           <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1.5">
