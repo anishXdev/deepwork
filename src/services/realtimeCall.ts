@@ -135,14 +135,14 @@ export class RealtimeCollabManager {
   private async handleIncomingSocketMessage(data: any) {
     switch (data.type) {
       case 'chat_message':
-        if (data.message) {
+        if (data.message && data.message.senderId !== this.currentUserId) {
           this.callbacks.onChatMessage?.(data.message);
         }
         break;
 
       case 'incoming_call':
-        // Only fire if the incoming call is not from ourselves
-        if (data.callerEmail && data.callerEmail.toLowerCase() !== this.currentUserEmail) {
+        // Only fire if the incoming call is not from ourselves in the same tab/session
+        if (data.callerId !== this.currentUserId) {
           const incoming: IncomingCall = {
             id: data.callId,
             boardId: data.boardId,
@@ -167,61 +167,69 @@ export class RealtimeCollabManager {
             ]
           };
           this.activeCallId = data.callId;
-          this.targetPeerEmail = data.callerEmail.toLowerCase();
+          this.targetPeerEmail = (data.callerEmail || '').toLowerCase();
           this.callbacks.onIncomingCall?.(incoming);
         }
         break;
 
       case 'call_accepted':
-        this.activeCallId = data.callId;
-        this.targetPeerEmail = (data.accepterEmail || '').toLowerCase();
-        this.callbacks.onCallAccepted?.({
-          callId: data.callId,
-          peerId: data.accepterId,
-          peerName: data.accepterName,
-          peerEmail: data.accepterEmail
-        });
+        if (data.accepterId !== this.currentUserId) {
+          this.activeCallId = data.callId;
+          this.targetPeerEmail = (data.accepterEmail || '').toLowerCase();
+          this.callbacks.onCallAccepted?.({
+            callId: data.callId,
+            peerId: data.accepterId,
+            peerName: data.accepterName,
+            peerEmail: data.accepterEmail
+          });
 
-        // If we are the caller, start WebRTC Offer
-        if (this.isCaller) {
-          await this.initiateWebRTCOffer();
+          // If we are the caller, start WebRTC Offer
+          if (this.isCaller) {
+            await this.initiateWebRTCOffer();
+          }
         }
         break;
 
       case 'call_rejected':
-        this.callbacks.onCallDeclined?.({
-          callId: data.callId,
-          peerId: data.rejecterId,
-          peerName: data.rejecterName,
-          peerEmail: data.rejecterEmail
-        });
-        this.cleanupCall();
+        if (data.rejecterId !== this.currentUserId) {
+          this.callbacks.onCallDeclined?.({
+            callId: data.callId,
+            peerId: data.rejecterId,
+            peerName: data.rejecterName,
+            peerEmail: data.rejecterEmail
+          });
+          this.cleanupCall();
+        }
         break;
 
       case 'call_cancelled':
-        this.callbacks.onCallCancelled?.({ callId: data.callId });
-        this.cleanupCall();
+        if (data.callerId !== this.currentUserId) {
+          this.callbacks.onCallCancelled?.({ callId: data.callId });
+          this.cleanupCall();
+        }
         break;
 
       case 'call_ended':
-        this.callbacks.onCallEnded?.({ callId: data.callId });
-        this.cleanupCall();
+        if (data.senderId !== this.currentUserId) {
+          this.callbacks.onCallEnded?.({ callId: data.callId });
+          this.cleanupCall();
+        }
         break;
 
       case 'webrtc_offer':
-        if (data.offer && data.senderEmail !== this.currentUserEmail) {
+        if (data.offer && data.senderId !== this.currentUserId) {
           await this.handleWebRTCOffer(data.offer, data.senderEmail);
         }
         break;
 
       case 'webrtc_answer':
-        if (data.answer && data.senderEmail !== this.currentUserEmail) {
+        if (data.answer && data.senderId !== this.currentUserId) {
           await this.handleWebRTCAnswer(data.answer);
         }
         break;
 
       case 'webrtc_ice':
-        if (data.candidate && data.senderEmail !== this.currentUserEmail) {
+        if (data.candidate && data.senderId !== this.currentUserId) {
           await this.handleWebRTCIce(data.candidate);
         }
         break;
@@ -270,6 +278,7 @@ export class RealtimeCollabManager {
       this.send({
         type: 'call_cancel',
         callId: id,
+        callerId: this.currentUserId,
         callerEmail: this.currentUserEmail
       });
     }
@@ -309,6 +318,7 @@ export class RealtimeCollabManager {
       this.send({
         type: 'call_end',
         callId: id,
+        senderId: this.currentUserId,
         senderEmail: this.currentUserEmail,
         targetEmail: this.targetPeerEmail
       });
@@ -333,11 +343,12 @@ export class RealtimeCollabManager {
     const pc = new RTCPeerConnection(this.rtcConfig);
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && this.targetPeerEmail) {
+      if (event.candidate) {
         this.send({
           type: 'webrtc_ice',
           callId: this.activeCallId,
           candidate: event.candidate.toJSON(),
+          senderId: this.currentUserId,
           senderEmail: this.currentUserEmail,
           targetEmail: this.targetPeerEmail
         });
@@ -399,6 +410,7 @@ export class RealtimeCollabManager {
         type: 'webrtc_offer',
         callId: this.activeCallId,
         offer: pc.localDescription,
+        senderId: this.currentUserId,
         senderEmail: this.currentUserEmail,
         targetEmail: this.targetPeerEmail
       });
@@ -426,6 +438,7 @@ export class RealtimeCollabManager {
         type: 'webrtc_answer',
         callId: this.activeCallId,
         answer: pc.localDescription,
+        senderId: this.currentUserId,
         senderEmail: this.currentUserEmail,
         targetEmail: senderEmail
       });

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   Subject, 
@@ -356,17 +356,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const activeCallRef = useRef<ActiveCallState | null>(null);
   activeCallRef.current = activeCall;
 
-  // Initialize and maintain WebSocket connection
-  useEffect(() => {
-    if (profile.email) {
-      RealtimeCollab.connect(
-        profile.email,
-        activeBoardId,
-        profile.id || 'usr_me',
-        profile.name || profile.email.split('@')[0]
-      );
+  // Persistent unique tab/window client identifier
+  const tabClientId = useMemo(() => {
+    let id = sessionStorage.getItem('deepwork_client_tab_id');
+    if (!id) {
+      id = `tab_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      sessionStorage.setItem('deepwork_client_tab_id', id);
     }
-  }, [profile.email, activeBoardId, profile.id, profile.name]);
+    return id;
+  }, []);
+
+  // Initialize and maintain WebSocket connection for all clients/tabs
+  useEffect(() => {
+    const effectiveEmail = (profile.email || '').trim().toLowerCase();
+    const effectiveUserId = profile.id ? `${profile.id}_${tabClientId}` : tabClientId;
+    const effectiveName = profile.name || (effectiveEmail ? effectiveEmail.split('@')[0] : 'Teammate');
+
+    RealtimeCollab.connect(
+      effectiveEmail || `${tabClientId}@deepwork.local`,
+      activeBoardId,
+      effectiveUserId,
+      effectiveName
+    );
+  }, [profile.email, activeBoardId, profile.id, profile.name, tabClientId]);
+
+  // Keep active board synced on the socket
+  useEffect(() => {
+    if (activeBoardId) {
+      RealtimeCollab.updateBoard(activeBoardId);
+    }
+  }, [activeBoardId]);
 
   // Register Realtime Collab Callbacks
   useEffect(() => {
@@ -434,6 +453,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         StorageService.addChatMessage(msg);
         sound.playNotificationPop();
+        // Toast notification so collaborator is alerted even when room is closed
+        Notifications.toast('info', `💬 ${msg.senderName}: "${msg.content.slice(0, 45)}${msg.content.length > 45 ? '...' : ''}"`);
       }
     });
   }, []);

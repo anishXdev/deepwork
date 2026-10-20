@@ -97,8 +97,12 @@ export default defineConfig(({ mode }) => {
                     const sender = collabClients.get(ws);
                     const targetBoardId = data.boardId || sender?.boardId;
                     for (const [clientWs, client] of collabClients.entries()) {
-                      if (clientWs !== ws && client.boardId === targetBoardId && clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(JSON.stringify(data));
+                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                        const isSameBoard = Boolean(client.boardId && targetBoardId && client.boardId === targetBoardId);
+                        const isPeerInWorkspace = collabClients.size <= 4;
+                        if (isSameBoard || isPeerInWorkspace) {
+                          clientWs.send(JSON.stringify(data));
+                        }
                       }
                     }
                     return;
@@ -106,16 +110,23 @@ export default defineConfig(({ mode }) => {
 
                   // 2. Call Ringing: Send incoming_call to targeted users
                   if (data.type === 'call_ring') {
-                    const targetEmails = (data.targetEmails || []).map((e: string) => (e || '').toLowerCase().trim());
-                    const callerEmail = (data.callerEmail || '').toLowerCase().trim();
+                    const targetEmails = (data.targetEmails || []).map((e: string) => (e || '').toLowerCase().trim()).filter(Boolean);
+                    const callerId = data.callerId;
 
                     for (const [clientWs, client] of collabClients.entries()) {
                       if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        const isTargetEmail = targetEmails.length === 0 || targetEmails.includes(client.email);
-                        const isSameBoard = client.boardId === data.boardId;
-                        const notCaller = client.email !== callerEmail;
+                        // Never send back to the exact same caller socket or same userId
+                        if (client.userId && callerId && client.userId === callerId) {
+                          continue;
+                        }
 
-                        if (notCaller && (isTargetEmail || isSameBoard)) {
+                        const matchesEmail = targetEmails.length > 0 && targetEmails.some((te: string) =>
+                          client.email === te || client.email.includes(te) || te.includes(client.email)
+                        );
+                        const isSameBoard = Boolean(client.boardId && data.boardId && client.boardId === data.boardId);
+                        const isPeerFallback = collabClients.size <= 4;
+
+                        if (matchesEmail || isSameBoard || targetEmails.length === 0 || isPeerFallback) {
                           clientWs.send(JSON.stringify({
                             type: 'incoming_call',
                             callId: data.callId,
@@ -153,18 +164,15 @@ export default defineConfig(({ mode }) => {
 
                   // 4. Call Rejected
                   if (data.type === 'call_reject') {
-                    const targetEmail = (data.targetEmail || '').toLowerCase().trim();
-                    for (const [clientWs, client] of collabClients.entries()) {
+                    for (const [clientWs] of collabClients.entries()) {
                       if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        if (!targetEmail || client.email === targetEmail) {
-                          clientWs.send(JSON.stringify({
-                            type: 'call_rejected',
-                            callId: data.callId,
-                            rejecterId: data.rejecterId,
-                            rejecterEmail: data.rejecterEmail,
-                            rejecterName: data.rejecterName
-                          }));
-                        }
+                        clientWs.send(JSON.stringify({
+                          type: 'call_rejected',
+                          callId: data.callId,
+                          rejecterId: data.rejecterId,
+                          rejecterEmail: data.rejecterEmail,
+                          rejecterName: data.rejecterName
+                        }));
                       }
                     }
                     return;
@@ -176,7 +184,8 @@ export default defineConfig(({ mode }) => {
                       if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
                         clientWs.send(JSON.stringify({
                           type: 'call_cancelled',
-                          callId: data.callId
+                          callId: data.callId,
+                          callerId: data.callerId
                         }));
                       }
                     }
@@ -189,7 +198,8 @@ export default defineConfig(({ mode }) => {
                       if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
                         clientWs.send(JSON.stringify({
                           type: 'call_ended',
-                          callId: data.callId
+                          callId: data.callId,
+                          senderId: data.senderId
                         }));
                       }
                     }
@@ -198,12 +208,9 @@ export default defineConfig(({ mode }) => {
 
                   // 7. WebRTC Signaling Relays (Offer, Answer, ICE)
                   if (data.type === 'webrtc_offer' || data.type === 'webrtc_answer' || data.type === 'webrtc_ice') {
-                    const targetEmail = (data.targetEmail || '').toLowerCase().trim();
-                    for (const [clientWs, client] of collabClients.entries()) {
+                    for (const [clientWs] of collabClients.entries()) {
                       if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        if (!targetEmail || client.email === targetEmail) {
-                          clientWs.send(JSON.stringify(data));
-                        }
+                        clientWs.send(JSON.stringify(data));
                       }
                     }
                     return;

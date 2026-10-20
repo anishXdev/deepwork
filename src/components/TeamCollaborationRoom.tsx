@@ -20,7 +20,10 @@ import {
   FileText,
   CheckSquare,
   Square,
-  BellRing
+  BellRing,
+  Minus,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
@@ -48,6 +51,7 @@ export const TeamCollaborationRoom: React.FC = () => {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'chat' | 'call'>('chat');
+  const [windowMode, setWindowMode] = useState<'floating' | 'minimized' | 'full'>('floating');
   const [inputText, setInputText] = useState('');
   const [selectedTaskToShare, setSelectedTaskToShare] = useState<string>('');
   const [isTaskPickerOpen, setIsTaskPickerOpen] = useState(false);
@@ -83,10 +87,11 @@ export const TeamCollaborationRoom: React.FC = () => {
     setSelectedMemberIds(effectiveCallable.map(m => m.id));
   }, [effectiveCallable.length]);
 
-  // If a call or ring is started, auto-switch to call tab
+  // If a call or ring is started, auto-switch to call tab and ensure floating mode
   useEffect(() => {
     if (activeCall?.active || outgoingCall) {
       setActiveTab('call');
+      setWindowMode(prev => prev === 'minimized' ? 'minimized' : 'floating');
     }
   }, [activeCall?.active, outgoingCall]);
 
@@ -131,7 +136,8 @@ export const TeamCollaborationRoom: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  if (!isTeamRoomOpen) return null;
+  const isVisible = isTeamRoomOpen || activeCall?.active || Boolean(outgoingCall);
+  if (!isVisible) return null;
 
   const formatCallTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
@@ -227,85 +233,210 @@ export const TeamCollaborationRoom: React.FC = () => {
     endCall();
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in"
-      onClick={() => setIsTeamRoomOpen(false)}
-    >
-      <div
-        className="w-full max-w-3xl h-[88vh] max-h-[720px] flex flex-col rounded-2xl shadow-2xl border overflow-hidden animate-in zoom-in-95 duration-150"
+  // Minimized floating capsule docked at bottom right
+  if (windowMode === 'minimized') {
+    return (
+      <aside
+        aria-label="Active Call Floating Bar"
+        className="fixed bottom-5 right-5 z-40 h-14 rounded-full px-4 flex items-center gap-3 shadow-2xl border pointer-events-auto animate-in slide-in-from-bottom-2 duration-150"
         style={{
-          background: 'var(--bg-card)',
-          borderColor: 'var(--border)'
+          background: 'var(--bg-card-alt)',
+          borderColor: 'var(--border)',
+          boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5), 0 0 0 1px rgba(16, 185, 129, 0.3)'
         }}
-        onClick={e => e.stopPropagation()}
       >
-        {/* Top Header */}
-        <div className="px-5 py-3.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600/10 text-emerald-600 flex items-center justify-center border border-emerald-600/20">
-              <Lock className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold truncate max-w-[200px] sm:max-w-xs" style={{ color: 'var(--text-primary)' }}>
-                  {activeBoard?.name || 'Main Board'} Team Room
-                </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>E2EE Encrypted</span>
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Peer-to-peer secure chat, voice & video workspace
-              </p>
-            </div>
-          </div>
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
 
-          <div className="flex items-center gap-2">
-            {/* Tab switchers */}
-            <div className="flex items-center rounded-lg p-0.5 border" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  Haptics.tap();
-                  setActiveTab('chat');
-                }}
-                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'chat'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>Chat</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  Haptics.tap();
-                  setActiveTab('call');
-                }}
-                className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'call'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Video className="w-3.5 h-3.5" />
-                <span>Call {(activeCall?.active || outgoingCall) && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}</span>
-              </button>
-            </div>
+        <div className="flex flex-col min-w-0 pr-1">
+          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+            {activeCall?.type === 'video' ? <Video className="w-3.5 h-3.5 text-blue-400" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+            <span>
+              {activeCall?.active
+                ? formatCallTime(activeCall.durationSeconds)
+                : outgoingCall
+                ? `Ringing ${formatCallTime(outgoingCall.ringingSeconds)}`
+                : 'Team Room'}
+            </span>
+          </span>
+          <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
+            {activeCall?.participants[0]?.name || outgoingCall?.targetNames[0] || activeBoard?.name || 'Workspace'}
+          </span>
+        </div>
 
+        {activeCall?.active && (
+          <div className="flex items-center gap-1 border-l pl-2 border-slate-700">
             <button
               type="button"
-              onClick={() => setIsTeamRoomOpen(false)}
-              className="p-1.5 rounded-lg hover:bg-slate-500/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              onClick={toggleCallMute}
+              className={`p-2 rounded-full transition cursor-pointer ${
+                activeCall.isMuted ? 'bg-rose-500/20 text-rose-400' : 'hover:bg-white/10 text-slate-300 hover:text-white'
+              }`}
+              title={activeCall.isMuted ? 'Unmute' : 'Mute'}
             >
-              <X className="w-4 h-4" />
+              {activeCall.isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={toggleCallVideo}
+              className={`p-2 rounded-full transition cursor-pointer ${
+                !activeCall.isVideoOn ? 'bg-rose-500/20 text-rose-400' : 'hover:bg-white/10 text-slate-300 hover:text-white'
+              }`}
+              title={activeCall.isVideoOn ? 'Camera Off' : 'Camera On'}
+            >
+              {activeCall.isVideoOn ? <Video className="w-3.5 h-3.5 text-blue-400" /> : <VideoOff className="w-3.5 h-3.5" />}
             </button>
           </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            Haptics.tap();
+            setWindowMode('floating');
+            setIsTeamRoomOpen(true);
+          }}
+          className="p-2 rounded-full hover:bg-white/10 text-blue-400 hover:text-blue-300 transition cursor-pointer"
+          title="Restore Floating Call Window"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
+
+        {activeCall?.active ? (
+          <button
+            type="button"
+            onClick={handleEndCall}
+            className="p-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white transition active:scale-95 cursor-pointer"
+            title="End Call"
+          >
+            <PhoneOff className="w-3.5 h-3.5" />
+          </button>
+        ) : outgoingCall ? (
+          <button
+            type="button"
+            onClick={cancelOutgoingCall}
+            className="p-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white transition active:scale-95 cursor-pointer"
+            title="Cancel Call"
+          >
+            <PhoneOff className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsTeamRoomOpen(false)}
+            className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+            title="Close"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </aside>
+    );
+  }
+
+  const windowInnerMarkup = (
+    <>
+      {/* Top Header */}
+      <div className="px-4 sm:px-5 py-3 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-emerald-600/10 text-emerald-600 flex items-center justify-center border border-emerald-600/20 shrink-0">
+            <Lock className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-xs sm:text-sm font-bold truncate max-w-[130px] sm:max-w-xs" style={{ color: 'var(--text-primary)' }}>
+                {activeBoard?.name || 'Main Board'}
+              </h2>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-0.5 shrink-0">
+                <ShieldCheck className="w-2.5 h-2.5" />
+                <span>E2EE</span>
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 truncate hidden sm:block">
+              Secure peer-to-peer workspace
+            </p>
+          </div>
         </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Tab switchers */}
+          <div className="flex items-center rounded-lg p-0.5 border" style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+            <button
+              type="button"
+              onClick={() => {
+                Haptics.tap();
+                setActiveTab('chat');
+              }}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'chat'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <MessageSquare className="w-3 h-3" />
+              <span>Chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                Haptics.tap();
+                setActiveTab('call');
+              }}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'call'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Video className="w-3 h-3" />
+              <span>Call {(activeCall?.active || outgoingCall) && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}</span>
+            </button>
+          </div>
+
+          {/* Minimize button: collapses into bottom-right floating pill */}
+          <button
+            type="button"
+            onClick={() => {
+              Haptics.tap();
+              setWindowMode('minimized');
+            }}
+            className="p-1.5 rounded-lg hover:bg-slate-500/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            title="Minimize to floating pill"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Fullscreen / Float toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              Haptics.tap();
+              setWindowMode(prev => prev === 'full' ? 'floating' : 'full');
+            }}
+            className="p-1.5 rounded-lg hover:bg-slate-500/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            title={windowMode === 'full' ? 'Exit fullscreen (Float)' : 'Fullscreen / Expand'}
+          >
+            {windowMode === 'full' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={() => {
+              Haptics.tap();
+              if (activeCall?.active || outgoingCall) {
+                setWindowMode('minimized');
+                Notifications.toast('info', 'Call minimized to floating bar. Click expand to reopen.');
+              } else {
+                setIsTeamRoomOpen(false);
+              }
+            }}
+            className="p-1.5 rounded-lg hover:bg-slate-500/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            title="Close"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
 
         {/* Content Area */}
         <div className="flex-1 flex overflow-hidden">
@@ -814,49 +945,84 @@ export const TeamCollaborationRoom: React.FC = () => {
             )}
           </div>
 
-          {/* Right Sidebar: Active Members List */}
-          <div className="w-56 border-l p-4 hidden md:flex flex-col justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
-                <span className="flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Members</span>
-                </span>
-                <span>{members.length}</span>
-              </div>
+          {/* Right Sidebar: Active Members List (only visible in full mode on desktop) */}
+          {windowMode === 'full' && (
+            <div className="w-56 border-l p-4 hidden md:flex flex-col justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Members</span>
+                  </span>
+                  <span>{members.length}</span>
+                </div>
 
-              <div className="space-y-2">
-                {members.map(m => (
-                  <div
-                    key={m.id}
-                    className="p-2 rounded-xl flex items-center gap-2 border bg-white/40 dark:bg-slate-800/40 text-xs"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
+                <div className="space-y-2">
+                  {members.map(m => (
                     <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white"
-                      style={{ backgroundColor: m.color || '#0C66E4' }}
+                      key={m.id}
+                      className="p-2 rounded-xl flex items-center gap-2 border bg-white/40 dark:bg-slate-800/40 text-xs"
+                      style={{ borderColor: 'var(--border)' }}
                     >
-                      {m.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="truncate min-w-0">
-                      <div className="font-bold truncate text-[11px]" style={{ color: 'var(--text-primary)' }}>
-                        {m.name}
+                      <div
+                        className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white"
+                        style={{ backgroundColor: m.color || '#0C66E4' }}
+                      >
+                        {m.name.slice(0, 2).toUpperCase()}
                       </div>
-                      <div className="text-[10px] text-slate-400 capitalize">{m.role}</div>
+                      <div className="truncate min-w-0">
+                        <div className="font-bold truncate text-[11px]" style={{ color: 'var(--text-primary)' }}>
+                          {m.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 capitalize">{m.role}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-slate-400 space-y-1">
+                <span className="font-bold text-blue-600 block flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Quick Tip
+                </span>
+                <span>Mention collaborators using <strong>@Name</strong> in card titles to assign work instantly.</span>
               </div>
             </div>
-
-            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-slate-400 space-y-1">
-              <span className="font-bold text-blue-600 block flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> Quick Tip
-              </span>
-              <span>Mention collaborators using <strong>@Name</strong> in card titles to assign work instantly.</span>
-            </div>
-          </div>
+          )}
         </div>
+    </>
+  );
+
+  if (windowMode === 'floating') {
+    return (
+      <aside
+        aria-label="Floating Collaboration Window"
+        className="fixed bottom-5 right-5 z-40 w-[420px] max-w-[calc(100vw-1.5rem)] h-[540px] max-h-[82vh] flex flex-col rounded-2xl shadow-2xl border overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-4 duration-150"
+        style={{
+          background: 'var(--bg-card)',
+          borderColor: 'var(--border)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(59, 130, 246, 0.25)'
+        }}
+      >
+        {windowInnerMarkup}
+      </aside>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in"
+      onClick={() => setWindowMode('floating')}
+    >
+      <div
+        className="w-full max-w-4xl h-[88vh] max-h-[760px] flex flex-col rounded-2xl shadow-2xl border overflow-hidden animate-in zoom-in-95 duration-150"
+        style={{
+          background: 'var(--bg-card)',
+          borderColor: 'var(--border)'
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {windowInnerMarkup}
       </div>
     </div>
   );
