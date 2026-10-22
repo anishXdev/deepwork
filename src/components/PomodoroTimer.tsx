@@ -11,7 +11,6 @@ import {
   Minimize2,
   Coffee,
   Timer,
-  Lock,
   Sliders,
   Sparkles,
   Volume2,
@@ -45,7 +44,6 @@ export const PomodoroTimer: React.FC = () => {
     setCustomTimerMinutes,
     addFiveMinutes,
     manualCompleteAndLog,
-    enableStrictFocus,
     isTourOpen,
     tourStep
   } = useApp();
@@ -76,15 +74,13 @@ export const PomodoroTimer: React.FC = () => {
   );
   const currentTopic = topics.find(t => t.id === timerSelectedTopicId);
 
-  const isGatePrep = Boolean(settings.isGatePrep);
-
   // Quick preset options
   const standardPresets = [
     { mins: 15, label: '15m Sprint' },
     { mins: 25, label: '25m Focus' },
     { mins: 45, label: '45m Deep Work' },
-    { mins: 60, label: '60m Lecture' },
-    { mins: 90, label: '90m Exam Block' },
+    { mins: 60, label: '60m Work Block' },
+    { mins: 90, label: '90m Deep Work' },
   ];
 
   const handleApplyCustomTime = (mins: number) => {
@@ -112,24 +108,7 @@ export const PomodoroTimer: React.FC = () => {
       style={isFullscreen ? { background: 'var(--bg-app)' } : {}}
     >
       {/* ── Top Bar ───────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => {
-            Haptics.notification();
-            enableStrictFocus();
-          }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer"
-          style={{
-            background: 'rgba(239,68,68,0.08)',
-            border: '1px solid rgba(239,68,68,0.25)',
-            color: '#ef4444',
-          }}
-          title="Strict Focus: Fullscreen immersion lockdown, blocks distraction"
-        >
-          <Lock className="w-3.5 h-3.5" />
-          <span>{isGatePrep ? 'Strict Exam Lockdown' : 'Strict Focus Mode'}</span>
-        </button>
-
+      <div className="flex items-center justify-end mb-4">
         <div className="flex items-center gap-2">
           {/* Custom Timer Duration Trigger */}
           <button
@@ -411,7 +390,7 @@ export const PomodoroTimer: React.FC = () => {
             </h3>
           </div>
           <span className="text-[10px] font-mono text-slate-400">
-            {studiedSecondsInSession > 0 ? `Session: ${Math.round(studiedSecondsInSession / 60)}m logged` : 'Select tag or topic'}
+            {studiedSecondsInSession > 0 ? `Session: ${Math.round(studiedSecondsInSession / 60)}m focused` : 'Select a tag or task'}
           </span>
         </div>
 

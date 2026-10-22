@@ -212,9 +212,14 @@ export const ExcalidrawWhiteboard: React.FC = () => {
       }
     };
     updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(canvas.parentElement || canvas);
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, [renderCanvas]);
 
   useEffect(() => {
     renderCanvas();
@@ -349,9 +354,13 @@ export const ExcalidrawWhiteboard: React.FC = () => {
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {}
+    if (activeTool !== 'text') {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {}
+    } else {
+      e.preventDefault();
+    }
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;

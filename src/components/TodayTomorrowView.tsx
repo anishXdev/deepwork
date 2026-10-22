@@ -1464,11 +1464,13 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
           </span>
 
           {topic.scheduledDate && (
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-slate-400">
-              📅 {topic.scheduledDate.slice(5)}
+            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400" title={`Planned for ${topic.scheduledDate}`}>
+              <Calendar className="w-3 h-3" /> {topic.scheduledDate}
             </span>
           )}
         </div>
+
+        <span className="text-[9px] font-mono text-slate-400 shrink-0" title={`Card ID: ${topic.id}`}>ID {topic.id.slice(-8)}</span>
 
         {/* Action Controls */}
         <div className="flex items-center gap-1">

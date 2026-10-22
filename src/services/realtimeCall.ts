@@ -283,8 +283,7 @@ export class RealtimeCollabManager {
 
       case 'task_delegated':
         if (data.senderId !== this.currentUserId) {
-          const taskObj = data.task || data;
-          this.callbacks.onTaskDelegated?.(taskObj);
+          this.callbacks.onTaskDelegated?.(data);
         }
         break;
 

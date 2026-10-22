@@ -312,13 +312,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               localIds.add(rn.id);
               hasNew = true;
             }
+            if (rn.type === 'task_delegated' && rn.task?.id) {
+              setTopics(prev => {
+                if (prev.some(topic => topic.id === rn.task.id)) return prev;
+                const next = [rn.task as Topic, ...prev];
+                StorageService.saveTopics(next);
+                return next;
+              });
+            }
           }
 
           if (hasNew) {
             StorageService.saveNotifications(merged);
             setNotifications(merged);
             sound.playCompletionChime();
-            Notifications.toast('info', `🔔 New collaboration invite received!`);
+            Notifications.toast('info', '🔔 New team update received.');
           }
         }
       } catch (err) {
@@ -479,6 +487,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       onTaskDelegated: (data: any) => {
         const taskObj = data?.task || data;
         if (!taskObj || !taskObj.id) return;
+        const recipientEmail = (data?.recipientEmail || taskObj.assigneeEmail || '').trim().toLowerCase();
+        const myEmail = (profile.email || '').trim().toLowerCase();
+        if (recipientEmail && myEmail && recipientEmail !== myEmail) return;
         setTopics(prev => {
           const exists = prev.some(t => t.id === taskObj.id);
           const next = exists

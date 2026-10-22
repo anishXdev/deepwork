@@ -160,6 +160,7 @@ export default async function handler(req, res) {
         inviteCode: d.inviteCode,
         taskId: d.taskId,
         taskTitle: d.taskTitle,
+        task: d.task,
         timestamp: d.timestamp,
         read: Boolean(d.read),
         status: d.status || 'pending'
@@ -306,6 +307,7 @@ export default async function handler(req, res) {
           inviteCode: notification.inviteCode,
           taskId: notification.taskId,
           taskTitle: notification.taskTitle,
+          task: notification.task,
           status: notification.status || 'pending',
           read: false,
           timestamp: notification.timestamp || new Date().toISOString(),
