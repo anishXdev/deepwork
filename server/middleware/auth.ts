@@ -74,12 +74,13 @@ export function verifyAuth(req: Request, res: Response, next: NextFunction): voi
     if (userHeader) {
       try {
         const parsed = JSON.parse(userHeader);
-        if (parsed && (parsed.email || parsed.id)) {
+        if (parsed && (parsed.email || parsed.id || parsed.name)) {
+          const userEmail = (parsed.email || '').toLowerCase().trim();
           req.user = {
             id: parsed.id || `usr_${Date.now()}`,
-            email: (parsed.email || '').toLowerCase().trim(),
+            email: userEmail || `${parsed.id || 'user'}@deepwork.local`,
             name: parsed.name || 'Member',
-            avatar: parsed.avatar || '',
+            avatar: parsed.avatar || parsed.avatarUrl || '',
             color: parsed.color || '#0C66E4'
           };
           return next();

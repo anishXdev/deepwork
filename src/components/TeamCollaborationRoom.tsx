@@ -82,7 +82,17 @@ export const TeamCollaborationRoom: React.FC = () => {
       ] : []);
 
   // Exclude current user from callable teammates
-  const callableMembers = members.filter(m => m.email.toLowerCase() !== (profile.email || '').toLowerCase());
+  const myEmail = (profile.email || '').toLowerCase().trim();
+  const myName = (profile.name || '').toLowerCase().trim();
+  const callableMembers = members.filter(m => {
+    const memberEmail = (m.email || '').toLowerCase().trim();
+    const memberName = (m.name || '').toLowerCase().trim();
+    if (myEmail && memberEmail && memberEmail === myEmail) return false;
+    if (profile.id && m.id === profile.id) return false;
+    if (m.name.includes('(You)')) return false;
+    if (myName && memberName && (memberName === myName || memberName === `${myName} (you)`)) return false;
+    return true;
+  });
   const effectiveCallable = callableMembers;
 
   // Selected participants to call

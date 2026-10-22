@@ -523,57 +523,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentBoard = boards.find(b => b.id === activeBoardId);
     const allMembers = currentBoard?.members || [];
 
-    // Filter callable members (exclude self)
-    const otherMembers = allMembers.filter(
-      m => (m.email || '').toLowerCase() !== (profile.email || '').toLowerCase()
-    );
+    // Filter callable members (strictly exclude self)
+    const myEmail = (profile.email || '').toLowerCase().trim();
+    const myName = (profile.name || '').toLowerCase().trim();
+    const otherMembers = allMembers.filter(m => {
+      const memberEmail = (m.email || '').toLowerCase().trim();
+      const memberName = (m.name || '').toLowerCase().trim();
+      if (myEmail && memberEmail && memberEmail === myEmail) return false;
+      if (profile.id && m.id === profile.id) return false;
+      if (m.name.includes('(You)')) return false;
+      if (myName && memberName && (memberName === myName || memberName === `${myName} (you)`)) return false;
+      return true;
+    });
 
     const targetMembers = selectedMemberIds && selectedMemberIds.length > 0
       ? otherMembers.filter(m => selectedMemberIds.includes(m.id))
       : otherMembers;
 
     if (targetMembers.length === 0) {
-      Notifications.toast('warning', '⚠️ Please invite or select another collaborator to call.');
+      Notifications.toast('warning', '⚠️ Please invite another collaborator to call. You cannot call yourself.');
       return;
     }
 
+    const targetMember = targetMembers[0];
     const targetEmails = targetMembers.map(m => m.email).filter(Boolean);
+    const recipientEmail = targetEmails[0] || targetMember?.email || `${targetMember?.id || 'teammate'}@deepwork.local`;
     const memberIds = targetMembers.map(m => m.id);
+
+    if (myEmail && recipientEmail.toLowerCase().trim() === myEmail) {
+      Notifications.toast('warning', '⚠️ You cannot call yourself. Please invite another teammate to call.');
+      return;
+    }
 
     try {
       // 1. Call secure backend Express API /api/calls/initiate
       const apiRes = await CallApiService.initiateCall({
-        recipientId: targetMembers[0]?.id,
-        recipientEmail: targetEmails[0],
+        recipientId: targetMember?.id,
+        recipientEmail,
         recipientName: targetMembers.map(m => m.name).join(', '),
-        recipientAvatar: targetMembers[0]?.avatar,
+        recipientAvatar: targetMember?.avatar,
         boardId: activeBoardId,
         boardName: currentBoard?.name || 'Deepwork Board',
         callType: type
       });
 
-      if (!apiRes.success && apiRes.status === 'busy') {
-        Notifications.toast('warning', '⚠️ Collaborator is currently busy in another call.');
+      if (!apiRes.success) {
+        if (apiRes.status === 'busy') {
+          Notifications.toast('warning', '⚠️ Collaborator is currently busy in another call.');
+        } else {
+          Notifications.toast('warning', `⚠️ ${apiRes.error || 'Could not initiate call.'}`);
+        }
         return;
       }
 
-      const callId = apiRes.callId || RealtimeCollab.startRingingCall({
-        callType: type,
-        boardId: activeBoardId,
-        boardName: currentBoard?.name || 'Deepwork Board',
-        targetEmails,
-        targetMemberIds: memberIds,
-        callerColor: '#0C66E4',
-        callerAvatar: profile.avatar || profile.avatarUrl
-      });
+      const callId = apiRes.callId || `call_${Date.now()}`;
 
       // 2. Connect to LiveKit Room if token and URL are returned
       if (apiRes.token && apiRes.livekitUrl) {
         livekitClient.connect(apiRes.livekitUrl, apiRes.token, type).catch(err => {
           console.warn('[AppContext] LiveKit connect notice:', err);
         });
-      } else {
-        await RealtimeCollab.setupLocalMedia(type);
       }
 
       setOutgoingCall({
@@ -582,7 +591,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'ringing',
         targetMemberIds: memberIds,
         targetNames: targetMembers.map(m => m.name),
-        targetEmails,
+        targetEmails: [recipientEmail],
         boardId: activeBoardId,
         boardName: currentBoard?.name || 'Deepwork Board',
         ringingSeconds: 0
@@ -600,7 +609,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       Notifications.toast('info', `📞 Calling ${targetMembers.map(m => m.name).join(', ')}... Ringing...`);
     } catch (err: any) {
       console.warn('[AppContext] Error starting call:', err);
-      Notifications.toast('warning', '⚠️ Network error initiating call.');
+      Notifications.toast('warning', `⚠️ Call error: ${err.message || 'Unable to connect'}`);
     }
   };
 
