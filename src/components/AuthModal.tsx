@@ -12,7 +12,8 @@ import {
   LogOut,
   RotateCcw,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Heart
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
@@ -269,6 +270,12 @@ export const AuthModal: React.FC = () => {
             <span className="text-[9px] leading-tight" style={{ color: 'var(--text-muted)' }}>Chat & calling</span>
           </div>
         </div>
+
+        {!isSignedIn && (
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>
+            Made with <Heart className="w-3 h-3 fill-rose-500 text-rose-500" aria-label="love" /> by Abhishek
+          </p>
+        )}
       </div>
     </div>
   );
