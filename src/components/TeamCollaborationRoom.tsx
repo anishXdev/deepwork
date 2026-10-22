@@ -24,7 +24,6 @@ import {
   FileText,
   CheckSquare,
   Square,
-  BellRing,
   Minus,
   Maximize2,
   Minimize2
@@ -47,8 +46,7 @@ export const TeamCollaborationRoom: React.FC = () => {
     toggleCallMute,
     toggleCallVideo,
     toggleCallScreenShare,
-    simulateIncomingCall,
-    remoteMediaStream,
+    remoteMediaStreams,
     chatMessages,
     sendChatMessage,
     profile,
@@ -98,11 +96,11 @@ export const TeamCollaborationRoom: React.FC = () => {
 
   // Direct peer connections call one collaborator at a time.
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(() =>
-    effectiveCallable.slice(0, 1).map(m => m.id)
+    effectiveCallable.map(m => m.id)
   );
 
   useEffect(() => {
-    setSelectedMemberIds(effectiveCallable.slice(0, 1).map(m => m.id));
+    setSelectedMemberIds(effectiveCallable.map(m => m.id));
   }, [effectiveCallable.length]);
 
   // If a call or ring is started, auto-switch to call tab and ensure floating mode
@@ -113,12 +111,6 @@ export const TeamCollaborationRoom: React.FC = () => {
     }
   }, [activeCall?.active, outgoingCall]);
 
-  // Attach remote stream to remote video element
-  useEffect(() => {
-    if (remoteMediaStream && remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteMediaStream;
-    }
-  }, [remoteMediaStream]);
 
   // Sync local stream with local video element using singleton RealtimeCollab stream
   useEffect(() => {
@@ -176,7 +168,7 @@ export const TeamCollaborationRoom: React.FC = () => {
 
   const handleToggleMember = (id: string) => {
     Haptics.tap();
-    setSelectedMemberIds(prev => prev.includes(id) ? [] : [id]);
+    setSelectedMemberIds(prev => prev.includes(id) ? prev.filter(memberId => memberId !== id) : [...prev, id]);
   };
 
   // Built-in Screen Sharing Handler
@@ -304,7 +296,7 @@ export const TeamCollaborationRoom: React.FC = () => {
               </h2>
               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-0.5 shrink-0">
                 <ShieldCheck className="w-2.5 h-2.5" />
-                <span>E2EE</span>
+                <span>Team Chat</span>
               </span>
             </div>
             <p className="text-[10px] text-slate-400 truncate hidden sm:block">
@@ -408,7 +400,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                         <Lock className="w-5 h-5" />
                       </div>
                       <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                        End-to-End Encrypted Team Chat
+                        Team Chat
                       </h4>
                       <p className="text-xs max-w-sm" style={{ color: 'var(--text-muted)' }}>
                         Messages are shared only with members of this board. Start the discussion or share a task card below!
@@ -502,7 +494,7 @@ export const TeamCollaborationRoom: React.FC = () => {
 
                     <input
                       type="text"
-                      placeholder="Type encrypted message to team..."
+                      placeholder="Type a message to your team..."
                       value={inputText}
                       onChange={e => setInputText(e.target.value)}
                       className="input-base text-xs py-2 flex-1"
@@ -546,7 +538,8 @@ export const TeamCollaborationRoom: React.FC = () => {
                   <CallWindow
                     roomName={activeCall.participants[0]?.name || outgoingCall?.targetNames?.[0] || incomingCall?.callerName || 'Teammate'}
                     durationSeconds={activeCall.durationSeconds}
-                    remoteMediaStream={remoteMediaStream}
+                    remoteMediaStreams={remoteMediaStreams}
+                    participants={activeCall.participants}
                     isMuted={activeCall.isMuted}
                     isVideoOn={activeCall.isVideoOn}
                     isScreenSharing={activeCall.isScreenSharing}
@@ -570,9 +563,9 @@ export const TeamCollaborationRoom: React.FC = () => {
                     </div>
 
                     <div className="space-y-1">
-                      <h3 className="text-base font-bold text-white">Instant Encrypted Live Call</h3>
+                      <h3 className="text-base font-bold text-white">Team Video & Voice Call</h3>
                       <p className="text-xs text-slate-400 max-w-sm">
-                        Select which collaborators to call. Invited members receive an accept/decline alert.
+                        Choose multiple teammates. Everyone who accepts joins the same live call.
                       </p>
                     </div>
 
@@ -580,7 +573,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                     <div className="w-full max-w-sm p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-2.5 shadow-lg">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                          Select a Teammate to Call
+                          Select teammates to invite
                         </span>
                       </div>
 
@@ -604,7 +597,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                               >
                                 <div className="flex items-center gap-2 min-w-0">
                                   <input
-                                    type="radio"
+                                    type="checkbox"
                                     checked={isSelected}
                                     onChange={() => handleToggleMember(m.id)}
                                     className="rounded accent-blue-600"
@@ -628,7 +621,7 @@ export const TeamCollaborationRoom: React.FC = () => {
 
                       {effectiveCallable.length > 0 && (
                         <p className="text-[11px] text-slate-500">
-                          Peer to peer calling connects one teammate at a time.
+                          Each selected teammate can join the same peer-to-peer call.
                         </p>
                       )}
                     </div>
@@ -656,26 +649,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Test Incoming Call Prompt Trigger */}
-                    {effectiveCallable.length > 0 && (
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => simulateIncomingCall({ name: effectiveCallable[0]?.name || 'Teammate', color: effectiveCallable[0]?.color || '#EC4899' })}
-                          className="text-[11px] text-slate-400 hover:text-emerald-400 flex items-center gap-1.5 transition cursor-pointer"
-                          title="Simulate an incoming call to preview the Accept / Decline alert"
-                        >
-                          <BellRing className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Test Incoming Call Alert (Accept / Decline)</span>
-                        </button>
-                      </div>
-                    )}
-
                     <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-2">
-                      <span className="flex items-center gap-1">
-                        <Lock className="w-3.5 h-3.5 text-emerald-500" /> End-to-end encrypted
-                      </span>
-                      <span>•</span>
                       <span>Built-in Screen Share</span>
                       <span>•</span>
                       <span>Individual Calling Selection</span>

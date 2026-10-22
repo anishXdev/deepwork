@@ -129,7 +129,8 @@ export interface StudyBoard {
   color?: string;
   icon?: string;
   isDefault?: boolean;
-  inviteCode?: string; // 6-8 char invite code, e.g. DW-DEFAULT or DW-8M2P4X
+  inviteCode?: string; // 6-8 char invite code
+  encryptionKey?: string; // local-only board key; shared only in invite URL fragment
   members: BoardMember[];
   createdAt: string;
 }
@@ -173,6 +174,7 @@ export interface ChatMessage {
 
 export interface CollabCallParticipant {
   id: string;
+  email?: string;
   name: string;
   color: string;
   avatar?: string;
@@ -226,6 +228,7 @@ export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface Task {
   id: string;
+  trackingId?: string;
   boardId?: string; // ID of the board this card belongs to
   name: string;
   tags?: string[]; // array of tag IDs (e.g. ['tag_internship', 'tag_dev'])

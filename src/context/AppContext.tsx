@@ -34,6 +34,7 @@ import { Notifications } from '../services/notifications';
 import { Haptics } from '../utils/haptics';
 import { RealtimeCollab } from '../services/realtimeCall';
 import { RingtoneService } from '../services/ringtone';
+import { E2EE } from '../services/e2ee';
 
 interface AppContextType {
   subjects: Subject[];
@@ -55,6 +56,7 @@ interface AppContextType {
   activeFocusTopic: Topic | null;
   rescheduleTargetTopic: Topic | null;
   isTopicModalOpen: boolean;
+  topicBeingEdited: Topic | null;
   topicModalDefaultDate?: string;
   isRescheduleModalOpen: boolean;
   isSyncModalOpen: boolean;
@@ -68,8 +70,6 @@ interface AppContextType {
   closeAuthModal: () => void;
   isTemplatesModalOpen: boolean;
   setIsTemplatesModalOpen: (open: boolean) => void;
-  isMcpModalOpen: boolean;
-  setIsMcpModalOpen: (open: boolean) => void;
   loadStarterTemplate: (templateId: string) => void;
 
   setSubjects: React.Dispatch<React.SetStateAction<Subject[]>>;
@@ -127,8 +127,6 @@ interface AppContextType {
   removeBoardMember: (boardId: string, memberId: string) => void;
   delegateTopic: (topicId: string, member: BoardMember | null) => void;
   joinBoardByCode: (code: string) => Promise<{ success: boolean; message: string; board?: StudyBoard }>;
-  isJoinBoardModalOpen: boolean;
-  setIsJoinBoardModalOpen: (open: boolean) => void;
 
   // Collaboration Notifications & Interactive Invites
   notifications: CollabNotification[];
@@ -156,7 +154,7 @@ interface AppContextType {
   acceptIncomingCall: () => void;
   rejectIncomingCall: () => void;
   simulateIncomingCall: (caller?: { name: string; avatar?: string; color: string }) => void;
-  remoteMediaStream: MediaStream | null;
+  remoteMediaStreams: Record<string, MediaStream>;
   chatMessages: ChatMessage[];
   sendChatMessage: (content: string, taskId?: string, taskTitle?: string) => void;
 
@@ -164,6 +162,7 @@ interface AppContextType {
   setActiveTab: (tab: 'study' | 'subjects' | 'tags' | 'timer' | 'analytics' | 'whiteboard' | 'sync') => void;
   setActiveFocusTopic: (topic: Topic | null) => void;
   openAddTopicModal: (defaultDate?: string) => void;
+  openEditTopicModal: (topic: Topic) => void;
   closeTopicModal: () => void;
   openRescheduleModal: (topic: Topic) => void;
   closeRescheduleModal: () => void;
@@ -210,14 +209,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<UserSettings>(() => StorageService.getSettings());
   const [profile, setProfile] = useState<UserProfile>(() => StorageService.getProfile());
   const [streaks, setStreaks] = useState<StreakData>(() => StorageService.getStreaks());
-  const [boards, setBoards] = useState<StudyBoard[]>(() => StorageService.getBoards());
+  const [boards, setBoards] = useState<StudyBoard[]>(() => {
+    const current = StorageService.getBoards();
+    const secured = current.map(board => board.encryptionKey ? board : { ...board, encryptionKey: E2EE.createKey() });
+    if (secured.some((board, i) => board.encryptionKey !== current[i]?.encryptionKey)) StorageService.saveBoards(secured);
+    return secured;
+  });
   const [activeBoardId, setActiveBoardIdState] = useState<string>(() => StorageService.getActiveBoardId());
   const [tags, setTags] = useState<Tag[]>(() => StorageService.getTags());
   const [userGamification, setUserGamification] = useState<UserGamification>(() => StorageService.getGamification());
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
-  const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
-  const [isJoinBoardModalOpen, setIsJoinBoardModalOpen] = useState(false);
 
   // Collaboration Notifications State
   const [notifications, setNotifications] = useState<CollabNotification[]>(() => StorageService.getNotifications());
@@ -274,8 +276,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const created = StorageService.addNotification(notif);
 
     // If sending to another user via email, dispatch to MongoDB Atlas so the recipient gets it!
-    if (recipientEmail && recipientEmail !== myEmail) {
-      CloudSyncService.sendRemoteNotification(created);
+    if (recipientEmail && recipientEmail !== myEmail && notif.type !== 'collab_invite') {
+      const boardKey = boards.find(board => board.id === created.boardId)?.encryptionKey;
+      if (boardKey) {
+        const secretFields = { title: created.title, message: created.message, boardName: created.boardName, taskId: created.taskId, taskTitle: created.taskTitle, task: created.task };
+        void E2EE.encrypt(secretFields, boardKey).then(sealed => CloudSyncService.sendRemoteNotification({
+          ...created, title: 'Encrypted team update', message: '', boardName: undefined, taskId: undefined, taskTitle: undefined, task: undefined, sealed, e2ee: true
+        }));
+      }
       Notifications.toast('success', `👥 Invite dispatched to ${recipientEmail}! They will see it in their Notification Center.`);
     } else {
       // Local self notification
@@ -293,7 +301,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const pullRemoteNotifs = async () => {
       try {
-        const remoteList = await CloudSyncService.fetchRemoteNotifications(userEmail);
+        const encryptedList = await CloudSyncService.fetchRemoteNotifications(userEmail);
+        const remoteList: any[] = [];
+        for (const item of encryptedList) {
+          try {
+            const key = boards.find(board => board.id === item.boardId)?.encryptionKey;
+            const clear = item.e2ee && item.sealed && key ? await E2EE.decrypt<any>(item.sealed, key) : item;
+            remoteList.push({ ...item, ...clear, sealed: undefined, e2ee: undefined });
+          } catch (error) { console.warn('Could not decrypt a team notification.', error); }
+        }
         if (remoteList && remoteList.length > 0) {
           const localList = StorageService.getNotifications();
           const localIds = new Set(localList.map(n => n.id));
@@ -331,7 +347,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pullRemoteNotifs();
     const interval = setInterval(pullRemoteNotifs, 15000);
     return () => clearInterval(interval);
-  }, [profile.email]);
+  }, [profile.email, boards]);
 
   const signOut = () => {
     Haptics.tap();
@@ -352,7 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<OutgoingCallState | null>(null);
-  const [remoteMediaStream, setRemoteMediaStream] = useState<MediaStream | null>(null);
+  const [remoteMediaStreams, setRemoteMediaStreams] = useState<Record<string, MediaStream>>({});
 
   const outgoingCallRef = useRef<OutgoingCallState | null>(null);
   outgoingCallRef.current = outgoingCall;
@@ -391,11 +407,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const pullChat = async () => {
       const remoteMsgs = await CloudSyncService.fetchRemoteChat(activeBoardId);
       if (stopped || !remoteMsgs.length) return;
-      const newMessages = remoteMsgs.filter(message => !knownChatMessageIds.current.has(message.id));
-      remoteMsgs.forEach(message => {
-        knownChatMessageIds.current.add(message.id);
-        StorageService.addChatMessage(message);
-      });
+      const boardKey = boards.find(board => board.id === activeBoardId)?.encryptionKey;
+      const clearMessages: ChatMessage[] = [];
+      for (const message of remoteMsgs) {
+        try {
+          const clear = message.e2ee && boardKey ? await E2EE.decrypt<any>(message.content, boardKey) : message;
+          clearMessages.push({ ...message, ...clear, e2ee: undefined });
+        } catch (error) { console.warn('Could not decrypt board chat; check that you opened the secure invite link.', error); }
+      }
+      const newMessages = clearMessages.filter(message => !knownChatMessageIds.current.has(message.id));
+      clearMessages.forEach(message => { knownChatMessageIds.current.add(message.id); StorageService.addChatMessage(message); });
       setChatMessages(StorageService.getChatMessages());
       newMessages.filter(message => message.senderId !== profile.id).forEach(message => {
         sound.playNotificationPop();
@@ -405,7 +426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pullChat();
     const interval = setInterval(pullChat, 3000);
     return () => { stopped = true; clearInterval(interval); };
-  }, [activeBoardId, profile.id]);
+  }, [activeBoardId, profile.id, boards]);
 
   // Register Realtime Collab Callbacks
   useEffect(() => {
@@ -415,38 +436,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         RingtoneService.playIncomingRing();
         sound.playNotificationPop();
       },
-      onCallAccepted: ({ callId, peerId, peerName }) => {
+      onCallAccepted: ({ callId, peerId, peerName, peerEmail }) => {
         RingtoneService.stopOutgoingRing();
         RingtoneService.playCallConnectedTone();
         const callType = outgoingCallRef.current?.type || 'video';
         setOutgoingCall(null);
-        setActiveCall({
-          active: true,
-          callId,
-          type: callType,
-          isMuted: false,
-          isVideoOn: callType === 'video',
-          isScreenSharing: false,
-          durationSeconds: 0,
-          participants: [
-            {
-              id: peerId,
-              name: peerName,
-              color: '#10B981',
-              isMuted: false,
-              isVideoOn: callType === 'video',
-              isSpeaking: false
-            }
-          ],
-          selectedMemberIds: [peerId]
-        });
+        setActiveCall(prev => ({
+          active: true, callId, type: callType, isMuted: prev?.isMuted || false,
+          isVideoOn: prev?.isVideoOn ?? callType === 'video', isScreenSharing: prev?.isScreenSharing || false,
+          durationSeconds: prev?.durationSeconds || 0,
+          participants: [...(prev?.participants || []).filter(p => p.id !== peerId), {
+            id: peerId, email: peerEmail, name: peerName, color: '#10B981', isMuted: false,
+            isVideoOn: callType === 'video', isSpeaking: false
+          }],
+          selectedMemberIds: [...new Set([...(prev?.selectedMemberIds || []), peerId])]
+        }));
         setIsTeamRoomOpen(true);
         Notifications.toast('success', `🎉 ${peerName} accepted the call! Live meeting started.`);
       },
+      onParticipantJoined: ({ peerId, peerName, peerEmail }) => {
+        setActiveCall(prev => prev ? ({
+          ...prev,
+          participants: prev.participants.some(participant => participant.id === peerId)
+            ? prev.participants.map(participant => participant.id === peerId ? { ...participant, email: peerEmail, name: peerName } : participant)
+            : [...prev.participants, { id: peerId, email: peerEmail, name: peerName, color: '#10B981', isMuted: false, isVideoOn: prev.type === 'video', isSpeaking: false }],
+          selectedMemberIds: [...new Set([...prev.selectedMemberIds, peerId])]
+        }) : prev);
+      },
       onCallDeclined: ({ peerName }) => {
-        RingtoneService.stopOutgoingRing();
-        RingtoneService.playCallEndedTone();
-        setOutgoingCall(null);
         Notifications.toast('info', `📞 ${peerName || 'Teammate'} declined the call.`);
       },
       onCallCancelled: () => {
@@ -460,28 +477,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveCall(null);
         setOutgoingCall(null);
         setIncomingCall(null);
-        setRemoteMediaStream(null);
+        setRemoteMediaStreams({});
         Notifications.toast('info', 'Call ended.');
       },
-      onRemoteStream: (stream) => {
-        setRemoteMediaStream(stream);
+      onRemoteStream: (stream, peerEmail) => {
+        setRemoteMediaStreams(prev => ({ ...prev, [peerEmail || `peer_${Object.keys(prev).length}`]: stream }));
       },
-      onChatMessage: (msg) => {
+      onChatMessage: async (msg) => {
         if (knownChatMessageIds.current.has(msg.id)) return;
-        knownChatMessageIds.current.add(msg.id);
-        setChatMessages(prev => {
-          if (prev.some(m => m.id === msg.id)) return prev;
-          return [...prev, msg];
-        });
-        StorageService.addChatMessage(msg);
-        sound.playNotificationPop();
-        // Toast notification so collaborator is alerted even when room is closed
-        Notifications.sendNotification(`💬 ${msg.senderName}`, { body: msg.content.slice(0, 120), tag: `deepwork-chat-${msg.id}` });
+        try {
+          const key = boards.find(board => board.id === msg.boardId)?.encryptionKey;
+          const clear = (msg as any).e2ee && key ? await E2EE.decrypt<any>(msg.content, key) : msg;
+          const decoded = { ...msg, ...clear, e2ee: undefined };
+          if (knownChatMessageIds.current.has(decoded.id)) return;
+          knownChatMessageIds.current.add(decoded.id);
+          setChatMessages(prev => prev.some(m => m.id === decoded.id) ? prev : [...prev, decoded]);
+          StorageService.addChatMessage(decoded);
+          sound.playNotificationPop();
+          Notifications.sendNotification(`💬 ${decoded.senderName}`, { body: decoded.content.slice(0, 120), tag: `deepwork-chat-${decoded.id}` });
+        } catch (error) { console.warn('Could not decrypt realtime chat message.', error); }
       },
-      onTaskDelegated: (data: any) => {
-        const taskObj = data?.task || data;
+      onTaskDelegated: async (data: any) => {
+        let payload = data;
+        if (data?.sealed && data?.boardId) {
+          const key = boards.find(board => board.id === data.boardId)?.encryptionKey;
+          if (!key) return;
+          try { payload = { ...data, ...(await E2EE.decrypt<any>(data.sealed, key)) }; } catch { return; }
+        }
+        const taskObj = payload?.task || payload;
         if (!taskObj || !taskObj.id) return;
-        const recipientEmail = (data?.recipientEmail || taskObj.assigneeEmail || '').trim().toLowerCase();
+        const recipientEmail = (payload?.recipientEmail || taskObj.assigneeEmail || '').trim().toLowerCase();
         const myEmail = (profile.email || '').trim().toLowerCase();
         if (recipientEmail && myEmail && recipientEmail !== myEmail) return;
         setTopics(prev => {
@@ -555,33 +580,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const targetMembers = (selectedMemberIds && selectedMemberIds.length > 0
       ? otherMembers.filter(m => selectedMemberIds.includes(m.id))
-      : otherMembers).slice(0, 1);
+      : otherMembers);
 
     if (targetMembers.length === 0) {
       Notifications.toast('warning', '⚠️ Please invite another collaborator to call. You cannot call yourself.');
       return;
     }
 
-    const targetMember = targetMembers[0];
-    const targetEmails = [targetMember.email].filter(Boolean);
-    const recipientEmail = targetEmails[0];
-    if (!recipientEmail || !recipientEmail.includes('@')) {
-      Notifications.toast('warning', `${targetMember.name} needs a valid email address before calls can be delivered.`);
+    const validTargets = targetMembers.filter(member => {
+      const email = (member.email || '').toLowerCase().trim();
+      return email.includes('@') && (!myEmail || email !== myEmail);
+    });
+    if (!validTargets.length) {
+      Notifications.toast('warning', 'Select at least one teammate with a valid email address.');
       return;
     }
-    const memberIds = [targetMember.id];
-
-    if (myEmail && recipientEmail.toLowerCase().trim() === myEmail) {
-      Notifications.toast('warning', '⚠️ You cannot call yourself. Please invite another teammate to call.');
-      return;
-    }
+    const targetEmails = validTargets.map(member => member.email.toLowerCase().trim());
+    const memberIds = validTargets.map(member => member.id);
 
     try {
       const localStream = await RealtimeCollab.setupLocalMedia(type);
       if (!localStream) throw new Error('Allow microphone access to start a call.');
       const callId = await RealtimeCollab.startRingingCall({
         callType: type, boardId: activeBoardId, boardName: currentBoard?.name || 'Deepwork Board',
-        targetEmails: [recipientEmail], targetMemberIds: memberIds,
+        targetEmails, targetMemberIds: memberIds,
         callerColor: '#0C66E4', callerAvatar: profile.avatarUrl || profile.avatar
       });
 
@@ -590,8 +612,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type,
         status: 'ringing',
         targetMemberIds: memberIds,
-        targetNames: [targetMember.name],
-        targetEmails: [recipientEmail],
+        targetNames: validTargets.map(member => member.name),
+        targetEmails,
         boardId: activeBoardId,
         boardName: currentBoard?.name || 'Deepwork Board',
         ringingSeconds: 0
@@ -602,11 +624,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       StorageService.logTelemetryEvent('call_started', {
         callType: type,
-        participantCount: 1,
+        participantCount: validTargets.length,
         boardTitle: currentBoard?.name
       });
 
-      Notifications.toast('info', `📞 Calling ${targetMember.name}... Ringing...`);
+      Notifications.toast('info', `📞 Calling ${validTargets.length} teammate${validTargets.length === 1 ? '' : 's'}...`);
     } catch (err: any) {
       RealtimeCollab.endActiveCall();
       console.warn('[AppContext] Error starting call:', err);
@@ -705,7 +727,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     RealtimeCollab.endActiveCall(activeCall?.callId);
     setActiveCall(null);
     setOutgoingCall(null);
-    setRemoteMediaStream(null);
+    setRemoteMediaStreams({});
     Notifications.toast('info', 'Call ended.');
   };
 
@@ -762,8 +784,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setChatMessages(StorageService.getChatMessages());
     knownChatMessageIds.current.add(newMsg.id);
-    RealtimeCollab.broadcastChatMessage(newMsg);
-    CloudSyncService.sendRemoteChat(newMsg);
+    const boardKey = activeBoard?.encryptionKey;
+    if (boardKey) {
+      void E2EE.encrypt(newMsg, boardKey).then(content => {
+        const wireMessage = { ...newMsg, content, taskId: undefined, taskTitle: undefined, e2ee: true };
+        RealtimeCollab.broadcastChatMessage(wireMessage);
+        CloudSyncService.sendRemoteChat(wireMessage);
+      }).catch(error => console.error('Could not encrypt chat message:', error));
+    } else {
+      Notifications.toast('error', 'This board has no encryption key. Reopen a secure invite or create a new board.');
+    }
     Haptics.tap();
   };
 
@@ -891,7 +921,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const joinCode = params.get('joinCode') || params.get('code');
 
       if (joinCode) {
-        joinBoardByCode(joinCode);
+        const inviteKey = new URLSearchParams(window.location.hash.slice(1)).get('key') || undefined;
+        joinBoardByCode(joinCode, inviteKey);
         const url = new URL(window.location.href);
         url.searchParams.delete('joinCode');
         url.searchParams.delete('code');
@@ -961,7 +992,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0];
 
-  const joinBoardByCode = async (code: string): Promise<{ success: boolean; message: string; board?: StudyBoard }> => {
+  const joinBoardByCode = async (code: string, inviteKey?: string): Promise<{ success: boolean; message: string; board?: StudyBoard }> => {
     const rawCode = (code || '').trim().toUpperCase();
     if (!rawCode) {
       return { success: false, message: 'Please enter a valid invite code' };
@@ -992,8 +1023,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       const joinRes = await CloudSyncService.joinBoardRemote(rawCode, userMember);
-      if (joinRes.success && joinRes.board) {
-        const boardToAdd: StudyBoard = joinRes.board;
+      if (joinRes.success && joinRes.encryptedEnvelope && inviteKey) {
+        const shared = await E2EE.decrypt<{ board: StudyBoard; topics: Topic[] }>(joinRes.encryptedEnvelope, inviteKey);
+        const boardToAdd: StudyBoard = { ...shared.board, encryptionKey: inviteKey, members: [...(shared.board.members || []), userMember] };
+        setTopics(prev => { const merged = [...prev.filter(t => t.boardId !== boardToAdd.id), ...shared.topics]; StorageService.saveTopics(merged); return merged; });
         setBoards(prev => {
           const exists = prev.some(b => b.id === boardToAdd.id);
           if (exists) {
@@ -1009,6 +1042,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         Notifications.toast('success', `🎉 Joined "${boardToAdd.name}"!`);
         return { success: true, message: `Successfully joined "${boardToAdd.name}"`, board: boardToAdd };
       }
+
+      if (joinRes.success && !inviteKey) return { success: false, message: 'Open the full secure invite link to join this encrypted board.' };
 
       // Fallback direct boardCode query
       const res = await fetch(`/api/sync?boardCode=${encodeURIComponent(rawCode)}`);
@@ -1064,6 +1099,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       icon,
       isDefault: false,
       inviteCode: uniqueCode,
+      encryptionKey: E2EE.createKey(),
       members: [
         { id: profile.id || 'member_me', name: `${profile.name || 'You'} (Owner)`, email: profile.email || '', color, role: 'owner' },
       ],
@@ -1154,7 +1190,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         taskTitle: updatedTopic.name,
         task: updatedTopic
       });
-      RealtimeCollab.sendTaskDelegation(updatedTopic, recipientEmail);
+      const boardKey = activeBoard?.encryptionKey;
+      if (boardKey) void E2EE.encrypt({ task: updatedTopic }, boardKey).then(sealed => RealtimeCollab.sendTaskDelegation({ sealed, e2ee: true, boardId: activeBoardId, recipientEmail }));
       CloudSyncService.scheduleDebouncedPush(500);
       Notifications.toast('success', `👤 Delegated "${updatedTopic.name}" directly to ${member.name}'s board!`);
     } else {
@@ -1402,6 +1439,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Modals state
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [topicBeingEdited, setTopicBeingEdited] = useState<Topic | null>(null);
   const [topicModalDefaultDate, setTopicModalDefaultDate] = useState<string | undefined>(undefined);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [rescheduleTargetTopic, setRescheduleTargetTopic] = useState<Topic | null>(null);
@@ -1462,18 +1500,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             color: s.color || '#0d9488'
           })));
         }
-        if (Array.isArray(res.data.topics)) {
-          setTopics(res.data.topics.filter((t: any) => t && typeof t === 'object' && t.id));
+        const cloudTasks = res.data.tasks || res.data.topics;
+        if (Array.isArray(cloudTasks)) {
+          const cleanTasks = cloudTasks.filter((t: any) => t && typeof t === 'object' && t.id);
+          setTopics(cleanTasks);
+          StorageService.saveTopics(cleanTasks);
         }
         if (Array.isArray(res.data.sessions)) {
           setSessions(res.data.sessions.filter((s: any) => s && typeof s === 'object' && s.id));
         }
+        let migratedBoardKeys = false;
         if (Array.isArray(res.data.boards)) {
-          setBoards(res.data.boards.filter((b: any) => b && typeof b === 'object' && b.id).map((b: any) => ({
-            ...b,
-            color: b.color || '#0C66E4',
-            members: Array.isArray(b.members) ? b.members.filter(Boolean) : []
-          })));
+          const cloudBoards = res.data.boards.filter((b: any) => b && typeof b === 'object' && b.id).map((b: any) => {
+            if (!b.encryptionKey) migratedBoardKeys = true;
+            return { ...b, encryptionKey: b.encryptionKey || E2EE.createKey(), color: b.color || '#0C66E4', members: Array.isArray(b.members) ? b.members.filter(Boolean) : [] };
+          });
+          setBoards(cloudBoards);
+          StorageService.saveBoards(cloudBoards);
+          if (migratedBoardKeys) setTimeout(() => CloudSyncService.pushToCloudImmediate(), 1000);
         }
         if (res.data.streaks) setStreaks(res.data.streaks);
         if (res.data.settings) setSettings(res.data.settings);
@@ -1617,9 +1661,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addTopic = async (
     topicData: Omit<Topic, 'id' | 'completedHours' | 'createdAt' | 'updatedAt'>
   ): Promise<Topic> => {
+    let trackingId = topicData.trackingId;
+    if (!trackingId) {
+      let isDuplicate = false;
+      do {
+        const bytes = new Uint8Array(4);
+        crypto.getRandomValues(bytes);
+        trackingId = `DW-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+        isDuplicate = topics.some(topic => topic.trackingId === trackingId);
+      } while (isDuplicate);
+    }
+
     const newTopic: Topic = {
       ...topicData,
       id: 'top_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      trackingId,
       boardId: topicData.boardId || activeBoardId,
       completedHours: 0,
       createdAt: new Date().toISOString(),
@@ -1814,12 +1870,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const openAddTopicModal = (defaultDate?: string) => {
+    setTopicBeingEdited(null);
     setTopicModalDefaultDate(defaultDate || AnalyticsService.getTodayDateString());
+    setIsTopicModalOpen(true);
+  };
+
+  const openEditTopicModal = (topic: Topic) => {
+    setTopicBeingEdited(topic);
+    setTopicModalDefaultDate(topic.scheduledDate || AnalyticsService.getTodayDateString());
     setIsTopicModalOpen(true);
   };
 
   const closeTopicModal = () => {
     setIsTopicModalOpen(false);
+    setTopicBeingEdited(null);
     setTopicModalDefaultDate(undefined);
   };
 
@@ -1937,6 +2001,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeFocusTopic,
         rescheduleTargetTopic,
         isTopicModalOpen,
+        topicBeingEdited,
         topicModalDefaultDate,
         isRescheduleModalOpen,
         isSyncModalOpen,
@@ -1991,8 +2056,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsShortcutsModalOpen,
         isTemplatesModalOpen,
         setIsTemplatesModalOpen,
-        isMcpModalOpen,
-        setIsMcpModalOpen,
         loadStarterTemplate,
         exportBackup,
         importBackup,
@@ -2008,8 +2071,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeBoardMember,
         delegateTopic,
         joinBoardByCode,
-        isJoinBoardModalOpen,
-        setIsJoinBoardModalOpen,
         // Collaboration Notifications
         notifications,
         unreadNotificationsCount,
@@ -2035,7 +2096,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         acceptIncomingCall,
         rejectIncomingCall,
         simulateIncomingCall,
-        remoteMediaStream,
+        remoteMediaStreams,
         chatMessages,
         sendChatMessage,
         // Cloud Sync
@@ -2047,6 +2108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         setActiveFocusTopic,
         openAddTopicModal,
+        openEditTopicModal,
         closeTopicModal,
         openRescheduleModal,
         closeRescheduleModal,

@@ -156,11 +156,137 @@ body {
   border-radius: 10px;
   border: 1px solid var(--border);
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
-  padding: 11px 13px;
+  padding: 14px;
+  min-height: 142px;
   cursor: grab;
   transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, border-color 0.16s ease;
   user-select: none;
   position: relative;
+}
+
+.night-sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: paint;
+  background-image:
+    radial-gradient(2px 2px at 9% 17%, rgba(255, 255, 255, .95) 45%, rgba(182, 211, 255, .4) 70%, transparent 100%),
+    radial-gradient(1px 1px at 21% 43%, rgba(202, 221, 255, .56) 50%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 38% 13%, rgba(255, 250, 229, .96) 42%, rgba(255, 231, 166, .28) 72%, transparent 100%),
+    radial-gradient(1px 1px at 54% 31%, rgba(205, 221, 250, .5) 50%, transparent 100%),
+    radial-gradient(2px 2px at 72% 14%, rgba(255, 255, 255, .88) 45%, rgba(186, 208, 255, .35) 72%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 88% 34%, rgba(211, 228, 255, .64) 50%, transparent 100%),
+    radial-gradient(1px 1px at 94% 68%, rgba(230, 240, 255, .44) 50%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 14% 79%, rgba(211, 228, 255, .48) 50%, transparent 100%),
+    radial-gradient(2px 2px at 43% 73%, rgba(255, 255, 255, .78) 45%, rgba(178, 207, 255, .22) 72%, transparent 100%),
+    radial-gradient(1px 1px at 4% 58%, rgba(229, 238, 255, .48) 50%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 28% 29%, rgba(225, 237, 255, .7) 45%, transparent 100%),
+    radial-gradient(1px 1px at 33% 91%, rgba(206, 222, 255, .45) 50%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 61% 8%, rgba(255, 255, 255, .9) 42%, rgba(193, 216, 255, .3) 72%, transparent 100%),
+    radial-gradient(1px 1px at 67% 51%, rgba(214, 229, 255, .5) 50%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 82% 83%, rgba(225, 237, 255, .58) 45%, transparent 100%),
+    radial-gradient(1px 1px at 49% 53%, rgba(211, 228, 255, .4) 50%, transparent 100%),
+    radial-gradient(1px 1px at 97% 10%, rgba(227, 237, 255, .52) 50%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 18% 6%, rgba(242, 247, 255, .66) 45%, transparent 100%),
+    radial-gradient(1px 1px at 77% 66%, rgba(218, 230, 255, .46) 50%, transparent 100%),
+    radial-gradient(2px 2px at 3% 92%, rgba(255, 255, 255, .76) 45%, rgba(179, 207, 255, .2) 72%, transparent 100%);
+}
+
+.sky-sun {
+  position: absolute;
+  width: var(--sun-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--sun-core) 0%, var(--sun-glow) 35%, color-mix(in srgb, var(--sun-glow) 25%, transparent) 62%, transparent 74%);
+  filter: blur(2px);
+  animation: sun-breathe 12s ease-in-out infinite alternate;
+}
+
+.sky-sun-main { --sun-size: clamp(140px, 20vw, 270px); --sun-core: rgba(255, 229, 174, .32); --sun-glow: rgba(255, 210, 143, .13); top: 5vh; right: 9vw; }
+
+@keyframes sun-breathe { from { opacity: .65; transform: scale(.96); } to { opacity: 1; transform: scale(1.04); } }
+
+.twinkling-stars { position: absolute; inset: 0; }
+.twinkle-star {
+  position: absolute;
+  top: var(--twinkle-top);
+  left: var(--twinkle-left);
+  width: var(--twinkle-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 0 4px 1px rgba(207, 226, 255, .58), 0 0 12px 3px rgba(168, 204, 255, .19);
+  animation: star-twinkle var(--twinkle-duration) ease-in-out var(--twinkle-delay) infinite alternate;
+}
+.twinkle-star-1 { --twinkle-top: 19%; --twinkle-left: 17%; --twinkle-size: 2px; --twinkle-duration: 2.8s; --twinkle-delay: -1s; }
+.twinkle-star-2 { --twinkle-top: 39%; --twinkle-left: 35%; --twinkle-size: 3px; --twinkle-duration: 4.1s; --twinkle-delay: -3s; }
+.twinkle-star-3 { --twinkle-top: 10%; --twinkle-left: 58%; --twinkle-size: 2px; --twinkle-duration: 3.4s; --twinkle-delay: -2.2s; }
+.twinkle-star-4 { --twinkle-top: 66%; --twinkle-left: 81%; --twinkle-size: 2px; --twinkle-duration: 5.2s; --twinkle-delay: -4s; }
+.twinkle-star-5 { --twinkle-top: 82%; --twinkle-left: 27%; --twinkle-size: 2px; --twinkle-duration: 3.7s; --twinkle-delay: -.7s; }
+.twinkle-star-6 { --twinkle-top: 48%; --twinkle-left: 92%; --twinkle-size: 3px; --twinkle-duration: 4.6s; --twinkle-delay: -2.8s; }
+.twinkle-star-7 { --twinkle-top: 29%; --twinkle-left: 6%; --twinkle-size: 2px; --twinkle-duration: 3.2s; --twinkle-delay: -1.8s; }
+.twinkle-star-8 { --twinkle-top: 74%; --twinkle-left: 56%; --twinkle-size: 2px; --twinkle-duration: 4.8s; --twinkle-delay: -3.5s; }
+
+@keyframes star-twinkle {
+  from { opacity: .22; transform: scale(.62); }
+  to { opacity: .98; transform: scale(1.45); }
+}
+
+.sky-bird {
+  position: absolute;
+  left: -8vw;
+  width: 25px;
+  height: 12px;
+  fill: rgba(211, 224, 246, .58);
+  filter: drop-shadow(0 0 7px rgba(194, 216, 255, .16));
+  animation: birds-glide var(--bird-duration) linear var(--bird-delay) infinite;
+  will-change: transform;
+}
+
+.bird-wing { transform-box: view-box; animation: bird-flap .72s ease-in-out infinite alternate; }
+.bird-wing-left { transform-origin: 22px 16px; }
+.bird-wing-right { transform-origin: 22px 16px; animation-delay: -.12s; }
+.bird-body { opacity: .88; }
+.bird-flame { fill: #ff9f43; opacity: 0; filter: drop-shadow(0 0 2px rgba(255, 113, 40, .8)); animation: bird-fire-breath 9s ease-in-out var(--fire-delay, 0s) infinite; transform-origin: 40px 10px; }
+.sky-bird-1 { --fire-delay: -3s; }
+.sky-bird-2 { --fire-delay: -6s; }
+.sky-bird-3 { --fire-delay: -1s; }
+.sky-bird-4 { --fire-delay: -8s; }
+.sky-bird-5 { --fire-delay: -4s; }
+
+@keyframes bird-fire-breath {
+  0%, 34%, 100% { opacity: 0; transform: scale(.35); }
+  37% { opacity: .95; transform: scale(1); }
+  42% { opacity: .72; transform: scale(.72); }
+  47% { opacity: 0; transform: scale(.2); }
+}
+
+@keyframes bird-flap {
+  from { transform: scaleY(.62) rotate(-5deg); }
+  to { transform: scaleY(1.16) rotate(7deg); }
+}
+
+.sky-bird-1 { top: 21%; --bird-duration: 38s; --bird-delay: -28s; }
+.sky-bird-2 { top: 31%; width: 17px; opacity: .65; --bird-duration: 49s; --bird-delay: -12s; }
+.sky-bird-3 { top: 15%; width: 13px; opacity: .58; --bird-duration: 55s; --bird-delay: -42s; }
+.sky-bird-4 { top: 39%; width: 20px; opacity: .55; --bird-duration: 44s; --bird-delay: -20s; }
+.sky-bird-5 { top: 25%; width: 12px; opacity: .52; --bird-duration: 61s; --bird-delay: -51s; }
+
+@keyframes birds-glide {
+  0% { transform: translate3d(-8vw, 0, 0) scale(.82); }
+  45% { transform: translate3d(48vw, -14px, 0) scale(1); }
+  100% { transform: translate3d(116vw, 9px, 0) scale(.88); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sky-bird, .sky-sun, .bird-wing, .bird-flame, .twinkle-star { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .sky-sun-main { top: 9vh; right: -8vw; }
+  .sky-bird { fill: rgba(211, 224, 246, .34); }
 }
 
 @media (max-width: 640px) {
@@ -182,6 +308,12 @@ body {
   .trello-column-cards {
     max-height: min(55vh, 480px);
   }
+
+  .trello-card { min-height: 0; padding: 13px; }
+}
+
+@media (hover: none) {
+  .trello-card .opacity-0.group-hover\:opacity-100 { opacity: 1; }
 }
 
 .trello-card:hover {

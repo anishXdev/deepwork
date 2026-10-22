@@ -7,8 +7,7 @@
     "dev": "vite",
     "server": "tsx server/index.ts",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "mcp": "node scripts/deepwork-mcp.cjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@capacitor/core": "^6.0.0",

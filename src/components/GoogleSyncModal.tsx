@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { GoogleAuthService } from '../services/googleAuth';
 import { StorageService } from '../services/storage';
 import { CloudSyncService } from '../services/cloudSync';
+import { E2EE } from '../services/e2ee';
 import { UserProfile } from '../types';
 import {
   X,
@@ -39,6 +40,9 @@ export const GoogleSyncModal: React.FC = () => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [inputSyncKey, setInputSyncKey] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState(() => E2EE.getOrCreateRecoveryKey());
+  const [recoveryInput, setRecoveryInput] = useState('');
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
   const [pairSuccess, setPairSuccess] = useState(false);
   const [mongoStatus, setMongoStatus] = useState<{ connected: boolean; cluster?: string; database?: string } | null>(null);
 
@@ -109,10 +113,11 @@ export const GoogleSyncModal: React.FC = () => {
     }
   };
 
-  const handleExportData = () => {
+  const handleExportData = async () => {
     Haptics.tap();
     const data = StorageService.exportAllData();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const backup = { encrypted: true, payload: await E2EE.encrypt(data, recoveryKey) };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -129,6 +134,10 @@ export const GoogleSyncModal: React.FC = () => {
     reader.onload = event => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
+        if (parsed.encrypted && parsed.payload) {
+          void E2EE.decrypt<any>(parsed.payload, recoveryKey).then(clear => { StorageService.importData(clear); window.location.reload(); }).catch(() => setErrorMessage('Could not decrypt this backup. Enter its recovery key first.'));
+          return;
+        }
         StorageService.importData(parsed);
         window.location.reload();
       } catch {
@@ -231,6 +240,21 @@ export const GoogleSyncModal: React.FC = () => {
                 style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
                 Connected
               </span>
+            </div>
+
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
+              <div>
+                <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>End-to-end recovery key</p>
+                <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>Your cloud snapshot is encrypted in this browser. Save this key somewhere safe; you need it to restore data on another device.</p>
+              </div>
+              <div className="flex gap-2">
+                <input readOnly value={recoveryKey} className="min-w-0 flex-1 rounded-lg px-2 py-2 text-[10px] font-mono" style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border)' }} aria-label="Recovery key" />
+                <button className="btn-secondary px-3 text-xs" onClick={async () => { await navigator.clipboard.writeText(recoveryKey); setRecoveryCopied(true); setTimeout(() => setRecoveryCopied(false), 1800); }}>{recoveryCopied ? 'Copied' : 'Copy'}</button>
+              </div>
+              <form className="flex gap-2" onSubmit={async e => { e.preventDefault(); try { E2EE.setRecoveryKey(recoveryInput); setRecoveryKey(E2EE.getRecoveryKey()); setRecoveryInput(''); setErrorMessage(null); const restored = await CloudSyncService.pullFromCloud(); if (restored.success && restored.found) window.location.reload(); else setErrorMessage(restored.error || 'No encrypted cloud backup was found for this account.'); } catch (err: any) { setErrorMessage(err.message || 'Invalid recovery key'); } }}>
+                <input value={recoveryInput} onChange={e => setRecoveryInput(e.target.value)} placeholder="Restore with a saved recovery key" className="min-w-0 flex-1 rounded-lg px-2 py-2 text-xs" style={{ background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border)' }} />
+                <button className="btn-secondary px-3 text-xs" type="submit">Restore</button>
+              </form>
             </div>
 
             {/* Cloud Workspace Card */}

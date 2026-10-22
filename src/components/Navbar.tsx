@@ -44,7 +44,6 @@ export const Navbar: React.FC = () => {
     timeLeft,
     userGamification,
     setIsShortcutsModalOpen,
-    setIsMcpModalOpen,
     unreadNotificationsCount,
     setIsNotificationCenterOpen,
     setIsTeamRoomOpen,
@@ -178,20 +177,6 @@ export const Navbar: React.FC = () => {
             <span className="font-mono text-blue-600">{userGamification.xp} XP</span>
           </div>
 
-          {/* MCP Server Integration Trigger */}
-          <button
-            onClick={() => { Haptics.tap(); setIsMcpModalOpen(true); }}
-            title="Model Context Protocol (MCP) Integration"
-            className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer border"
-            style={{
-              background: 'rgba(16,185,129,0.08)',
-              borderColor: 'rgba(16,185,129,0.25)',
-              color: '#10B981'
-            }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-mono text-[11px] font-bold">MCP</span>
-          </button>
 
           {/* Keyboard Shortcuts Trigger */}
           <button

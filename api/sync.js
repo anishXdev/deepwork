@@ -77,13 +77,13 @@ export default async function handler(req, res) {
     try {
       const collection = await getCollection();
       const docs = await collection.find({
-        'data.profile.email': { $exists: true, $ne: '' }
-      }, { projection: { _id: 1, 'data.profile': 1 } }).toArray();
+        $or: [{ 'directoryProfile.email': { $exists: true, $ne: '' } }, { 'data.profile.email': { $exists: true, $ne: '' } }]
+      }, { projection: { _id: 1, directoryProfile: 1, 'data.profile': 1 } }).toArray();
 
       const userList = [];
       const seen = new Set();
       docs.forEach(d => {
-        const p = d.data?.profile;
+        const p = d.directoryProfile || d.data?.profile;
         if (p && p.email && p.email.includes('@') && !seen.has(p.email.toLowerCase())) {
           seen.add(p.email.toLowerCase());
           userList.push({
@@ -112,18 +112,20 @@ export default async function handler(req, res) {
       const doc = await collection.findOne({
         $or: [
           { _id: `user_${rawEmail.replace(/[@.]/g, '_')}` },
+          { 'directoryProfile.email': { $regex: new RegExp(`^${rawEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
           { 'data.profile.email': { $regex: new RegExp(`^${rawEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
         ]
-      }, { projection: { _id: 1, 'data.profile': 1 } });
+      }, { projection: { _id: 1, directoryProfile: 1, 'data.profile': 1 } });
 
-      if (doc && doc.data?.profile) {
+      const publicProfile = doc?.directoryProfile || doc?.data?.profile;
+      if (doc && publicProfile) {
         return res.status(200).json({
           found: true,
           user: {
-            id: doc.data.profile.id || doc._id,
-            name: doc.data.profile.name || rawEmail.split('@')[0],
-            email: doc.data.profile.email || rawEmail,
-            avatar: doc.data.profile.avatarUrl || doc.data.profile.avatar || ''
+            id: publicProfile.id || doc._id,
+            name: publicProfile.name || rawEmail.split('@')[0],
+            email: publicProfile.email || rawEmail,
+            avatar: publicProfile.avatarUrl || publicProfile.avatar || ''
           }
         });
       }
@@ -161,6 +163,8 @@ export default async function handler(req, res) {
         taskId: d.taskId,
         taskTitle: d.taskTitle,
         task: d.task,
+        sealed: d.sealed,
+        e2ee: d.e2ee === true,
         timestamp: d.timestamp,
         read: Boolean(d.read),
         status: d.status || 'pending'
@@ -181,9 +185,8 @@ export default async function handler(req, res) {
       const collection = await getCollection();
       // Check direct invite record first
       let doc = await collection.findOne({ _id: `invite_${rawCode}` });
-      if (doc && doc.board) {
-        return res.status(200).json({ found: true, board: doc.board, inviter: doc.inviter || 'Teammate' });
-      }
+      if (doc?.encryptedEnvelope) return res.status(200).json({ found: true, encryptedEnvelope: doc.encryptedEnvelope });
+      if (doc?.board) return res.status(200).json({ found: false, message: 'This invite uses an older format. Ask the owner to create a new secure invite link.' });
 
       // Query within user boards
       doc = await collection.findOne({
@@ -195,6 +198,7 @@ export default async function handler(req, res) {
         ]
       });
 
+      if (doc && doc.data?.encrypted === true) return res.status(404).json({ found: false, message: 'Open the complete secure invite link.' });
       if (doc && doc.data?.boards && Array.isArray(doc.data.boards)) {
         const board = doc.data.boards.find(b =>
           b.inviteCode?.toUpperCase() === rawCode ||
@@ -203,8 +207,8 @@ export default async function handler(req, res) {
         );
         if (board) {
           return res.status(200).json({
-            found: true,
-            board,
+            found: false,
+            message: 'This invite uses an older format. Ask the owner to create a new secure invite link.',
             inviter: doc.data?.profile?.name || doc.data?.profile?.email || 'Teammate'
           });
         }
@@ -251,7 +255,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     const body = req.body || {};
-    const { action, notification, notifId, status: updateStatus, read: updateRead, boardCode: joinCode, user: joinUser, key: bodyKey, data } = body;
+    const { action, notification, notifId, status: updateStatus, read: updateRead, boardCode: joinCode, user: joinUser, key: bodyKey, data, boardInvites, directoryProfile } = body;
 
     // Save board messages for collaborators using polling when a live socket is unavailable.
     if (action === 'send_chat' && body.message) {
@@ -301,7 +305,9 @@ export default async function handler(req, res) {
           senderColor: notification.senderColor || '#0C66E4',
           type: notification.type || 'collab_invite',
           title: notification.title,
-          message: notification.message,
+          message: notification.message || '',
+          sealed: notification.sealed || null,
+          e2ee: notification.e2ee === true,
           boardId: notification.boardId,
           boardName: notification.boardName,
           inviteCode: notification.inviteCode,
@@ -340,10 +346,11 @@ export default async function handler(req, res) {
       try {
         const collection = await getCollection();
         let inviteDoc = await collection.findOne({ _id: `invite_${rawCode}` });
+        if (inviteDoc?.encryptedEnvelope) return res.status(200).json({ success: true, encryptedEnvelope: inviteDoc.encryptedEnvelope });
         let targetBoard = inviteDoc?.board;
         let ownerEmail = inviteDoc?.ownerEmail;
 
-        if (!targetBoard) {
+        if (!targetBoard && !inviteDoc) {
           const userDoc = await collection.findOne({ 'data.boards.inviteCode': rawCode });
           if (userDoc && Array.isArray(userDoc.data?.boards)) {
             targetBoard = userDoc.data.boards.find(b => b.inviteCode?.toUpperCase() === rawCode);
@@ -430,7 +437,8 @@ export default async function handler(req, res) {
         { _id: targetKey },
         { 
           $set: { 
-            data, 
+            data,
+            directoryProfile: directoryProfile || undefined,
             updatedAt,
             lastClientIp: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
           } 
@@ -438,8 +446,21 @@ export default async function handler(req, res) {
         { upsert: true }
       );
 
-      // Index each board's invite code in MongoDB Atlas
-      if (Array.isArray(data?.boards)) {
+      // Publish only encrypted board payloads for secure invite links.
+      if (Array.isArray(boardInvites)) {
+        for (const invite of boardInvites) {
+          const code = String(invite.inviteCode || '').trim().toUpperCase();
+          if (!code || typeof invite.envelope !== 'string') continue;
+          await collection.updateOne(
+            { _id: `invite_${code}` },
+            { $set: { encryptedEnvelope: invite.envelope, ownerEmail: invite.ownerEmail || null, updatedAt }, $unset: { board: '', inviter: '' } },
+            { upsert: true }
+          );
+        }
+      }
+
+      // Legacy plaintext snapshots are no longer indexed for board invites.
+      if (data?.encrypted !== true && Array.isArray(data?.boards)) {
         for (const b of data.boards) {
           if (b.inviteCode) {
             await collection.updateOne(

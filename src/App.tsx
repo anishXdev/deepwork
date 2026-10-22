@@ -10,7 +10,6 @@ const AnalyticsDashboard = React.lazy(() => import('./components/AnalyticsDashbo
 const ExcalidrawWhiteboard = React.lazy(() => import('./components/ExcalidrawWhiteboard').then(m => ({ default: m.ExcalidrawWhiteboard })));
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { TemplatesModal } from './components/TemplatesModal';
-import { McpModal } from './components/McpModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { TeamCollaborationRoom } from './components/TeamCollaborationRoom';
 import { IncomingCallModal } from './components/IncomingCallModal';
@@ -20,7 +19,6 @@ import { CreateSubjectModal } from './components/CreateSubjectModal';
 import { StreakModal } from './components/StreakModal';
 import { AuthModal } from './components/AuthModal';
 import { TaskCelebrationOverlay } from './components/TaskCelebrationOverlay';
-import { JoinBoardModal } from './components/JoinBoardModal';
 import { ToastContainer } from './components/ToastContainer';
 import { MobileFab } from './components/MobileFab';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -37,8 +35,24 @@ const MainContent: React.FC = () => {
   const { activeTab, isStreakModalOpen, closeStreakModal } = useApp();
 
   return (
-    <main className="min-h-screen text-slate-900 dark:text-slate-100 transition-colors" style={{ backgroundColor: 'var(--bg-app)' }}>
-      <div className="min-h-screen flex flex-col">
+    <main className="relative isolate min-h-screen text-slate-900 dark:text-slate-100 transition-colors" style={{ backgroundColor: '#000000' }}>
+      <div className="night-sky" aria-hidden="true">
+        <div className="sky-sun sky-sun-main" />
+        <div className="twinkling-stars">
+          {Array.from({ length: 8 }, (_, index) => <span className={`twinkle-star twinkle-star-${index + 1}`} key={index} />)}
+        </div>
+        <div className="sky-birds">
+          {Array.from({ length: 5 }, (_, index) => (
+            <svg className={`sky-bird sky-bird-${index + 1}`} viewBox="0 0 54 20" key={index}>
+              <path className="bird-wing bird-wing-left" d="M22 15 Q13 4 1 3 Q12 10 22 20Z" />
+              <path className="bird-wing bird-wing-right" d="M22 15 Q31 4 43 3 Q32 10 22 20Z" />
+              <path className="bird-body" d="M18 14 Q22 11 26 14 L30 19 L22 17 L16 19Z" />
+              <path className="bird-flame" d="M39 9 Q48 2 45 8 Q50 6 46 12 Q43 15 39 12Z" />
+            </svg>
+          ))}
+        </div>
+      </div>
+      <div className="relative z-[1] min-h-screen flex flex-col">
         <Navbar />
 
         <div className="flex-1">
@@ -66,9 +80,7 @@ const MainContent: React.FC = () => {
         <StreakModal isOpen={isStreakModalOpen} onClose={closeStreakModal} />
         <KeyboardShortcutsModal />
         <TemplatesModal />
-        <McpModal />
         <NotificationCenterModal />
-        <JoinBoardModal />
         <TeamCollaborationRoom />
         <IncomingCallModal />
         <ToastContainer />

@@ -3,7 +3,7 @@ import { CloudSyncService } from '../services/cloudSync';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
-import { Topic, Subject, Tag, GateTaskCategory, GATE_TASK_CATEGORIES, GATE_STREAM_SYLLABUS, BoardMember } from '../types';
+import { Topic, Subject, Tag, GateTaskCategory, GATE_TASK_CATEGORIES, BoardMember, TaskPriority } from '../types';
 import {
   Play,
   Plus,
@@ -31,13 +31,14 @@ import {
   MessageSquare,
   AtSign,
   Search,
-  Key
+  Pencil,
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
+import { parsePriorityShortcut } from '../utils/cardInput';
 import { CreateBoardModal } from './CreateBoardModal';
 import { CollaborationModal } from './CollaborationModal';
 
-type ColumnId = 'backlog' | 'today' | 'tomorrow' | 'completed';
+type ColumnId = 'backlog' | 'today' | 'tomorrow' | 'this_week';
 
 export const TodayTomorrowView: React.FC = () => {
   const {
@@ -46,17 +47,15 @@ export const TodayTomorrowView: React.FC = () => {
     tags,
     addTag,
     settings,
-    updateSettings,
     toggleTopicCompletion,
     setActiveFocusTopic,
     setActiveTab,
     openAddTopicModal,
     openRescheduleModal,
+    openEditTopicModal,
     deleteTopic,
     addTopic,
     updateTopic,
-    setStudyMode,
-    loadGateStreamSyllabus,
     boards,
     activeBoardId,
     activeBoard,
@@ -65,20 +64,15 @@ export const TodayTomorrowView: React.FC = () => {
     delegateTopic,
     setIsTemplatesModalOpen,
     setIsTeamRoomOpen,
-    setIsJoinBoardModalOpen,
     activeCall,
     sendCollabNotification,
     profile
   } = useApp();
 
   const isGatePrep = Boolean(settings.isGatePrep);
-  const examDateStr = settings.gateExamDate || (isGatePrep ? '2027-02-06' : '');
-  const targetStream = settings.gateTargetStream || 'CSE';
-  const customExamName = settings.examName || 'Target Exam';
 
   const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string>('all');
-  const [isEditingExamModal, setIsEditingExamModal] = useState<boolean>(false);
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState<boolean>(false);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState<boolean>(false);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState<boolean>(false);
@@ -87,8 +81,9 @@ export const TodayTomorrowView: React.FC = () => {
   // Active inline add card per column
   const [activeInlineAddColumn, setActiveInlineAddColumn] = useState<ColumnId | null>(null);
   const [inlineTitle, setInlineTitle] = useState('');
+  const [inlinePriority, setInlinePriority] = useState<TaskPriority>('normal');
   const [inlineTagId, setInlineTagId] = useState('');
-  const [inlineHours, setInlineHours] = useState(1.5);
+  const [inlineHours, setInlineHours] = useState(1);
   const [inlineCategory, setInlineCategory] = useState<GateTaskCategory>('concept');
   const [inlineAssigneeId, setInlineAssigneeId] = useState<string>('');
 
@@ -100,24 +95,9 @@ export const TodayTomorrowView: React.FC = () => {
   const todayStr = AnalyticsService.getTodayDateString();
   const tomorrowStr = AnalyticsService.getTomorrowDateString();
 
-  // Calculate days left to exam
-  const getDaysUntilExam = () => {
-    if (!examDateStr) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const examDate = new Date(examDateStr + 'T00:00:00');
-    if (isNaN(examDate.getTime())) return null;
-    const diffMs = examDate.getTime() - today.getTime();
-    return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-  };
-  const daysUntilExam = getDaysUntilExam();
-
-  // Weekly study progress
-  const recommendation = AnalyticsService.getSmartPacingRecommendation(
-    settings.weeklyHoursTarget,
-    useApp().sessions,
-    settings.weekStartsOnMonday
-  );
+  const weekEndDate = new Date();
+  weekEndDate.setDate(weekEndDate.getDate() + (((7 - weekEndDate.getDay()) % 7) || 7));
+  const weekEndStr = weekEndDate.toISOString().slice(0, 10);
 
   // Filter topics for the active board or directly delegated to the current user
   const myEmail = (profile.email || '').trim().toLowerCase();
@@ -143,7 +123,7 @@ export const TodayTomorrowView: React.FC = () => {
   // Group into Trello Kanban columns
   const backlogTopics = filteredTopics.filter(t =>
     t.status !== 'completed' &&
-    (!t.scheduledDate || (t.scheduledDate > tomorrowStr))
+    (!t.scheduledDate || t.scheduledDate > weekEndStr)
   );
 
   const todayTopics = filteredTopics.filter(t =>
@@ -157,7 +137,9 @@ export const TodayTomorrowView: React.FC = () => {
     t.scheduledDate === tomorrowStr
   );
 
-  const completedTopics = filteredTopics.filter(t => t.status === 'completed');
+  const thisWeekTopics = filteredTopics.filter(t =>
+    t.status !== 'completed' && t.scheduledDate > tomorrowStr && t.scheduledDate <= weekEndStr
+  );
 
   const getSubject = (id?: string): Subject | undefined => id ? subjects.find(s => s.id === id) : undefined;
 
@@ -178,8 +160,10 @@ export const TodayTomorrowView: React.FC = () => {
       const future = new Date();
       future.setDate(future.getDate() + 7);
       updateTopic(topicId, { scheduledDate: future.toISOString().split('T')[0], status: 'todo' });
-    } else if (targetCol === 'completed') {
-      updateTopic(topicId, { status: 'completed' });
+    } else if (targetCol === 'this_week') {
+      const nextAvailable = new Date();
+      nextAvailable.setDate(nextAvailable.getDate() + 2);
+      updateTopic(topicId, { scheduledDate: nextAvailable.toISOString().slice(0, 10) <= weekEndStr ? nextAvailable.toISOString().slice(0, 10) : weekEndStr, status: 'todo' });
     }
   };
 
@@ -248,6 +232,11 @@ export const TodayTomorrowView: React.FC = () => {
 
     let scheduledDate = todayStr;
     if (colId === 'tomorrow') scheduledDate = tomorrowStr;
+    if (colId === 'this_week') {
+      const planned = new Date();
+      planned.setDate(planned.getDate() + 2);
+      scheduledDate = planned.toISOString().slice(0, 10) <= weekEndStr ? planned.toISOString().slice(0, 10) : weekEndStr;
+    }
     if (colId === 'backlog') {
       const d = new Date();
       d.setDate(d.getDate() + 7);
@@ -264,10 +253,11 @@ export const TodayTomorrowView: React.FC = () => {
       );
     }
 
-    const cleanTitle = inlineTitle
+    const parsedTitle = parsePriorityShortcut(inlineTitle);
+    const cleanTitle = parsedTitle.title
       .replace(/#([a-zA-Z0-9_\-]+)/g, '')
       .replace(/@([a-zA-Z0-9_\-]+)/g, '')
-      .trim() || inlineTitle.trim();
+      .trim() || parsedTitle.title;
 
     const createdTopic = await addTopic({
       boardId: activeBoardId,
@@ -275,10 +265,11 @@ export const TodayTomorrowView: React.FC = () => {
       tags: finalTags,
       subjectId: targetTagId || 'tag_default',
       category: isGatePrep ? inlineCategory : undefined,
-      approxHours: Number(inlineHours) || 1.5,
+      approxHours: Number(inlineHours) || 1,
       scheduledDate,
       scheduledTime: colId === 'today' ? '10:00' : '09:00',
-      status: colId === 'completed' ? 'completed' : 'todo',
+      status: 'todo',
+      priority: parsedTitle.priority || inlinePriority,
       notes: '',
       assigneeId: assignedMember?.id,
       assigneeName: assignedMember?.name,
@@ -308,6 +299,7 @@ export const TodayTomorrowView: React.FC = () => {
     }
 
     setInlineTitle('');
+    setInlinePriority('normal');
     setInlineAssigneeId('');
     setActiveInlineAddColumn(null);
     Haptics.success();
@@ -437,16 +429,7 @@ export const TodayTomorrowView: React.FC = () => {
                     <Plus className="w-3.5 h-3.5" />
                     <span>Create New Board</span>
                   </button>
-                  <button
-                    onClick={() => {
-                      setIsBoardDropdownOpen(false);
-                      setIsJoinBoardModalOpen(true);
-                    }}
-                    className="w-full py-1.5 px-2 rounded-lg text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5 justify-center cursor-pointer"
-                  >
-                    <Key className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Join with Invite Code</span>
-                  </button>
+
                 </div>
               </div>
             )}
@@ -481,19 +464,7 @@ export const TodayTomorrowView: React.FC = () => {
               <span className="hidden sm:inline">Collaborate</span>
             </button>
 
-            <button
-              onClick={() => setIsJoinBoardModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-secondary)'
-              }}
-              title="Enter a board invite code to join another board"
-            >
-              <Key className="w-3.5 h-3.5 text-amber-500" />
-              <span className="hidden sm:inline">Join Code</span>
-            </button>
+
 
             <button
               onClick={() => {
@@ -514,28 +485,6 @@ export const TodayTomorrowView: React.FC = () => {
             </button>
           </div>
 
-          <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
-
-          {/* Exam Countdown Chip */}
-          <button
-            onClick={() => setIsEditingExamModal(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all hover:brightness-95 cursor-pointer"
-            style={{
-              background: 'var(--accent-soft)',
-              color: 'var(--accent)',
-              border: '1px solid var(--accent-border)',
-            }}
-            title="Click to change target deadline date"
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>
-              {daysUntilExam !== null ? (
-                <><strong>{daysUntilExam}d</strong> to deadline</>
-              ) : (
-                <>+ Set Deadline Date</>
-              )}
-            </span>
-          </button>
         </div>
 
         {/* Right: Filters & Controls */}
@@ -602,7 +551,7 @@ export const TodayTomorrowView: React.FC = () => {
       {/* ── Trello Kanban Columns ───────────────────────────────── */}
       <div className="trello-board">
 
-        {/* ── Column 1: Brainstorm ──────────────────────────────── */}
+        {/* ── Column 1: Brainstorm ───────────────────────────────── */}
         <TrelloColumn
           id="backlog"
           title="💡 Brainstorm"
@@ -616,11 +565,15 @@ export const TodayTomorrowView: React.FC = () => {
           onOpenInlineAdd={() => {
             setActiveInlineAddColumn('backlog');
             setInlineTitle('');
+            setInlinePriority('normal');
+            setInlineHours(1);
           }}
           onCloseInlineAdd={() => setActiveInlineAddColumn(null)}
           onInlineSubmit={() => handleInlineAddSubmit('backlog')}
           inlineTitle={inlineTitle}
           setInlineTitle={setInlineTitle}
+          inlinePriority={inlinePriority}
+          setInlinePriority={setInlinePriority}
           tags={tags}
           inlineTagId={inlineTagId}
           setInlineTagId={setInlineTagId}
@@ -649,6 +602,7 @@ export const TodayTomorrowView: React.FC = () => {
               onComplete={() => toggleTopicCompletion(topic.id)}
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
+              onEdit={() => openEditTopicModal(topic)}
               primaryAction={{
                 label: "Today's Focus",
                 action: () => handleMoveCard(topic.id, 'today'),
@@ -657,7 +611,7 @@ export const TodayTomorrowView: React.FC = () => {
           )}
         />
 
-        {/* ── Column 2: Today's Focus ───────────────────────────── */}
+        {/* ── Column 2: Today's Focus ────────────────────────────── */}
         <TrelloColumn
           id="today"
           title="⚡ Today's Focus"
@@ -672,11 +626,15 @@ export const TodayTomorrowView: React.FC = () => {
           onOpenInlineAdd={() => {
             setActiveInlineAddColumn('today');
             setInlineTitle('');
+            setInlinePriority('normal');
+            setInlineHours(1);
           }}
           onCloseInlineAdd={() => setActiveInlineAddColumn(null)}
           onInlineSubmit={() => handleInlineAddSubmit('today')}
           inlineTitle={inlineTitle}
           setInlineTitle={setInlineTitle}
+          inlinePriority={inlinePriority}
+          setInlinePriority={setInlinePriority}
           tags={tags}
           inlineTagId={inlineTagId}
           setInlineTagId={setInlineTagId}
@@ -705,6 +663,7 @@ export const TodayTomorrowView: React.FC = () => {
               onComplete={() => toggleTopicCompletion(topic.id)}
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
+              onEdit={() => openEditTopicModal(topic)}
               primaryAction={{
                 label: 'Tomorrow',
                 action: () => handleMoveCard(topic.id, 'tomorrow'),
@@ -713,7 +672,7 @@ export const TodayTomorrowView: React.FC = () => {
           )}
         />
 
-        {/* ── Column 3: Tomorrow ────────────────────────────────── */}
+        {/* ── Column 3: Tomorrow ─────────────────────────────────── */}
         <TrelloColumn
           id="tomorrow"
           title="🌅 Tomorrow"
@@ -727,11 +686,15 @@ export const TodayTomorrowView: React.FC = () => {
           onOpenInlineAdd={() => {
             setActiveInlineAddColumn('tomorrow');
             setInlineTitle('');
+            setInlinePriority('normal');
+            setInlineHours(1);
           }}
           onCloseInlineAdd={() => setActiveInlineAddColumn(null)}
           onInlineSubmit={() => handleInlineAddSubmit('tomorrow')}
           inlineTitle={inlineTitle}
           setInlineTitle={setInlineTitle}
+          inlinePriority={inlinePriority}
+          setInlinePriority={setInlinePriority}
           tags={tags}
           inlineTagId={inlineTagId}
           setInlineTagId={setInlineTagId}
@@ -760,6 +723,7 @@ export const TodayTomorrowView: React.FC = () => {
               onComplete={() => toggleTopicCompletion(topic.id)}
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
+              onEdit={() => openEditTopicModal(topic)}
               primaryAction={{
                 label: 'Do Today',
                 action: () => handleMoveCard(topic.id, 'today'),
@@ -768,33 +732,39 @@ export const TodayTomorrowView: React.FC = () => {
           )}
         />
 
-        {/* ── Column 4: Completed ───────────────────────────────── */}
+        {/* ── Column 4: This Week ───────────────────────────────── */}
         <TrelloColumn
-          id="completed"
-          title="✅ Completed"
-          items={completedTopics}
-          totalHours={calcHours(completedTopics)}
-          accentColor="#1F845A"
-          isDragOver={dragOverColumn === 'completed'}
-          onDragOver={e => handleDragOver(e, 'completed')}
+          id="this_week"
+          title="📅 This Week"
+          items={thisWeekTopics}
+          totalHours={calcHours(thisWeekTopics)}
+          accentColor="#8B5CF6"
+          isDragOver={dragOverColumn === 'this_week'}
+          onDragOver={e => handleDragOver(e, 'this_week')}
           onDragLeave={handleDragLeave}
-          onDrop={e => handleDrop(e, 'completed')}
-          activeInlineAdd={false}
-          onOpenInlineAdd={() => {}}
-          onCloseInlineAdd={() => {}}
-          onInlineSubmit={() => {}}
-          inlineTitle=""
-          setInlineTitle={() => {}}
+          onDrop={e => handleDrop(e, 'this_week')}
+          activeInlineAdd={activeInlineAddColumn === 'this_week'}
+          onOpenInlineAdd={() => {
+            setActiveInlineAddColumn('this_week');
+            setInlineTitle('');
+            setInlinePriority('normal');
+            setInlineHours(1);
+          }}
+          onCloseInlineAdd={() => setActiveInlineAddColumn(null)}
+          onInlineSubmit={() => handleInlineAddSubmit('this_week')}
+          inlineTitle={inlineTitle}
+          setInlineTitle={setInlineTitle}
+          inlinePriority={inlinePriority}
+          setInlinePriority={setInlinePriority}
           tags={tags}
-          inlineTagId=""
-          setInlineTagId={() => {}}
-          inlineHours={1.5}
-          setInlineHours={() => {}}
+          inlineTagId={inlineTagId}
+          setInlineTagId={setInlineTagId}
+          inlineHours={inlineHours}
+          setInlineHours={setInlineHours}
           boardMembers={activeBoard?.members || []}
-          inlineAssigneeId=""
-          setInlineAssigneeId={() => {}}
+          inlineAssigneeId={inlineAssigneeId}
+          setInlineAssigneeId={setInlineAssigneeId}
           isGatePrep={isGatePrep}
-          hideAddButton
           renderCard={topic => (
             <TrelloCard
               key={topic.id}
@@ -802,7 +772,6 @@ export const TodayTomorrowView: React.FC = () => {
               subject={getSubject(topic.subjectId)}
               tags={tags}
               isGatePrep={isGatePrep}
-              isCompleted
               members={activeBoard?.members || []}
               isDelegating={activeDelegatingTopicId === topic.id}
               onToggleDelegate={() => setActiveDelegatingTopicId(activeDelegatingTopicId === topic.id ? null : topic.id)}
@@ -815,8 +784,9 @@ export const TodayTomorrowView: React.FC = () => {
               onComplete={() => toggleTopicCompletion(topic.id)}
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
+              onEdit={() => openEditTopicModal(topic)}
               primaryAction={{
-                label: 'Reopen',
+                label: 'Today',
                 action: () => handleMoveCard(topic.id, 'today'),
               }}
             />
@@ -836,91 +806,6 @@ export const TodayTomorrowView: React.FC = () => {
         isOpen={isCollabModalOpen}
         onClose={() => setIsCollabModalOpen(false)}
       />
-
-      {/* ── Deadline Date Settings Modal ─────────────────────────────── */}
-      {isEditingExamModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div
-            className="w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-2xl"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Target Deadline Date
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsEditingExamModal(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                  Target Deadline Date
-                </label>
-                <input
-                  type="date"
-                  value={examDateStr}
-                  onChange={e => updateSettings({ gateExamDate: e.target.value })}
-                  className="input-base"
-                />
-              </div>
-
-              {isGatePrep ? (
-                <>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                      GATE Branch / Stream
-                    </label>
-                    <select
-                      value={targetStream}
-                      onChange={e => {
-                        const newStream = e.target.value;
-                        updateSettings({ gateTargetStream: newStream });
-                        loadGateStreamSyllabus(newStream, false);
-                      }}
-                      className="input-base"
-                    >
-                      {Object.entries(GATE_STREAM_SYLLABUS).map(([k, v]) => (
-                        <option key={k} value={k}>{v.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
-                    Exam Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Semester Finals, CAT, AWS..."
-                    value={settings.examName || ''}
-                    onChange={e => updateSettings({ examName: e.target.value })}
-                    className="input-base"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setIsEditingExamModal(false)}
-                className="btn-primary"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
@@ -943,6 +828,8 @@ interface TrelloColumnProps {
   onInlineSubmit: () => void;
   inlineTitle: string;
   setInlineTitle: (val: string) => void;
+  inlinePriority: TaskPriority;
+  setInlinePriority: (val: TaskPriority) => void;
   tags: Tag[];
   inlineTagId: string;
   setInlineTagId: (val: string) => void;
@@ -971,6 +858,8 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
   onInlineSubmit,
   inlineTitle,
   setInlineTitle,
+  inlinePriority,
+  setInlinePriority,
   tags,
   inlineTagId,
   setInlineTagId,
@@ -1027,9 +916,9 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
                 <input
                   type="text"
                   autoFocus
-                  placeholder="Task title (type #tag to create tags on the fly)..."
+                  placeholder="Task title, #tag, -high / -urgent / -low..."
                   value={inlineTitle}
-                  onChange={e => setInlineTitle(e.target.value)}
+                  onChange={e => { const value = e.target.value; setInlineTitle(value); const detected = parsePriorityShortcut(value).priority; if (detected) setInlinePriority(detected); }}
                   onKeyDown={e => {
                     if (e.key === 'Enter') onInlineSubmit();
                     if (e.key === 'Escape') onCloseInlineAdd();
@@ -1060,6 +949,14 @@ const TrelloColumn: React.FC<TrelloColumnProps> = ({
                     })}
                   </div>
                 )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                <span className="text-[10px] text-slate-400 font-semibold">Priority:</span>
+                {([['low', 'Low', '#10B981'], ['normal', 'Normal', '#3B82F6'], ['high', 'High', '#EF4444'], ['urgent', 'Urgent', '#DC2626']] as [TaskPriority, string, string][]).map(([value, label, color]) => (
+                  <button key={value} type="button" onClick={() => setInlinePriority(value)} className="rounded-full px-2 py-0.5 text-[10px] font-bold border transition-all" style={{ color, borderColor: inlinePriority === value ? color : `${color}50`, background: inlinePriority === value ? `${color}20` : 'transparent' }}>{label}</button>
+                ))}
+                <span className="text-[9px] text-slate-500">or type -h / -u / -l</span>
               </div>
 
               {/* Quick existing tag chips if available */}
@@ -1241,6 +1138,7 @@ interface TrelloCardProps {
   onComplete: () => void;
   onReschedule: () => void;
   onDelete: () => void;
+  onEdit: () => void;
   primaryAction?: {
     label: string;
     action: () => void;
@@ -1262,15 +1160,20 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
   onComplete,
   onReschedule,
   onDelete,
+  onEdit,
   primaryAction,
 }) => {
-  const catMeta = isGatePrep && topic.category ? GATE_TASK_CATEGORIES[topic.category] : null;
-
   const topicTags = (topic.tags || [])
     .map(tid => tags.find(t => t?.id === tid))
     .filter((t): t is Tag => Boolean(t && t.id));
 
-  const primaryColor = topicTags[0]?.color || subject?.color || '#0C66E4';
+  const priorityStyle = {
+    urgent: { label: 'Urgent', color: '#EF4444', soft: 'rgba(239,68,68,.10)' },
+    high: { label: 'High', color: '#EF4444', soft: 'rgba(239,68,68,.08)' },
+    normal: { label: 'Normal', color: '#3B82F6', soft: 'rgba(59,130,246,.08)' },
+    low: { label: 'Low', color: '#10B981', soft: 'rgba(16,185,129,.08)' },
+  }[topic.priority || 'normal'];
+  const trackingId = topic.trackingId || `DW-${topic.id.slice(-8).replace(/[^a-z0-9]/gi, '').toUpperCase()}`;
 
   return (
     <div
@@ -1280,62 +1183,15 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
         isCompleted ? 'opacity-65' : ''
       }`}
       style={{
-        borderLeft: `3.5px solid ${isCompleted ? '#10B981' : primaryColor}`,
+        borderLeft: `4px solid ${isCompleted ? '#10B981' : priorityStyle.color}`,
+        background: `linear-gradient(145deg, var(--bg-card), ${priorityStyle.soft})`,
       }}
     >
-      {/* Top Row: Tags & Assignee Avatar */}
-      <div className="flex items-center justify-between gap-1.5 min-h-[20px]">
-        <div className="flex flex-wrap items-center gap-1 min-w-0">
-          {topicTags.map(t => {
-            const tagColor = t?.color || '#0C66E4';
-            return (
-              <span
-                key={t.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide transition-colors"
-                style={{
-                  backgroundColor: `${tagColor}15`,
-                  color: tagColor,
-                  border: `1px solid ${tagColor}30`,
-                }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tagColor }} />
-                <span className="truncate max-w-[110px]">#{t.name}</span>
-              </span>
-            );
-          })}
-
-          {topicTags.length === 0 && subject && (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide"
-              style={{
-                backgroundColor: `${subject.color || '#0d9488'}15`,
-                color: subject.color || '#0d9488',
-                border: `1px solid ${subject.color || '#0d9488'}30`,
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: subject.color || '#0d9488' }} />
-              <span className="truncate max-w-[110px]">{subject.name}</span>
-            </span>
-          )}
-
-          {catMeta && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${catMeta.bgClass}`}>
-              {catMeta.emoji} {catMeta.label}
-            </span>
-          )}
-
-          {/* Priority indicator badge */}
-          {topic.priority === 'urgent' && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-              🔥 Urgent
-            </span>
-          )}
-          {topic.priority === 'high' && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-              ⚡ High
-            </span>
-          )}
-        </div>
+      {/* Priority and owner */}
+      <div className="flex items-center justify-between gap-2 min-h-[22px]">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ color: priorityStyle.color, background: priorityStyle.soft }}>
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: priorityStyle.color }} />{priorityStyle.label}
+        </span>
 
         {/* Assignee / Delegation Chip */}
         <div className="relative shrink-0">
@@ -1418,7 +1274,7 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
         </div>
       </div>
 
-      {/* Card Title & Checkbox */}
+      {/* Work title with stable tracking code */}
       <div className="flex items-start gap-2 pt-0.5">
         <button
           type="button"
@@ -1434,27 +1290,37 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
         </button>
 
         <div className="min-w-0 flex-1">
-          <h4
-            className="text-[13px] font-medium leading-snug tracking-tight select-text"
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h4
+            className="text-sm font-semibold leading-snug tracking-tight select-text"
             style={{
               color: isCompleted ? 'var(--text-muted)' : 'var(--text-primary)',
               textDecoration: isCompleted ? 'line-through' : 'none',
             }}
           >
             {topic.name}
-          </h4>
+            </h4>
+            <span className="inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wide" style={{ background: 'var(--bg-card-alt)', color: 'var(--text-muted)' }} title={`Tracking ID: ${topic.id}`}>{trackingId}</span>
+          </div>
 
           {topic.notes && (
-            <p className="text-[11px] line-clamp-1 mt-0.5 text-slate-400 dark:text-slate-500 select-text">
+            <p className="text-[11px] line-clamp-2 mt-1 text-slate-400 dark:text-slate-500 select-text">
               {topic.notes}
             </p>
+          )}
+          {(topicTags.length > 0 || (!topicTags.length && subject)) && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {topicTags.slice(0, 2).map(tag => <span key={tag.id} className="rounded-full px-2 py-0.5 text-[9px] font-semibold" style={{ background: `${tag.color || '#3B82F6'}18`, color: tag.color || '#3B82F6' }}>#{tag.name}</span>)}
+              {!topicTags.length && subject && <span className="rounded-full px-2 py-0.5 text-[9px] font-semibold" style={{ background: `${subject.color || '#3B82F6'}18`, color: subject.color || '#3B82F6' }}>{subject.name}</span>}
+              {topicTags.length > 2 && <span className="text-[9px] text-slate-400 self-center">+{topicTags.length - 2}</span>}
+            </div>
           )}
         </div>
       </div>
 
       {/* Footer Metadata & Micro-Actions */}
       <div
-        className="flex items-center justify-between pt-1.5 border-t mt-0.5"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t mt-1"
         style={{ borderColor: 'var(--border-subtle)' }}
       >
         <div className="flex items-center gap-2 text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
@@ -1465,15 +1331,13 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
 
           {topic.scheduledDate && (
             <span className="inline-flex items-center gap-1 text-[10px] text-slate-400" title={`Planned for ${topic.scheduledDate}`}>
-              <Calendar className="w-3 h-3" /> {topic.scheduledDate}
+              <Calendar className="w-3 h-3" /> {topic.scheduledDate.slice(5)}
             </span>
           )}
         </div>
 
-        <span className="text-[9px] font-mono text-slate-400 shrink-0" title={`Card ID: ${topic.id}`}>ID {topic.id.slice(-8)}</span>
-
         {/* Action Controls */}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {!isCompleted && (
             <button
               type="button"
@@ -1501,6 +1365,16 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
               {primaryAction.label}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onEdit(); }}
+            className="p-1 rounded text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            title="Edit Card"
+            aria-label={`Edit ${topic.name}`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
 
           <button
             type="button"

@@ -1,19 +1,23 @@
 import { RealtimeCollab } from '../services/realtimeCall';
 import { CloudSyncService } from '../services/cloudSync';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { AnalyticsService } from '../services/analytics';
 import { X, LayoutGrid, Clock, Calendar, Hash, Sparkles, AlertCircle, AtSign, Users, UserPlus } from 'lucide-react';
+import { TaskPriority } from '../types';
 import { Haptics } from '../utils/haptics';
+import { parsePriorityShortcut } from '../utils/cardInput';
 
 export const TopicModal: React.FC = () => {
   const {
     isTopicModalOpen,
+    topicBeingEdited,
     closeTopicModal,
     topicModalDefaultDate,
     tags,
     addTag,
     addTopic,
+    updateTopic,
     activeBoardId,
     activeBoard,
     sendCollabNotification,
@@ -23,14 +27,37 @@ export const TopicModal: React.FC = () => {
   const [titleInput, setTitleInput] = useState<string>('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
-  const [approxHours, setApproxHours] = useState<number>(1.5);
+  const [approxHours, setApproxHours] = useState<number>(1);
   const [scheduledDate, setScheduledDate] = useState<string>(
     topicModalDefaultDate || AnalyticsService.getTodayDateString()
   );
   const [scheduledTime, setScheduledTime] = useState<string>('10:00');
-  const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
+  const [priority, setPriority] = useState<TaskPriority>('normal');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isTopicModalOpen) return;
+    if (topicBeingEdited) {
+      setTitleInput(topicBeingEdited.name || '');
+      setSelectedTagIds(topicBeingEdited.tags || []);
+      setSelectedAssigneeId(topicBeingEdited.assigneeId || '');
+      setApproxHours(topicBeingEdited.approxHours || 1);
+      setScheduledDate(topicBeingEdited.scheduledDate || AnalyticsService.getTodayDateString());
+      setScheduledTime(topicBeingEdited.scheduledTime || '10:00');
+      setPriority(topicBeingEdited.priority || 'normal');
+      setNotes(topicBeingEdited.notes || '');
+    } else {
+      setTitleInput('');
+      setSelectedTagIds([]);
+      setSelectedAssigneeId('');
+      setScheduledDate(topicModalDefaultDate || AnalyticsService.getTodayDateString());
+      setApproxHours(1);
+      setScheduledTime('10:00');
+      setPriority('normal');
+      setNotes('');
+    }
+  }, [isTopicModalOpen, topicModalDefaultDate, topicBeingEdited]);
 
   if (!isTopicModalOpen) return null;
 
@@ -67,7 +94,7 @@ export const TopicModal: React.FC = () => {
 
       // Combine explicitly clicked tag IDs + extracted hashtag IDs
       const finalTagIds = Array.from(new Set([...selectedTagIds, ...tagIdsFromHashtags]));
-      const primarySubjectId = finalTagIds[0] || 'tag_default';
+      const primarySubjectId = finalTagIds[0] || topicBeingEdited?.subjectId || 'tag_default';
 
       // Find matching collaborator from @mention or selection
       let assignedMember = (activeBoard?.members || []).find(m => m.id === selectedAssigneeId);
@@ -79,31 +106,35 @@ export const TopicModal: React.FC = () => {
       }
 
       // Clean title text of trailing hashtags and @mentions for sleek display
-      const cleanTitle = titleInput
+      const parsedTitle = parsePriorityShortcut(titleInput);
+      const cleanTitle = parsedTitle.title
         .replace(/#([a-zA-Z0-9_\-]+)/g, '')
         .replace(/@([a-zA-Z0-9_\-]+)/g, '')
-        .trim() || titleInput.trim();
-
-      const createdTopic = await addTopic({
+        .trim() || parsedTitle.title;
+      const finalPriority = parsedTitle.priority || priority;
+      const topicFields = {
         boardId: activeBoardId,
         name: cleanTitle,
         tags: finalTagIds.length > 0 ? finalTagIds : undefined,
         subjectId: primarySubjectId,
-        approxHours: Number(approxHours) || 1.5,
+        approxHours: Number(approxHours) || 1,
         scheduledDate,
         scheduledTime,
-        status: 'todo',
+        status: topicBeingEdited?.status || 'todo',
         notes: notes.trim(),
-        priority: priority !== 'normal' ? priority : undefined,
+        priority: finalPriority,
         assigneeId: assignedMember?.id,
         assigneeName: assignedMember?.name,
         assigneeEmail: assignedMember ? (assignedMember.email || '').toLowerCase() : undefined,
         assigneeColor: assignedMember?.color,
         delegatedBy: assignedMember ? (profile.name || profile.email) : undefined,
         delegatedAt: assignedMember ? new Date().toISOString() : undefined
-      });
+      };
+      const createdTopic = topicBeingEdited
+        ? (updateTopic(topicBeingEdited.id, topicFields), { ...topicBeingEdited, ...topicFields })
+        : await addTopic(topicFields);
 
-      if (assignedMember) {
+      if (assignedMember && (!topicBeingEdited || topicBeingEdited.assigneeId !== assignedMember.id)) {
         const recipientEmail = (assignedMember.email || '').toLowerCase().trim();
         sendCollabNotification({
           type: 'task_delegated',
@@ -157,10 +188,10 @@ export const TopicModal: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                Add New Card
+                {topicBeingEdited ? 'Edit Card' : 'Add New Card'}
               </h2>
               <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                Write <strong>#tag</strong> in title to auto-create tags on the fly
+                Use <strong>#tag</strong> for tags and <strong>-high</strong>, <strong>-low</strong>, or <strong>-urgent</strong> for priority
               </p>
             </div>
           </div>
@@ -185,7 +216,7 @@ export const TopicModal: React.FC = () => {
               required
               placeholder="e.g. Build authentication flow #backend #auth"
               value={titleInput}
-              onChange={e => setTitleInput(e.target.value)}
+              onChange={e => { const value = e.target.value; setTitleInput(value); const detected = parsePriorityShortcut(value).priority; if (detected) setPriority(detected); }}
               className="input-base text-sm py-2"
             />
 
@@ -284,19 +315,27 @@ export const TopicModal: React.FC = () => {
             </div>
           )}
 
-          {/* Target Deadline Date & Estimated Hours */}
+          {/* Schedule & estimated work time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Deadline / Scheduled Date</span>
+                <span>Schedule this work</span>
               </label>
-              <input
-                type="date"
-                value={scheduledDate}
-                onChange={e => setScheduledDate(e.target.value)}
-                className="input-base text-xs py-1.5"
-              />
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {[
+                  { label: 'Today', value: AnalyticsService.getTodayDateString() },
+                  { label: 'Tomorrow', value: AnalyticsService.getTomorrowDateString() },
+                  { label: 'This week', value: (() => { const d = new Date(); d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7)); return d.toISOString().slice(0, 10); })() },
+                ].map(option => (
+                  <button key={option.label} type="button" onClick={() => setScheduledDate(option.value)}
+                    className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all hover:-translate-y-0.5"
+                    style={{ background: scheduledDate === option.value ? 'var(--accent-soft)' : 'var(--bg-card-alt)', borderColor: scheduledDate === option.value ? 'var(--accent-border)' : 'var(--border)', color: scheduledDate === option.value ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)} className="input-base text-xs py-1.5" aria-label="Choose a custom date" />
             </div>
 
             <div>
@@ -328,7 +367,8 @@ export const TopicModal: React.FC = () => {
             <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
               Priority Level
             </label>
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button type="button" onClick={() => setPriority('low')} className={`rounded-lg border py-1.5 text-xs font-bold transition-all ${priority === 'low' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>Low</button>
               <button
                 type="button"
                 onClick={() => setPriority('normal')}
@@ -345,11 +385,11 @@ export const TopicModal: React.FC = () => {
                 onClick={() => setPriority('high')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                   priority === 'high'
-                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-600'
+                    ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/30 text-rose-600'
                     : 'border-slate-200 dark:border-slate-700 text-slate-500'
                 }`}
               >
-                ⚡ High
+                ↑ High
               </button>
               <button
                 type="button"
@@ -393,7 +433,7 @@ export const TopicModal: React.FC = () => {
               disabled={isSubmitting || !titleInput.trim()}
               className="btn-primary text-xs px-4 py-1.5 font-bold disabled:opacity-40"
             >
-              {isSubmitting ? 'Adding...' : 'Add Card'}
+              {isSubmitting ? (topicBeingEdited ? 'Saving...' : 'Adding...') : (topicBeingEdited ? 'Save Changes' : 'Add Card')}
             </button>
           </div>
         </form>

@@ -1,5 +1,6 @@
 import { StorageService } from './storage';
 import { CloudSyncStatus } from '../types';
+import { E2EE } from './e2ee';
 
 async function readJsonResponse(response: Response): Promise<any> {
   const body = await response.text();
@@ -88,11 +89,15 @@ export const CloudSyncService = {
 
         const json = await readJsonResponse(res);
       if (json.found && json.data) {
-        StorageService.importData(json.data);
+        let clearData = json.data;
+        if (json.data.encrypted === true && typeof json.data.payload === 'string') {
+          clearData = await E2EE.decrypt(json.data.payload, E2EE.getOrCreateRecoveryKey());
+        }
+        StorageService.importData(clearData);
         if (json.updatedAt) {
           this.setLastSyncedAt(json.updatedAt);
         }
-        return { success: true, found: true, data: json.data, updatedAt: json.updatedAt };
+        return { success: true, found: true, data: clearData, updatedAt: json.updatedAt };
       }
 
       return { success: true, found: false };
@@ -111,12 +116,17 @@ export const CloudSyncService = {
 
     try {
       const allData = StorageService.exportAllData();
+      const encryptedData = { encrypted: true, payload: await E2EE.encrypt(allData, E2EE.getOrCreateRecoveryKey()) };
+      const boardInvites = await Promise.all((allData.boards || []).filter((board: any) => board.inviteCode && board.encryptionKey).map(async (board: any) => ({
+        inviteCode: board.inviteCode, ownerEmail: allData.profile?.email || '',
+        envelope: await E2EE.encrypt({ board, topics: (allData.tasks || []).filter((topic: any) => topic.boardId === board.id) }, board.encryptionKey)
+      })));
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, data: allData }),
+        body: JSON.stringify({ key, data: encryptedData, boardInvites, directoryProfile: { id: allData.profile?.id, name: allData.profile?.name, email: allData.profile?.email, avatarUrl: allData.profile?.avatarUrl, googleConnected: Boolean(allData.profile?.googleConnected) } }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -147,9 +157,9 @@ export const CloudSyncService = {
   /**
    * Generates a downloadable JSON file for offline export
    */
-  exportToFile() {
+  async exportToFile() {
     const data = StorageService.exportAllData();
-    const str = JSON.stringify(data, null, 2);
+    const str = JSON.stringify({ encrypted: true, payload: await E2EE.encrypt(data, E2EE.getOrCreateRecoveryKey()) }, null, 2);
     const blob = new Blob([str], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -181,7 +191,8 @@ export const CloudSyncService = {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      StorageService.importData(parsed);
+      const data = parsed.encrypted && parsed.payload ? await E2EE.decrypt<any>(parsed.payload, E2EE.getOrCreateRecoveryKey()) : parsed;
+      StorageService.importData(data);
       this.pushToCloudImmediate();
       return true;
     } catch (e) {
@@ -243,7 +254,7 @@ export const CloudSyncService = {
   /**
    * Joins a board in MongoDB Atlas and registers the member
    */
-  async joinBoardRemote(boardCode: string, user: { id: string; name: string; email: string; avatar?: string; color?: string }): Promise<{ success: boolean; board?: any; message?: string }> {
+  async joinBoardRemote(boardCode: string, user: { id: string; name: string; email: string; avatar?: string; color?: string }): Promise<{ success: boolean; board?: any; encryptedEnvelope?: string; message?: string }> {
     try {
       const res = await fetch('/api/sync', {
         method: 'POST',

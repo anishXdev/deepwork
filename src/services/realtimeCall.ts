@@ -3,10 +3,11 @@ import { ChatMessage, CollabCallParticipant, IncomingCall, CallType } from '../t
 interface RealtimeCallbacks {
   onIncomingCall?: (call: IncomingCall) => void;
   onCallAccepted?: (data: { callId: string; peerId: string; peerName: string; peerEmail: string }) => void;
+  onParticipantJoined?: (data: { callId: string; peerId: string; peerName: string; peerEmail: string }) => void;
   onCallDeclined?: (data: { callId: string; peerId: string; peerName: string; peerEmail: string }) => void;
   onCallCancelled?: (data: { callId: string }) => void;
   onCallEnded?: (data: { callId: string }) => void;
-  onRemoteStream?: (stream: MediaStream) => void;
+  onRemoteStream?: (stream: MediaStream, peerEmail?: string) => void;
   onChatMessage?: (msg: ChatMessage) => void;
   onTaskDelegated?: (data: { task: any; recipientEmail?: string; boardId?: string; boardName?: string; senderName?: string; senderEmail?: string }) => void;
   onConnectionStatus?: (status: 'connected' | 'connecting' | 'disconnected') => void;
@@ -22,13 +23,14 @@ export class RealtimeCollabManager {
   private currentUserName: string = '';
   private callbacks: RealtimeCallbacks = {};
   private signalingConfigurationError: string | null = null;
-  private peerConnection: RTCPeerConnection | null = null;
+  private peerConnections = new Map<string, RTCPeerConnection>();
   private localStream: MediaStream | null = null;
   private screenStream: MediaStream | null = null;
   private activeCallId: string | null = null;
   private isCaller: boolean = false;
   private targetPeerEmail: string = '';
-  private pendingCandidates: RTCIceCandidateInit[] = [];
+  private activeTargetEmails: string[] = [];
+  private pendingCandidates = new Map<string, RTCIceCandidateInit[]>();
 
   private rtcConfig: RTCConfiguration = {
     iceServers: [
@@ -192,6 +194,7 @@ export class RealtimeCollabManager {
             participants: [
               {
                 id: data.callerId,
+                email: data.callerEmail,
                 name: data.callerName,
                 color: data.callerColor || '#0C66E4',
                 avatar: data.callerAvatar,
@@ -218,12 +221,20 @@ export class RealtimeCollabManager {
             peerEmail: data.accepterEmail
           });
 
-          // If we are the caller, start WebRTC Offer
-          if (this.isCaller) {
-            await this.initiateWebRTCOffer();
-          }
+          // Peer negotiation starts from call_participant_joined to create a full mesh.
         }
         break;
+
+      case 'call_participant_joined': {
+        const peer = data.participant || {};
+        const peerEmail = String(peer.email || '').toLowerCase();
+        const peerId = String(peer.id || '');
+        if (data.callId === this.activeCallId && peerId && peerId !== this.currentUserId && peerEmail) {
+          this.callbacks.onParticipantJoined?.({ callId: data.callId, peerId, peerName: peer.name || 'Teammate', peerEmail });
+          if (this.currentUserId.localeCompare(peerId) < 0) await this.initiateWebRTCOffer(peerEmail);
+        }
+        break;
+      }
 
       case 'call_rejected':
         if (data.rejecterId !== this.currentUserId) {
@@ -233,7 +244,7 @@ export class RealtimeCollabManager {
             peerName: data.rejecterName,
             peerEmail: data.rejecterEmail
           });
-          this.cleanupCall();
+          // Keep a group call alive for the participants who accepted.
         }
         break;
 
@@ -255,9 +266,7 @@ export class RealtimeCollabManager {
         if (data.offer && data.senderId !== this.currentUserId) {
           const myEmail = this.currentUserEmail;
           const targetEmail = (data.targetEmail || '').toLowerCase().trim();
-          if (!targetEmail || !myEmail || targetEmail === myEmail || !this.activeCallId || this.activeCallId === data.callId) {
-            await this.handleWebRTCOffer(data.offer, data.senderEmail);
-          }
+          if (!targetEmail || !myEmail || targetEmail === myEmail) await this.handleWebRTCOffer(data.offer, data.senderEmail, data.callId);
         }
         break;
 
@@ -266,7 +275,7 @@ export class RealtimeCollabManager {
           const myEmail = this.currentUserEmail;
           const targetEmail = (data.targetEmail || '').toLowerCase().trim();
           if (!targetEmail || !myEmail || targetEmail === myEmail) {
-            await this.handleWebRTCAnswer(data.answer);
+            await this.handleWebRTCAnswer(data.answer, data.senderEmail);
           }
         }
         break;
@@ -276,7 +285,7 @@ export class RealtimeCollabManager {
           const myEmail = this.currentUserEmail;
           const targetEmail = (data.targetEmail || '').toLowerCase().trim();
           if (!targetEmail || !myEmail || targetEmail === myEmail) {
-            await this.handleWebRTCIce(data.candidate);
+            await this.handleWebRTCIce(data.candidate, data.senderEmail);
           }
         }
         break;
@@ -306,7 +315,8 @@ export class RealtimeCollabManager {
     const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     this.activeCallId = callId;
     this.isCaller = true;
-    this.targetPeerEmail = (params.targetEmails[0] || '').toLowerCase();
+    this.activeTargetEmails = params.targetEmails.map(email => email.toLowerCase());
+    this.targetPeerEmail = this.activeTargetEmails[0] || '';
 
     this.send({
       type: 'call_ring',
@@ -334,7 +344,8 @@ export class RealtimeCollabManager {
         callId: id,
         callerId: this.currentUserId,
         callerEmail: this.currentUserEmail,
-        targetEmail: this.targetPeerEmail
+        targetEmail: this.targetPeerEmail,
+        targetEmails: this.activeTargetEmails
       });
     }
     this.cleanupCall();
@@ -345,6 +356,7 @@ export class RealtimeCollabManager {
     this.activeCallId = callId;
     this.isCaller = false;
     this.targetPeerEmail = (callerEmail || '').toLowerCase();
+    this.activeTargetEmails = [this.targetPeerEmail];
 
     this.send({
       type: 'call_accept',
@@ -377,7 +389,8 @@ export class RealtimeCollabManager {
         callId: id,
         senderId: this.currentUserId,
         senderEmail: this.currentUserEmail,
-        targetEmail: this.targetPeerEmail
+        targetEmail: this.targetPeerEmail,
+        targetEmails: this.activeTargetEmails
       });
     }
     this.cleanupCall();
@@ -417,42 +430,31 @@ export class RealtimeCollabManager {
   }
 
   /* ── WebRTC Peer Connection & Media Streams ───────────────── */
-  private getOrCreatePeerConnection(): RTCPeerConnection {
-    if (this.peerConnection && this.peerConnection.signalingState !== 'closed') {
-      return this.peerConnection;
-    }
+  private getOrCreatePeerConnection(peerEmail: string): RTCPeerConnection {
+    const peerKey = peerEmail.trim().toLowerCase();
+    const existing = this.peerConnections.get(peerKey);
+    if (existing && existing.signalingState !== 'closed') return existing;
 
     const pc = new RTCPeerConnection(this.rtcConfig);
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.send({
-          type: 'webrtc_ice',
-          callId: this.activeCallId,
-          candidate: event.candidate.toJSON(),
-          senderId: this.currentUserId,
-          senderEmail: this.currentUserEmail,
-          targetEmail: this.targetPeerEmail
-        });
-      }
+    this.localStream?.getTracks().forEach(track => pc.addTrack(track, this.localStream!));
+    pc.onicecandidate = event => {
+      if (event.candidate) this.send({
+        type: 'webrtc_ice', callId: this.activeCallId, candidate: event.candidate.toJSON(),
+        senderId: this.currentUserId, senderEmail: this.currentUserEmail, targetEmail: peerKey
+      });
     };
-
-    pc.ontrack = (event) => {
-      if (event.streams && event.streams[0]) {
+    pc.ontrack = event => {
+      if (event.streams?.[0]) {
         const stream = event.streams[0];
-        stream.onaddtrack = () => this.callbacks.onRemoteStream?.(new MediaStream(stream.getTracks()));
-        stream.onremovetrack = () => this.callbacks.onRemoteStream?.(new MediaStream(stream.getTracks()));
-        this.callbacks.onRemoteStream?.(stream);
+        stream.onaddtrack = () => this.callbacks.onRemoteStream?.(new MediaStream(stream.getTracks()), peerKey);
+        stream.onremovetrack = () => this.callbacks.onRemoteStream?.(new MediaStream(stream.getTracks()), peerKey);
+        this.callbacks.onRemoteStream?.(stream, peerKey);
       }
     };
-
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        console.warn('[RealtimeCollab] WebRTC connection state:', pc.connectionState);
-      }
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') console.warn('[RealtimeCollab] Peer connection state:', peerKey, pc.connectionState);
     };
-
-    this.peerConnection = pc;
+    this.peerConnections.set(peerKey, pc);
     return pc;
   }
 
@@ -469,11 +471,6 @@ export class RealtimeCollabManager {
         });
         this.localStream = stream;
 
-        const pc = this.getOrCreatePeerConnection();
-        stream.getTracks().forEach(track => {
-          pc.addTrack(track, stream);
-        });
-
         return stream;
       }
     } catch (err) {
@@ -482,82 +479,50 @@ export class RealtimeCollabManager {
     return null;
   }
 
-  private async initiateWebRTCOffer() {
+  private async initiateWebRTCOffer(peerEmail: string) {
     try {
-      const pc = this.getOrCreatePeerConnection();
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      });
+      const peerKey = peerEmail.trim().toLowerCase();
+      const pc = this.getOrCreatePeerConnection(peerKey);
+      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
       await pc.setLocalDescription(offer);
-
-      this.send({
-        type: 'webrtc_offer',
-        callId: this.activeCallId,
-        offer: pc.localDescription,
-        senderId: this.currentUserId,
-        senderEmail: this.currentUserEmail,
-        targetEmail: this.targetPeerEmail
-      });
-    } catch (err) {
-      console.warn('[RealtimeCollab] Error creating WebRTC offer:', err);
-    }
+      this.send({ type: 'webrtc_offer', callId: this.activeCallId, offer: pc.localDescription, senderId: this.currentUserId, senderEmail: this.currentUserEmail, targetEmail: peerKey });
+    } catch (err) { console.warn('[RealtimeCollab] Error creating WebRTC offer:', err); }
   }
 
-  private async handleWebRTCOffer(offer: RTCSessionDescriptionInit, senderEmail: string) {
+  private async handleWebRTCOffer(offer: RTCSessionDescriptionInit, senderEmail: string, callId: string) {
     try {
-      this.targetPeerEmail = senderEmail.toLowerCase();
-      const pc = this.getOrCreatePeerConnection();
+      const peerKey = senderEmail.toLowerCase();
+      this.activeCallId = callId;
+      const pc = this.getOrCreatePeerConnection(peerKey);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
-
-      // Flush pending ICE candidates if any
-      while (this.pendingCandidates.length > 0) {
-        const cand = this.pendingCandidates.shift();
-        if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
-      }
-
+      const pending = this.pendingCandidates.get(peerKey) || [];
+      for (const candidate of pending) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      this.pendingCandidates.delete(peerKey);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-
-      this.send({
-        type: 'webrtc_answer',
-        callId: this.activeCallId,
-        answer: pc.localDescription,
-        senderId: this.currentUserId,
-        senderEmail: this.currentUserEmail,
-        targetEmail: senderEmail
-      });
-    } catch (err) {
-      console.warn('[RealtimeCollab] Error handling WebRTC offer:', err);
-    }
+      this.send({ type: 'webrtc_answer', callId, answer: pc.localDescription, senderId: this.currentUserId, senderEmail: this.currentUserEmail, targetEmail: peerKey });
+    } catch (err) { console.warn('[RealtimeCollab] Error handling WebRTC offer:', err); }
   }
 
-  private async handleWebRTCAnswer(answer: RTCSessionDescriptionInit) {
+  private async handleWebRTCAnswer(answer: RTCSessionDescriptionInit, senderEmail: string) {
     try {
-      if (this.peerConnection) {
-        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-
-        // Flush pending ICE candidates
-        while (this.pendingCandidates.length > 0) {
-          const cand = this.pendingCandidates.shift();
-          if (cand) await this.peerConnection.addIceCandidate(new RTCIceCandidate(cand));
-        }
-      }
-    } catch (err) {
-      console.warn('[RealtimeCollab] Error handling WebRTC answer:', err);
-    }
+      const peerKey = senderEmail.toLowerCase();
+      const pc = this.peerConnections.get(peerKey);
+      if (!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      const pending = this.pendingCandidates.get(peerKey) || [];
+      for (const candidate of pending) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      this.pendingCandidates.delete(peerKey);
+    } catch (err) { console.warn('[RealtimeCollab] Error handling WebRTC answer:', err); }
   }
 
-  private async handleWebRTCIce(candidate: RTCIceCandidateInit) {
+  private async handleWebRTCIce(candidate: RTCIceCandidateInit, senderEmail: string) {
     try {
-      if (this.peerConnection && this.peerConnection.remoteDescription) {
-        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-      } else {
-        this.pendingCandidates.push(candidate);
-      }
-    } catch (err) {
-      console.warn('[RealtimeCollab] Error adding ICE candidate:', err);
-    }
+      const peerKey = senderEmail.toLowerCase();
+      const pc = this.peerConnections.get(peerKey);
+      if (pc?.remoteDescription) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      else this.pendingCandidates.set(peerKey, [...(this.pendingCandidates.get(peerKey) || []), candidate]);
+    } catch (err) { console.warn('[RealtimeCollab] Error adding ICE candidate:', err); }
   }
 
   /* ── Screen Sharing & Track Controls ──────────────────────── */
@@ -571,16 +536,10 @@ export class RealtimeCollabManager {
         this.screenStream = stream;
 
         // If peer connection exists, replace the video sender track with screen share track
-        if (this.peerConnection) {
-          const videoTrack = stream.getVideoTracks()[0];
-          const senders = this.peerConnection.getSenders();
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          if (videoSender) {
-            await videoSender.replaceTrack(videoTrack);
-          } else {
-            this.peerConnection.addTrack(videoTrack, stream);
-            if (this.peerConnection.remoteDescription) await this.initiateWebRTCOffer();
-          }
+        const videoTrack = stream.getVideoTracks()[0];
+        for (const [email, pc] of this.peerConnections) {
+          const videoSender = pc.getSenders().find(sender => sender.track?.kind === 'video');
+          if (videoSender) await videoSender.replaceTrack(videoTrack); else pc.addTrack(videoTrack, stream);
         }
 
         return stream;
@@ -597,12 +556,11 @@ export class RealtimeCollabManager {
       this.screenStream = null;
     }
     // Restore webcam track if available
-    if (this.peerConnection && this.localStream) {
+    if (this.localStream) {
       const cameraTrack = this.localStream.getVideoTracks()[0];
-      const senders = this.peerConnection.getSenders();
-      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-      if (videoSender && cameraTrack) {
-        videoSender.replaceTrack(cameraTrack);
+      if (cameraTrack) for (const pc of this.peerConnections.values()) {
+        const videoSender = pc.getSenders().find(sender => sender.track?.kind === 'video');
+        if (videoSender) void videoSender.replaceTrack(cameraTrack);
       }
     }
   }
@@ -632,15 +590,9 @@ export class RealtimeCollabManager {
         const newTrack = stream.getVideoTracks()[0];
         if (newTrack) {
           this.localStream.addTrack(newTrack);
-          if (this.peerConnection) {
-            const senders = this.peerConnection.getSenders();
-            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-            if (videoSender) {
-              await videoSender.replaceTrack(newTrack);
-            } else {
-              this.peerConnection.addTrack(newTrack, this.localStream);
-              if (this.peerConnection.remoteDescription) await this.initiateWebRTCOffer();
-            }
+          for (const pc of this.peerConnections.values()) {
+            const videoSender = pc.getSenders().find(sender => sender.track?.kind === 'video');
+            if (videoSender) await videoSender.replaceTrack(newTrack); else pc.addTrack(newTrack, this.localStream);
           }
           return true;
         }
@@ -660,14 +612,13 @@ export class RealtimeCollabManager {
       this.localStream.getTracks().forEach(t => t.stop());
       this.localStream = null;
     }
-    if (this.peerConnection) {
-      this.peerConnection.close();
-      this.peerConnection = null;
-    }
+    for (const pc of this.peerConnections.values()) pc.close();
+    this.peerConnections.clear();
     this.activeCallId = null;
     this.isCaller = false;
     this.targetPeerEmail = '';
-    this.pendingCandidates = [];
+    this.activeTargetEmails = [];
+    this.pendingCandidates.clear();
   }
 }
 

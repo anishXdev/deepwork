@@ -19,7 +19,6 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
   const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [validationError, setValidationError] = useState<string>('');
   const [infoMessage, setInfoMessage] = useState<string>('');
@@ -173,7 +172,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
       senderColor: '#0C66E4'
     });
 
-    Notifications.toast('success', `👥 Collaboration invite sent to "${finalName}" (${finalEmail})!`);
+    Notifications.toast('info', `Copy the secure invite link below and share it privately with ${finalName}.`);
     setInviteName('');
     setInviteEmail('');
     setMatchedUser(null);
@@ -181,16 +180,10 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
     setInfoMessage('');
   };
 
-  const handleCopyInviteCode = () => {
-    navigator.clipboard.writeText(inviteCode);
-    setCopiedCode(true);
-    Haptics.notification();
-    Notifications.toast('success', `🔑 Board Invite Code "${inviteCode}" copied to clipboard!`);
-    setTimeout(() => setCopiedCode(false), 2500);
-  };
+
 
   const handleCopyInviteLink = () => {
-    const inviteUrl = `${window.location.origin}/?joinBoard=${encodeURIComponent(activeBoard.id)}&code=${encodeURIComponent(inviteCode)}&boardName=${encodeURIComponent(activeBoard.name)}&inviter=${encodeURIComponent(profile.name || profile.email || 'Team Lead')}`;
+    const inviteUrl = `${window.location.origin}/?joinBoard=${encodeURIComponent(activeBoard.id)}&code=${encodeURIComponent(inviteCode)}&boardName=${encodeURIComponent(activeBoard.name)}&inviter=${encodeURIComponent(profile.name || profile.email || 'Team Lead')}#key=${encodeURIComponent(activeBoard.encryptionKey || '')}`;
     navigator.clipboard.writeText(inviteUrl);
     setCopiedLink(true);
     Haptics.notification();
@@ -227,60 +220,21 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        {/* Board Invite Code Box */}
+        {/* Secure board invite link */}
         <div className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                <Key className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Board Invite Code</p>
-                <p className="text-[11px] text-slate-500">Teammates can enter this code in Board Menu → Join with Code</p>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+              <Key className="w-3.5 h-3.5" />
             </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-xs font-black tracking-widest px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 select-all">
-                {inviteCode}
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyInviteCode}
-                className="btn-secondary text-xs px-2.5 py-1 flex items-center gap-1 whitespace-nowrap cursor-pointer"
-                title="Copy Invite Code"
-              >
-                {copiedCode ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="text-emerald-600 font-bold text-[11px]">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span className="text-[11px]">Copy Code</span>
-                  </>
-                )}
-              </button>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Secure board invite</p>
+              <p className="text-[11px] text-slate-500">The link includes the board’s secret key. Copy it and share it privately; invite codes alone cannot unlock the board.</p>
             </div>
           </div>
-
-          {/* Shareable Direct Link */}
-          <div className="flex items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] text-slate-400 truncate">
-                Direct link: <span className="font-mono text-slate-500">{window.location.origin}/?code={inviteCode}</span>
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleCopyInviteLink}
-              className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer shrink-0"
-            >
-              {copiedLink ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-              <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
-            </button>
-          </div>
+          <button type="button" onClick={handleCopyInviteLink} className="btn-primary w-full text-xs py-2 flex items-center justify-center gap-2">
+            {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copiedLink ? 'Secure link copied' : 'Copy secure invite link'}</span>
+          </button>
         </div>
 
         {/* Invite Member Form: User Directory Lookup */}
