@@ -254,12 +254,12 @@ export const CloudSyncService = {
   /**
    * Joins a board in MongoDB Atlas and registers the member
    */
-  async joinBoardRemote(boardCode: string, user: { id: string; name: string; email: string; avatar?: string; color?: string }): Promise<{ success: boolean; board?: any; encryptedEnvelope?: string; message?: string }> {
+  async joinBoardRemote(boardCode: string, user: { id: string; name: string; email: string; avatar?: string; color?: string }): Promise<{ success: boolean; board?: any; members?: any[]; encryptedEnvelope?: string; message?: string }> {
     try {
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'join_board', boardCode, user })
+        body: JSON.stringify({ action: 'join_board', joinCode: boardCode, joinUser: user })
       });
       const data = await readJsonResponse(res);
       return data;

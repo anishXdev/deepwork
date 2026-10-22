@@ -32,11 +32,13 @@ import {
   AtSign,
   Search,
   Pencil,
+  KeyRound,
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { parsePriorityShortcut } from '../utils/cardInput';
 import { CreateBoardModal } from './CreateBoardModal';
 import { CollaborationModal } from './CollaborationModal';
+import { JoinBoardModal } from './JoinBoardModal';
 
 type ColumnId = 'backlog' | 'today' | 'tomorrow' | 'this_week';
 
@@ -75,6 +77,7 @@ export const TodayTomorrowView: React.FC = () => {
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string>('all');
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState<boolean>(false);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState<boolean>(false);
+  const [isJoinBoardOpen, setIsJoinBoardOpen] = useState<boolean>(false);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState<boolean>(false);
   const [boardSearchQuery, setBoardSearchQuery] = useState<string>('');
 
@@ -451,6 +454,16 @@ export const TodayTomorrowView: React.FC = () => {
             </div>
 
             <button
+              onClick={() => setIsJoinBoardOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+              title="Join a board with a code"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">Join Board</span>
+            </button>
+
+            <button
               onClick={() => setIsCollabModalOpen(true)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               style={{
@@ -806,6 +819,8 @@ export const TodayTomorrowView: React.FC = () => {
         isOpen={isCollabModalOpen}
         onClose={() => setIsCollabModalOpen(false)}
       />
+
+      <JoinBoardModal isOpen={isJoinBoardOpen} onClose={() => setIsJoinBoardOpen(false)} />
 
     </div>
   );

@@ -6,6 +6,7 @@ import { Notifications } from '../services/notifications';
 import { StorageService, generateBoardInviteCode } from '../services/storage';
 import { UserProfile } from '../types';
 import { CallButton } from './calling/CallButton';
+import { makeSecureBoardJoinCode } from '../utils/boardInvite';
 
 interface CollaborationModalProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor');
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
   const [validationError, setValidationError] = useState<string>('');
   const [infoMessage, setInfoMessage] = useState<string>('');
@@ -58,6 +59,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
 
   const members = activeBoard.members || [];
   const inviteCode = activeBoard.inviteCode || generateBoardInviteCode(activeBoard.id);
+  const secureJoinCode = activeBoard.encryptionKey ? makeSecureBoardJoinCode(inviteCode, activeBoard.encryptionKey) : inviteCode;
 
   const handleEmailChange = async (val: string) => {
     setInviteEmail(val);
@@ -123,7 +125,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
     setMatchedUser(null);
     if (normalized.includes('@') && normalized.includes('.')) {
       setValidationError('');
-      setInfoMessage('User not found in directory. You can still send an invite or share the Board Code below.');
+      setInfoMessage('User not found in directory. You can still send an invite and share the secure join code below.');
     } else {
       setValidationError('');
     }
@@ -166,13 +168,13 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
       senderEmail: profile.email || '',
       boardId: activeBoard.id,
       boardName: activeBoard.name,
-      inviteCode: inviteCode,
+      inviteCode: secureJoinCode,
       senderName: profile.name || 'Board Lead',
       senderAvatar: profile.avatar || profile.avatarUrl,
       senderColor: '#0C66E4'
     });
 
-    Notifications.toast('info', `Copy the secure invite link below and share it privately with ${finalName}.`);
+    Notifications.toast('info', `Share the secure join code below privately with ${finalName}.`);
     setInviteName('');
     setInviteEmail('');
     setMatchedUser(null);
@@ -182,13 +184,12 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
 
 
 
-  const handleCopyInviteLink = () => {
-    const inviteUrl = `${window.location.origin}/?joinBoard=${encodeURIComponent(activeBoard.id)}&code=${encodeURIComponent(inviteCode)}&boardName=${encodeURIComponent(activeBoard.name)}&inviter=${encodeURIComponent(profile.name || profile.email || 'Team Lead')}#key=${encodeURIComponent(activeBoard.encryptionKey || '')}`;
-    navigator.clipboard.writeText(inviteUrl);
-    setCopiedLink(true);
+  const handleCopyJoinCode = () => {
+    navigator.clipboard.writeText(secureJoinCode);
+    setCopiedCode(true);
     Haptics.notification();
-    Notifications.toast('success', '🔗 Collaboration invite link copied to clipboard!');
-    setTimeout(() => setCopiedLink(false), 2500);
+    Notifications.toast('success', 'Secure board join code copied to clipboard!');
+    setTimeout(() => setCopiedCode(false), 2500);
   };
 
   return (
@@ -220,20 +221,21 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        {/* Secure board invite link */}
+        {/* Secure board join code */}
         <div className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
               <Key className="w-3.5 h-3.5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Secure board invite</p>
-              <p className="text-[11px] text-slate-500">The link includes the board’s secret key. Copy it and share it privately; invite codes alone cannot unlock the board.</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Secure board join code</p>
+              <p className="text-[11px] text-slate-500">Share this code privately. It includes the board’s encryption key so teammates can unlock the shared board.</p>
             </div>
           </div>
-          <button type="button" onClick={handleCopyInviteLink} className="btn-primary w-full text-xs py-2 flex items-center justify-center gap-2">
-            {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedLink ? 'Secure link copied' : 'Copy secure invite link'}</span>
+          <div className="rounded-lg border px-3 py-2 font-mono text-[10px] leading-5 break-all select-all" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>{secureJoinCode}</div>
+          <button type="button" onClick={handleCopyJoinCode} className="btn-primary w-full text-xs py-2 flex items-center justify-center gap-2">
+            {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copiedCode ? 'Join code copied' : 'Copy secure join code'}</span>
           </button>
         </div>
 

@@ -255,7 +255,9 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     const body = req.body || {};
-    const { action, notification, notifId, status: updateStatus, read: updateRead, boardCode: joinCode, user: joinUser, key: bodyKey, data, boardInvites, directoryProfile } = body;
+    const { action, notification, notifId, status: updateStatus, read: updateRead, joinCode: secureJoinCode, boardCode, joinUser: secureJoinUser, user, key: bodyKey, data, boardInvites, directoryProfile } = body;
+    const joinCode = secureJoinCode || boardCode;
+    const joinUser = secureJoinUser || user;
 
     // Save board messages for collaborators using polling when a live socket is unavailable.
     if (action === 'send_chat' && body.message) {
@@ -346,7 +348,23 @@ export default async function handler(req, res) {
       try {
         const collection = await getCollection();
         let inviteDoc = await collection.findOne({ _id: `invite_${rawCode}` });
-        if (inviteDoc?.encryptedEnvelope) return res.status(200).json({ success: true, encryptedEnvelope: inviteDoc.encryptedEnvelope });
+        if (inviteDoc?.encryptedEnvelope) {
+          const members = Array.isArray(inviteDoc.members) ? [...inviteDoc.members] : [];
+          const cleanEmail = String(joinUser.email || '').trim().toLowerCase();
+          if (cleanEmail && !members.some(m => String(m.email || '').trim().toLowerCase() === cleanEmail)) {
+            members.push({
+              id: joinUser.id || `m_${Date.now()}`,
+              name: joinUser.name || cleanEmail.split('@')[0],
+              email: cleanEmail,
+              color: joinUser.color || '#10B981',
+              avatar: joinUser.avatar || '',
+              role: 'editor',
+              joinedAt: new Date().toISOString()
+            });
+            await collection.updateOne({ _id: `invite_${rawCode}` }, { $set: { members, updatedAt: new Date().toISOString() } });
+          }
+          return res.status(200).json({ success: true, encryptedEnvelope: inviteDoc.encryptedEnvelope, members });
+        }
         let targetBoard = inviteDoc?.board;
         let ownerEmail = inviteDoc?.ownerEmail;
 

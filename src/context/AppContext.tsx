@@ -35,6 +35,7 @@ import { Haptics } from '../utils/haptics';
 import { RealtimeCollab } from '../services/realtimeCall';
 import { RingtoneService } from '../services/ringtone';
 import { E2EE } from '../services/e2ee';
+import { parseSecureBoardJoinCode } from '../utils/boardInvite';
 
 interface AppContextType {
   subjects: Subject[];
@@ -276,7 +277,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const created = StorageService.addNotification(notif);
 
     // If sending to another user via email, dispatch to MongoDB Atlas so the recipient gets it!
-    if (recipientEmail && recipientEmail !== myEmail && notif.type !== 'collab_invite') {
+    if (recipientEmail && recipientEmail !== myEmail) {
       const boardKey = boards.find(board => board.id === created.boardId)?.encryptionKey;
       if (boardKey) {
         const secretFields = { title: created.title, message: created.message, boardName: created.boardName, taskId: created.taskId, taskTitle: created.taskTitle, task: created.task };
@@ -993,7 +994,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0];
 
   const joinBoardByCode = async (code: string, inviteKey?: string): Promise<{ success: boolean; message: string; board?: StudyBoard }> => {
-    const rawCode = (code || '').trim().toUpperCase();
+    const parsedInvite = parseSecureBoardJoinCode(code);
+    const rawCode = parsedInvite.inviteCode;
+    inviteKey = inviteKey || parsedInvite.encryptionKey;
     if (!rawCode) {
       return { success: false, message: 'Please enter a valid invite code' };
     }
@@ -1025,7 +1028,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const joinRes = await CloudSyncService.joinBoardRemote(rawCode, userMember);
       if (joinRes.success && joinRes.encryptedEnvelope && inviteKey) {
         const shared = await E2EE.decrypt<{ board: StudyBoard; topics: Topic[] }>(joinRes.encryptedEnvelope, inviteKey);
-        const boardToAdd: StudyBoard = { ...shared.board, encryptionKey: inviteKey, members: [...(shared.board.members || []), userMember] };
+        const joinedMembers = Array.isArray(joinRes.members) ? joinRes.members : [];
+        const members = [...(shared.board.members || []), ...joinedMembers, userMember];
+        const uniqueMembers = members.filter((member, index) => members.findIndex(other => other.id === member.id || (member.email && other.email?.toLowerCase() === member.email.toLowerCase())) === index);
+        const boardToAdd: StudyBoard = { ...shared.board, encryptionKey: inviteKey, members: uniqueMembers };
         setTopics(prev => { const merged = [...prev.filter(t => t.boardId !== boardToAdd.id), ...shared.topics]; StorageService.saveTopics(merged); return merged; });
         setBoards(prev => {
           const exists = prev.some(b => b.id === boardToAdd.id);
@@ -1043,7 +1049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { success: true, message: `Successfully joined "${boardToAdd.name}"`, board: boardToAdd };
       }
 
-      if (joinRes.success && !inviteKey) return { success: false, message: 'Open the full secure invite link to join this encrypted board.' };
+      if (joinRes.success && !inviteKey) return { success: false, message: 'This board is encrypted. Ask the owner for the complete secure join code.' };
 
       // Fallback direct boardCode query
       const res = await fetch(`/api/sync?boardCode=${encodeURIComponent(rawCode)}`);
