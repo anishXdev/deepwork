@@ -34,6 +34,8 @@ import { Notifications } from '../services/notifications';
 import { Haptics } from '../utils/haptics';
 import { RealtimeCollab } from '../services/realtimeCall';
 import { RingtoneService } from '../services/ringtone';
+import { livekitClient } from '../services/livekitClient';
+import { CallApiService } from '../services/callApiService';
 
 interface AppContextType {
   subjects: Subject[];
@@ -538,41 +540,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetEmails = targetMembers.map(m => m.email).filter(Boolean);
     const memberIds = targetMembers.map(m => m.id);
 
-    // Setup local media stream (camera/mic)
-    await RealtimeCollab.setupLocalMedia(type);
+    try {
+      // 1. Call secure backend Express API /api/calls/initiate
+      const apiRes = await CallApiService.initiateCall({
+        recipientId: targetMembers[0]?.id,
+        recipientEmail: targetEmails[0],
+        recipientName: targetMembers.map(m => m.name).join(', '),
+        recipientAvatar: targetMembers[0]?.avatar,
+        boardId: activeBoardId,
+        boardName: currentBoard?.name || 'Deepwork Board',
+        callType: type
+      });
 
-    const callId = RealtimeCollab.startRingingCall({
-      callType: type,
-      boardId: activeBoardId,
-      boardName: currentBoard?.name || 'Deepwork Board',
-      targetEmails,
-      targetMemberIds: memberIds,
-      callerColor: '#0C66E4',
-      callerAvatar: profile.avatar || profile.avatarUrl
-    });
+      if (!apiRes.success && apiRes.status === 'busy') {
+        Notifications.toast('warning', '⚠️ Collaborator is currently busy in another call.');
+        return;
+      }
 
-    setOutgoingCall({
-      callId,
-      type,
-      status: 'ringing',
-      targetMemberIds: memberIds,
-      targetNames: targetMembers.map(m => m.name),
-      targetEmails,
-      boardId: activeBoardId,
-      boardName: currentBoard?.name || 'Deepwork Board',
-      ringingSeconds: 0
-    });
+      const callId = apiRes.callId || RealtimeCollab.startRingingCall({
+        callType: type,
+        boardId: activeBoardId,
+        boardName: currentBoard?.name || 'Deepwork Board',
+        targetEmails,
+        targetMemberIds: memberIds,
+        callerColor: '#0C66E4',
+        callerAvatar: profile.avatar || profile.avatarUrl
+      });
 
-    RingtoneService.playOutgoingRing();
-    setIsTeamRoomOpen(true);
+      // 2. Connect to LiveKit Room if token and URL are returned
+      if (apiRes.token && apiRes.livekitUrl) {
+        livekitClient.connect(apiRes.livekitUrl, apiRes.token, type).catch(err => {
+          console.warn('[AppContext] LiveKit connect notice:', err);
+        });
+      } else {
+        await RealtimeCollab.setupLocalMedia(type);
+      }
 
-    StorageService.logTelemetryEvent('call_started', {
-      callType: type,
-      participantCount: targetMembers.length,
-      boardTitle: currentBoard?.name
-    });
+      setOutgoingCall({
+        callId,
+        type,
+        status: 'ringing',
+        targetMemberIds: memberIds,
+        targetNames: targetMembers.map(m => m.name),
+        targetEmails,
+        boardId: activeBoardId,
+        boardName: currentBoard?.name || 'Deepwork Board',
+        ringingSeconds: 0
+      });
 
-    Notifications.toast('info', `📞 Calling ${targetMembers.map(m => m.name).join(', ')}... Ringing...`);
+      RingtoneService.playOutgoingRing();
+      setIsTeamRoomOpen(true);
+
+      StorageService.logTelemetryEvent('call_started', {
+        callType: type,
+        participantCount: targetMembers.length,
+        boardTitle: currentBoard?.name
+      });
+
+      Notifications.toast('info', `📞 Calling ${targetMembers.map(m => m.name).join(', ')}... Ringing...`);
+    } catch (err: any) {
+      console.warn('[AppContext] Error starting call:', err);
+      Notifications.toast('warning', '⚠️ Network error initiating call.');
+    }
   };
 
   const cancelOutgoingCall = () => {
@@ -580,8 +609,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     RingtoneService.stopOutgoingRing();
     RingtoneService.playCallEndedTone();
     if (outgoingCall) {
+      CallApiService.cancelCall(outgoingCall.callId).catch(() => {});
       RealtimeCollab.cancelRingingCall(outgoingCall.callId);
     }
+    livekitClient.disconnect().catch(() => {});
     setOutgoingCall(null);
     Notifications.toast('info', 'Call cancelled.');
   };
@@ -592,8 +623,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     RingtoneService.stopIncomingRing();
     RingtoneService.playCallConnectedTone();
 
-    // Prepare local camera/mic stream
-    await RealtimeCollab.setupLocalMedia(incomingCall.type);
+    try {
+      const apiRes = await CallApiService.acceptCall(incomingCall.id);
+      if (apiRes.token && apiRes.livekitUrl) {
+        await livekitClient.connect(apiRes.livekitUrl, apiRes.token, incomingCall.type);
+      } else {
+        await RealtimeCollab.setupLocalMedia(incomingCall.type);
+      }
+    } catch (err) {
+      console.warn('[AppContext] LiveKit accept notice:', err);
+      await RealtimeCollab.setupLocalMedia(incomingCall.type);
+    }
 
     if (incomingCall.boardId && incomingCall.boardId !== activeBoardId) {
       setActiveBoardIdState(incomingCall.boardId);
@@ -624,6 +664,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!incomingCall) return;
     Haptics.warning();
     RingtoneService.stopIncomingRing();
+    CallApiService.rejectCall(incomingCall.id).catch(() => {});
     RealtimeCollab.rejectIncomingCall(incomingCall.id, incomingCall.callerEmail || '');
     Notifications.toast('info', `Call from ${incomingCall.callerName} declined.`);
     setIncomingCall(null);
@@ -654,6 +695,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     Haptics.tap();
     RingtoneService.stopAll();
     RingtoneService.playCallEndedTone();
+    if (activeCall?.callId) {
+      CallApiService.endCall(activeCall.callId).catch(() => {});
+    }
+    livekitClient.disconnect().catch(() => {});
     RealtimeCollab.endActiveCall(activeCall?.callId);
     setActiveCall(null);
     setOutgoingCall(null);
@@ -666,6 +711,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveCall(prev => {
       if (!prev) return null;
       const nextMuted = !prev.isMuted;
+      livekitClient.setMicrophoneEnabled(!nextMuted).catch(() => {});
       RealtimeCollab.setMuted(nextMuted);
       return { ...prev, isMuted: nextMuted };
     });
@@ -676,6 +722,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveCall(prev => {
       if (!prev) return null;
       const nextVideo = !prev.isVideoOn;
+      livekitClient.setCameraEnabled(nextVideo).catch(() => {});
       RealtimeCollab.setVideoEnabled(nextVideo);
       return { ...prev, isVideoOn: nextVideo };
     });
@@ -684,19 +731,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleCallScreenShare = async () => {
     Haptics.tap();
     if (activeCall?.isScreenSharing) {
+      await livekitClient.setScreenShareEnabled(false);
       RealtimeCollab.stopScreenShare();
       setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
       Notifications.toast('info', 'Screen sharing stopped.');
     } else {
-      const stream = await RealtimeCollab.startScreenShare();
-      if (stream) {
+      const success = await livekitClient.setScreenShareEnabled(true);
+      if (success) {
         setActiveCall(prev => prev ? { ...prev, isScreenSharing: true } : null);
         Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
-        stream.getVideoTracks()[0].onended = () => {
-          RealtimeCollab.stopScreenShare();
-          setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
-          Notifications.toast('info', 'Screen sharing stopped.');
-        };
+      } else {
+        const stream = await RealtimeCollab.startScreenShare();
+        if (stream) {
+          setActiveCall(prev => prev ? { ...prev, isScreenSharing: true } : null);
+          Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
+          stream.getVideoTracks()[0].onended = () => {
+            RealtimeCollab.stopScreenShare();
+            setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
+            Notifications.toast('info', 'Screen sharing stopped.');
+          };
+        }
       }
     }
   };

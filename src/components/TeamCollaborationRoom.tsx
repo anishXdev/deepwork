@@ -1,6 +1,9 @@
 import { RealtimeCollab } from '../services/realtimeCall';
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { CallWindow } from './calling/CallWindow';
+import { OutgoingCallScreen } from './calling/OutgoingCallScreen';
+import { CallButton } from './calling/CallButton';
 import {
   MessageSquare,
   Video,
@@ -392,13 +395,13 @@ export const TeamCollaborationRoom: React.FC = () => {
       </div>
 
         {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Main Panel */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
             {activeTab === 'chat' ? (
-              <div className="flex-1 flex flex-col justify-between overflow-hidden">
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 {/* Chat Messages Log */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
                   {boardMessages.length === 0 ? (
                     <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
                       <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
@@ -467,7 +470,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                 {/* Chat Input Bar */}
                 <form
                   onSubmit={handleSendMessage}
-                  className="p-3 border-t flex flex-col gap-2"
+                  className="shrink-0 z-10 p-3 border-t flex flex-col gap-2"
                   style={{ borderColor: 'var(--border)', background: 'var(--bg-card-alt)' }}
                 >
                   {selectedTaskToShare && (
@@ -540,251 +543,18 @@ export const TeamCollaborationRoom: React.FC = () => {
               /* Live Audio / Video Call Panel */
               <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-slate-950">
                 {activeCall?.active ? (
-                  <div className="flex-1 flex flex-col justify-between gap-3 min-h-0">
-                    {/* Active Call Header */}
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                        <span className="font-bold text-white uppercase tracking-wider">
-                          Live {activeCall.type === 'video' ? 'Video' : 'Audio'} Room
-                        </span>
-                        <span className="text-slate-400 font-mono text-[11px]">
-                          ⏱️ {formatCallTime(activeCall.durationSeconds)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                          <Lock className="w-3 h-3" />
-                          <span>P2P Encrypted</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Participant Video/Audio Grid */}
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-0">
-                      {/* Built-in Screen Share Tile if Active */}
-                      {activeCall.isScreenSharing && (
-                        <div className="col-span-full relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-blue-500 shadow-2xl flex flex-col min-h-[220px]">
-                          <div className="px-3 py-1.5 bg-blue-600/90 text-white text-xs font-bold flex items-center justify-between">
-                            <span className="flex items-center gap-1.5">
-                              <ScreenShare className="w-4 h-4 animate-pulse" />
-                              <span>🖥️ Live Screen Sharing ({profile.name || 'You'})</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleToggleScreenShare}
-                              className="px-2 py-0.5 rounded bg-white text-blue-700 text-[10px] font-extrabold hover:bg-slate-100 transition cursor-pointer"
-                            >
-                              Stop Sharing
-                            </button>
-                          </div>
-                          <div className="flex-1 flex items-center justify-center p-1 bg-black">
-                            <video
-                              ref={el => {
-                                screenVideoRef.current = el;
-                                const s = RealtimeCollab.getScreenStream();
-                                if (el && s && el.srcObject !== s) {
-                                  el.srcObject = s;
-                                }
-                              }}
-                              autoPlay
-                              playsInline
-                              className="w-full h-full max-h-[280px] object-contain rounded-lg"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Local User Tile */}
-                      <div className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center shadow-lg min-h-[160px]">
-                        {activeCall.isVideoOn ? (
-                          <video
-                            ref={el => {
-                              localVideoRef.current = el;
-                              const s = RealtimeCollab.getLocalStream();
-                              if (el && s && el.srcObject !== s) {
-                                el.srcObject = s;
-                              }
-                            }}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center gap-2 p-4">
-                            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl ${
-                              !activeCall.isMuted ? 'ring-4 ring-emerald-500 animate-pulse' : ''
-                            }`} style={{ background: '#0C66E4' }}>
-                              {(profile.name || 'You').slice(0, 2).toUpperCase()}
-                            </div>
-                            <span className="text-xs font-bold text-white">{profile.name || 'You'} (You)</span>
-                            {!activeCall.isMuted && (
-                              <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                                <Radio className="w-3 h-3 animate-pulse" /> Speaking
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Name badge */}
-                        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1.5">
-                          <span>{profile.name || 'You'} (You)</span>
-                          {activeCall.isMuted && <MicOff className="w-3 h-3 text-rose-400" />}
-                        </div>
-                      </div>
-
-                      {/* Remote Teammates (Only selected participants) */}
-                      {activeCall.participants.map(p => (
-                        <div
-                          key={p.id}
-                          className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 flex flex-col items-center justify-center shadow-lg p-4 min-h-[160px]"
-                        >
-                          {remoteMediaStream && remoteMediaStream.getVideoTracks().length > 0 ? (
-                            <video
-                              ref={el => {
-                                remoteVideoRef.current = el;
-                                if (el && remoteMediaStream && el.srcObject !== remoteMediaStream) {
-                                  el.srcObject = remoteMediaStream;
-                                }
-                              }}
-                              autoPlay
-                              playsInline
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center gap-2 p-4">
-                              <div
-                                className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl ${
-                                  p.isSpeaking ? 'ring-4 ring-emerald-500 animate-pulse' : ''
-                                }`}
-                                style={{ background: p.color || '#EC4899' }}
-                              >
-                                {p.name.slice(0, 2).toUpperCase()}
-                              </div>
-                              <span className="text-xs font-bold text-white mt-2">{p.name}</span>
-                              <span className="text-[10px] text-emerald-400 font-mono">Connected</span>
-                            </div>
-                          )}
-
-                          {/* Hidden unmuted audio element ensuring remote audio ALWAYS plays */}
-                          <audio
-                            autoPlay
-                            playsInline
-                            ref={el => {
-                              if (el && remoteMediaStream && el.srcObject !== remoteMediaStream) {
-                                el.srcObject = remoteMediaStream;
-                                el.play().catch(() => {});
-                              }
-                            }}
-                            className="hidden"
-                          />
-
-                          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1.5">
-                            <span>{p.name}</span>
-                            {p.isMuted && <MicOff className="w-3 h-3 text-rose-400" />}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Active Controls Bar */}
-                    <div className="flex items-center justify-center gap-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800">
-                      <button
-                        type="button"
-                        onClick={toggleCallMute}
-                        className={`p-3 rounded-xl font-bold transition-all cursor-pointer ${
-                          activeCall.isMuted
-                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                            : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
-                        }`}
-                        title={activeCall.isMuted ? 'Unmute' : 'Mute'}
-                      >
-                        {activeCall.isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5 text-emerald-400" />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={toggleCallVideo}
-                        className={`p-3 rounded-xl font-bold transition-all cursor-pointer ${
-                          !activeCall.isVideoOn
-                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                            : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
-                        }`}
-                        title={activeCall.isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
-                      >
-                        {activeCall.isVideoOn ? <Video className="w-5 h-5 text-blue-400" /> : <VideoOff className="w-5 h-5" />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleToggleScreenShare}
-                        className={`p-3 rounded-xl font-bold transition-all cursor-pointer ${
-                          activeCall.isScreenSharing
-                            ? 'bg-blue-600 text-white shadow-lg'
-                            : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
-                        }`}
-                        title={activeCall.isScreenSharing ? 'Stop Screen Share' : 'Share Screen (Built-in)'}
-                      >
-                        <ScreenShare className="w-5 h-5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleEndCall}
-                        className="p-3 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 cursor-pointer"
-                        title="End Call"
-                      >
-                        <PhoneOff className="w-5 h-5" />
-                        <span className="text-xs">End Call</span>
-                      </button>
-                    </div>
-                  </div>
+                  <CallWindow
+                    roomName={activeCall.callId || 'LiveKit Call'}
+                    durationSeconds={activeCall.durationSeconds}
+                    onEndCall={handleEndCall}
+                    isFloating={windowMode === 'floating'}
+                    onToggleFloating={() => setWindowMode(windowMode === 'floating' ? 'full' : 'floating')}
+                  />
                 ) : outgoingCall && outgoingCall.status === 'ringing' ? (
-                  /* Calling / Outgoing Ringing Screen */
-                  <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-white relative bg-slate-950 animate-in fade-in">
-                    {/* Animated radar pulse rings */}
-                    <div className="relative my-6 flex items-center justify-center">
-                      <span className="absolute w-44 h-44 rounded-full bg-blue-500/15 animate-ping duration-1000" />
-                      <span className="absolute w-32 h-32 rounded-full bg-blue-500/25 animate-pulse" />
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-3xl font-black text-white shadow-2xl relative z-10 border-4 border-blue-400/40">
-                        {outgoingCall.targetNames[0] ? outgoingCall.targetNames[0].slice(0, 2).toUpperCase() : 'DW'}
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 z-20 w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg animate-bounce">
-                        <PhoneCall className="w-4 h-4" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mb-8 max-w-sm">
-                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                        <span>Ringing Teammate • {formatCallTime(outgoingCall.ringingSeconds)}</span>
-                      </div>
-
-                      <h3 className="text-2xl font-black text-white tracking-tight">
-                        {outgoingCall.targetNames.join(', ')}
-                      </h3>
-
-                      <p className="text-xs text-slate-400 font-medium">
-                        Calling on workspace: <strong className="text-slate-200">"{outgoingCall.boardName}"</strong>
-                      </p>
-
-                      <p className="text-[11px] text-slate-500 pt-1 leading-relaxed">
-                        Waiting for teammate to accept... Meeting will connect as soon as at least one person answers.
-                      </p>
-                    </div>
-
-                    {/* Cancel Calling Button */}
-                    <button
-                      type="button"
-                      onClick={cancelOutgoingCall}
-                      className="px-6 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center gap-2 shadow-xl shadow-rose-600/30 transition-all active:scale-95 cursor-pointer"
-                    >
-                      <PhoneOff className="w-4 h-4" />
-                      <span>Cancel Call</span>
-                    </button>
-                  </div>
+                  <OutgoingCallScreen
+                    outgoingCall={outgoingCall}
+                    onCancelCall={cancelOutgoingCall}
+                  />
                 ) : (
                   /* No call in progress - Lobby with Participant Selection */
                   <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-4 text-white">
@@ -970,7 +740,7 @@ export const TeamCollaborationRoom: React.FC = () => {
     return (
       <aside
         aria-label="Floating Collaboration Window"
-        className="fixed bottom-5 right-5 z-40 w-[420px] max-w-[calc(100vw-1.5rem)] h-[540px] max-h-[82vh] flex flex-col rounded-2xl shadow-2xl border overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-4 duration-150"
+        className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-50 w-[420px] max-w-[calc(100vw-1.5rem)] h-[520px] max-h-[calc(100vh-5rem)] flex flex-col rounded-2xl shadow-2xl border overflow-hidden pointer-events-auto animate-in slide-in-from-bottom-4 duration-150"
         style={{
           background: 'var(--bg-card)',
           borderColor: 'var(--border)',

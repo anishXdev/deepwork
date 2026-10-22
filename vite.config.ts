@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
+import mongoose from 'mongoose';
+import { app as callExpressApp } from './server/app';
+import { setSignalingBroadcaster } from './server/routes/calls';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -57,6 +60,43 @@ export default defineConfig(({ mode }) => {
 
           // Real-time WebRTC Signaling & Chat WebSocket Server for Deepwork
           const collabClients = new Map<WebSocket, { email: string; boardId: string; userId: string; name: string }>();
+
+          // Ensure Mongoose is connected for LiveKit Calling & CallRecords
+          const livekitMongoUri = env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+          if (mongoose.connection.readyState === 0) {
+            mongoose.connect(livekitMongoUri, { dbName: 'studypulse' }).then(() => {
+              console.log('[StudyPulse Dev] Mongoose connected for LiveKit Calling & CallRecords');
+            }).catch((err) => {
+              console.warn('[StudyPulse Dev] Mongoose connection error:', err.message);
+            });
+          }
+
+          // Wire signaling broadcaster so calls initiated via Express API broadcast over WebSocket server
+          setSignalingBroadcaster((event: string, payload: any) => {
+            for (const [clientWs, client] of collabClients.entries()) {
+              if (clientWs.readyState === WebSocket.OPEN) {
+                const clientEmail = (client.email || '').toLowerCase().trim();
+                let shouldSend = false;
+                if (payload.targetEmails && Array.isArray(payload.targetEmails)) {
+                  shouldSend = payload.targetEmails.map((e: string) => (e || '').toLowerCase().trim()).includes(clientEmail);
+                } else if (payload.targetEmail) {
+                  shouldSend = clientEmail === (payload.targetEmail || '').toLowerCase().trim();
+                } else if (payload.callerEmail && event === 'call_accepted') {
+                  shouldSend = clientEmail === (payload.callerEmail || '').toLowerCase().trim();
+                } else if (payload.boardId) {
+                  shouldSend = client.boardId === payload.boardId;
+                } else {
+                  shouldSend = true;
+                }
+                if (shouldSend) {
+                  clientWs.send(JSON.stringify({ type: event, ...payload }));
+                }
+              }
+            }
+          });
+
+          // Mount Express app for LiveKit Calling API endpoints (/api/calls/*)
+          server.middlewares.use(callExpressApp);
 
           if (server.httpServer) {
             const wss = new WebSocketServer({ noServer: true });

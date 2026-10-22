@@ -5,6 +5,7 @@ import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
 import { StorageService, generateBoardInviteCode } from '../services/storage';
 import { UserProfile } from '../types';
+import { CallButton } from './calling/CallButton';
 
 interface CollaborationModalProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface CollaborationModalProps {
 }
 
 export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, onClose }) => {
-  const { activeBoard, addBoardMember, removeBoardMember, profile, sendCollabNotification } = useApp();
+  const { activeBoard, addBoardMember, removeBoardMember, profile, sendCollabNotification, startCall } = useApp();
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
@@ -401,14 +402,25 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                   </span>
 
                   {member.role !== 'owner' && (
-                    <button
-                      type="button"
-                      onClick={() => removeBoardMember(activeBoard.id, member.id)}
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
-                      title="Remove member"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <>
+                      <CallButton
+                        variant="icon-only"
+                        targetMemberId={member.id}
+                        targetMemberName={member.name}
+                        onStartCall={(type, id) => {
+                          onClose();
+                          startCall(type, id ? [id] : undefined);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeBoardMember(activeBoard.id, member.id)}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                        title="Remove member"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

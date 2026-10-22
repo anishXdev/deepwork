@@ -24,13 +24,6 @@ export const MobileBottomNav: React.FC = () => {
     <nav
       aria-label="Mobile Navigation"
       style={{
-        display: 'flex',
-        justifyContent: 'space-around',
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
         background: 'var(--bg-panel)',
         borderTop: '1px solid var(--border)',
         paddingTop: '6px',
@@ -38,7 +31,7 @@ export const MobileBottomNav: React.FC = () => {
         paddingLeft: '8px',
         paddingRight: '8px',
       }}
-      className="md:hidden"
+      className="flex md:hidden justify-around fixed bottom-0 left-0 right-0 z-40"
     >
       {navItems.map(item => {
         const Icon = item.icon;
