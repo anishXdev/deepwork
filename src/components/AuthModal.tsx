@@ -24,7 +24,6 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen,
     profile,
     setProfile,
-    setIsTourOpen,
     resetWorkspaceToCleanSlate,
     signOut
   } = useApp();
@@ -37,11 +36,6 @@ export const AuthModal: React.FC = () => {
   const isSignedIn = Boolean(profile.googleConnected || profile.email);
 
   const handleSuccessfulSignIn = (newProfile: any) => {
-    const isFirstTime = !localStorage.getItem('deepwork_has_authenticated') && !localStorage.getItem('dstudy_has_authenticated');
-    if (isFirstTime) {
-      localStorage.setItem('deepwork_has_authenticated', 'true');
-    }
-
     // Register this user in the registered users directory
     StorageService.registerUser(newProfile);
 
@@ -53,10 +47,6 @@ export const AuthModal: React.FC = () => {
     Haptics.success();
     Notifications.toast('success', `Welcome to Deepwork, ${newProfile.name || 'Member'}!`);
 
-    const hasCompletedTour = localStorage.getItem('deepwork_interactive_tour_completed') || localStorage.getItem('dstudy_interactive_tour_completed');
-    if (isFirstTime || !hasCompletedTour) {
-      setTimeout(() => { setIsTourOpen(true); }, 400);
-    }
   };
 
   const handleGoogleSignIn = async () => {

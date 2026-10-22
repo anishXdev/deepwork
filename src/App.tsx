@@ -19,7 +19,6 @@ import { RescheduleModal } from './components/RescheduleModal';
 import { CreateSubjectModal } from './components/CreateSubjectModal';
 import { StreakModal } from './components/StreakModal';
 import { AuthModal } from './components/AuthModal';
-import { InteractiveTourCoach } from './components/InteractiveTourCoach';
 import { TaskCelebrationOverlay } from './components/TaskCelebrationOverlay';
 import { JoinBoardModal } from './components/JoinBoardModal';
 import { ToastContainer } from './components/ToastContainer';
@@ -63,7 +62,6 @@ const MainContent: React.FC = () => {
         <RescheduleModal />
         <CreateSubjectModal />
         <AuthModal />
-        <InteractiveTourCoach />
         <TaskCelebrationOverlay />
         <StreakModal isOpen={isStreakModalOpen} onClose={closeStreakModal} />
         <KeyboardShortcutsModal />

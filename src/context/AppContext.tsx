@@ -62,12 +62,6 @@ interface AppContextType {
   isStreakModalOpen: boolean;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
-  isTourOpen: boolean;
-  setIsTourOpen: (open: boolean) => void;
-  tourStep: 1 | 2 | 3;
-  setTourStep: (step: 1 | 2 | 3) => void;
-  nextTourStep: () => void;
-  completeTour: () => void;
   celebrationTask: { name: string; quote: string } | null;
   setCelebrationTask: (val: { name: string; quote: string } | null) => void;
   openAuthModal: () => void;
@@ -1419,36 +1413,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const hasAuth = localStorage.getItem('deepwork_has_authenticated') || localStorage.getItem('dstudy_has_authenticated');
     return !hasAuth;
   });
-  const [isTourOpen, setIsTourOpen] = useState(false);
-  const [tourStep, setTourStep] = useState<1 | 2 | 3>(1);
   const [celebrationTask, setCelebrationTask] = useState<{ name: string; quote: string } | null>(null);
 
   const openAuthModal = () => setIsAuthModalOpen(true);
   const closeAuthModal = () => setIsAuthModalOpen(false);
-
-  const nextTourStep = () => {
-    if (tourStep === 1) {
-      setTourStep(2);
-      setActiveTab('timer');
-    } else if (tourStep === 2) {
-      setTourStep(3);
-      setActiveTab('analytics');
-    } else {
-      completeTour();
-    }
-  };
-
-  const completeTour = () => {
-    localStorage.setItem('deepwork_interactive_tour_completed', 'true');
-    setIsTourOpen(false);
-    setTourStep(1);
-    setActiveTab('study');
-    confetti({
-      particleCount: 75,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
-  };
 
   // Strict Focus Mode state
   const [isStrictFocusActive, setIsStrictFocusActive] = useState(false);
@@ -1684,14 +1652,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setTopics(prev => [newTopic, ...prev]);
-
-    // If in interactive tour step 1, advance to step 2
-    if (isTourOpen && tourStep === 1) {
-      setTimeout(() => {
-        setTourStep(2);
-        setActiveTab('timer');
-      }, 700);
-    }
 
     return newTopic;
   };
@@ -1984,12 +1944,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isStreakModalOpen,
         isAuthModalOpen,
         setIsAuthModalOpen,
-        isTourOpen,
-        setIsTourOpen,
-        tourStep,
-        setTourStep,
-        nextTourStep,
-        completeTour,
         celebrationTask,
         setCelebrationTask,
         openAuthModal,

@@ -44,8 +44,6 @@ export const PomodoroTimer: React.FC = () => {
     setCustomTimerMinutes,
     addFiveMinutes,
     manualCompleteAndLog,
-    isTourOpen,
-    tourStep
   } = useApp();
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -317,9 +315,7 @@ export const PomodoroTimer: React.FC = () => {
 
         <button
           onClick={() => (isTimerRunning ? pauseTimer() : startTimer())}
-          className={`px-8 py-3 rounded-xl text-white font-extrabold text-base flex items-center gap-2 transition-all active:scale-95 cursor-pointer ${
-            isTourOpen && tourStep === 2 && !isTimerRunning ? 'ring-2 ring-offset-2 animate-pulse' : ''
-          }`}
+          className="px-8 py-3 rounded-xl text-white font-extrabold text-base flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
           style={{
             background: isTimerRunning ? '#f59e0b' : 'var(--accent)',
             boxShadow: '0 4px 14px rgba(12, 102, 228, 0.25)',
