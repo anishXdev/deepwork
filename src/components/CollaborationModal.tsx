@@ -14,7 +14,7 @@ interface CollaborationModalProps {
 }
 
 export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, onClose }) => {
-  const { activeBoard, addBoardMember, removeBoardMember, profile, sendCollabNotification, startCall } = useApp();
+  const { activeBoard, addBoardMember, removeBoardMember, profile, sendCollabNotification, startCall, onlineMemberEmails } = useApp();
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
@@ -322,7 +322,9 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
             Current Members ({members.length})
           </h4>
           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-            {members.map(member => (
+            {members.map(member => {
+              const isOnline = onlineMemberEmails.includes((member.email || '').trim().toLowerCase());
+              return (
               <div
                 key={member.id}
                 className="p-2 rounded-xl flex items-center justify-between gap-2"
@@ -342,6 +344,10 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                     <p className="text-[10px] text-slate-400 truncate">
                       {member.role === 'owner' ? (profile.email || member.email) : member.email}
                     </p>
+                    <span className={`inline-flex items-center gap-1 text-[9px] font-semibold ${isOnline ? 'text-emerald-500' : 'text-slate-500'}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+                      {isOnline ? 'Online' : 'Offline'}
+                    </span>
                   </div>
                 </div>
 
@@ -363,6 +369,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                         variant="icon-only"
                         targetMemberId={member.id}
                         targetMemberName={member.name}
+                        disabled={!isOnline}
                         onStartCall={(type, id) => {
                           onClose();
                           startCall(type, id ? [id] : undefined);
@@ -380,7 +387,8 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({ isOpen, 
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

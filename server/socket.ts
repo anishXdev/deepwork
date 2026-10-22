@@ -1,7 +1,7 @@
 import { HttpServer } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 
-interface ConnectedClient { socket: WebSocket; userId: string; email: string; name: string; boardId?: string; }
+interface ConnectedClient { socket: WebSocket; userId: string; email: string; name: string; boardId?: string; lastSeen: number; }
 
 /** Relays WebRTC setup data only. Audio and video travel directly between browsers. */
 export class SignalingServer {
@@ -14,6 +14,18 @@ export class SignalingServer {
     // Vite uses the same HTTP server for its own HMR WebSocket (/?token=...).
     // Use noServer mode so this signaling server leaves every other upgrade alone.
     const wss = new WebSocketServer({ noServer: true });
+    const presenceSweep = setInterval(() => {
+      const cutoff = Date.now() - 45000;
+      const expired = [...this.clients.values()].filter(client => client.lastSeen < cutoff);
+      const affectedBoards = new Set(expired.map(client => client.boardId).filter(Boolean) as string[]);
+      for (const client of expired) {
+        this.clients.delete(client.socket);
+        this.callParticipants.forEach(peers => peers.delete(client.socket));
+        client.socket.terminate();
+      }
+      affectedBoards.forEach(boardId => this.publishPresence(boardId));
+    }, 15000);
+    presenceSweep.unref?.();
     server.on('upgrade', (request, socket, head) => {
       let pathname: string;
       try {
@@ -31,17 +43,33 @@ export class SignalingServer {
         let data: any;
         try { data = JSON.parse(raw.toString()); } catch { return; }
         if (data.type === 'register') {
-          this.clients.set(socket, { socket, email: String(data.email || '').trim().toLowerCase(), userId: String(data.userId || ''), name: String(data.name || 'Teammate'), boardId: data.boardId });
+          const previous = this.clients.get(socket);
+          this.clients.set(socket, { socket, email: String(data.email || '').trim().toLowerCase(), userId: String(data.userId || ''), name: String(data.name || 'Teammate'), boardId: data.boardId, lastSeen: Date.now() });
+          if (previous?.boardId && previous.boardId !== data.boardId) this.publishPresence(previous.boardId);
+          if (data.boardId) this.publishPresence(String(data.boardId));
           return;
         }
         const sender = this.clients.get(socket);
         if (!sender) return;
+        sender.lastSeen = Date.now();
         if (data.type === 'heartbeat') return;
-        if (data.type === 'update_board') { sender.boardId = data.boardId; return; }
+        if (data.type === 'update_board') {
+          const previousBoard = sender.boardId;
+          sender.boardId = data.boardId;
+          if (previousBoard) this.publishPresence(previousBoard);
+          if (sender.boardId) this.publishPresence(sender.boardId);
+          return;
+        }
         this.relay(data, sender);
       });
-      socket.on('close', () => { this.clients.delete(socket); this.callParticipants.forEach(peers => peers.delete(socket)); });
-      socket.on('error', () => { this.clients.delete(socket); this.callParticipants.forEach(peers => peers.delete(socket)); });
+      const removeClient = () => {
+        const client = this.clients.get(socket);
+        this.clients.delete(socket);
+        this.callParticipants.forEach(peers => peers.delete(socket));
+        if (client?.boardId) this.publishPresence(client.boardId);
+      };
+      socket.on('close', removeClient);
+      socket.on('error', removeClient);
     });
     return wss;
   }
@@ -99,6 +127,13 @@ export class SignalingServer {
         for (const client of users(String(data.recipientEmail || '').trim().toLowerCase())) deliver(client, data);
         break;
     }
+  }
+
+  private publishPresence(boardId: string) {
+    const clients = [...this.clients.values()].filter(client => client.boardId === boardId && client.socket.readyState === WebSocket.OPEN);
+    const onlineEmails = [...new Set(clients.map(client => client.email).filter(Boolean))];
+    const message = JSON.stringify({ type: 'presence_update', boardId, onlineEmails });
+    for (const client of clients) client.socket.send(message);
   }
 
   getConnectedClients() { return [...this.clients.values()].map(({ socket, ...client }) => client); }

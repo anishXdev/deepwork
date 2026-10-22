@@ -144,6 +144,7 @@ interface AppContextType {
   isTeamRoomOpen: boolean;
   setIsTeamRoomOpen: (open: boolean) => void;
   activeCall: ActiveCallState | null;
+  onlineMemberEmails: string[];
   outgoingCall: OutgoingCallState | null;
   startCall: (type: CallType, selectedMemberIds?: string[]) => void;
   cancelOutgoingCall: () => void;
@@ -370,6 +371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<OutgoingCallState | null>(null);
   const [remoteMediaStreams, setRemoteMediaStreams] = useState<Record<string, MediaStream>>({});
+  const [onlineMemberEmails, setOnlineMemberEmails] = useState<string[]>([]);
 
   const outgoingCallRef = useRef<OutgoingCallState | null>(null);
   outgoingCallRef.current = outgoingCall;
@@ -432,6 +434,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Register Realtime Collab Callbacks
   useEffect(() => {
     RealtimeCollab.setCallbacks({
+      onPresenceUpdate: emails => setOnlineMemberEmails(emails),
+      onConnectionStatus: status => { if (status !== 'connected') setOnlineMemberEmails([]); },
       onIncomingCall: (call) => {
         setIncomingCall(call);
         RingtoneService.playIncomingRing();
@@ -873,8 +877,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const hasMountedBoards = useRef(false);
   useEffect(() => {
     StorageService.saveBoards(boards);
+    if (hasMountedBoards.current) CloudSyncService.scheduleDebouncedPush();
+    else hasMountedBoards.current = true;
   }, [boards]);
 
   // Reconcile board owner when user signs in with their real profile
@@ -1111,7 +1118,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ],
       createdAt: new Date().toISOString(),
     };
-    setBoards(prev => [...prev, newBoard]);
+    const nextBoards = [...boards, newBoard];
+    // Persist before kicking off the asynchronous cloud push. This also protects
+    // a newly-created board from the startup cloud pull racing with creation.
+    StorageService.saveBoards(nextBoards);
+    setBoards(nextBoards);
     setActiveBoardId(newBoard.id);
     Notifications.toast('success', `📋 Board "${newBoard.name}" created!`);
     CloudSyncService.pushToCloudImmediate();
@@ -1521,8 +1532,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!b.encryptionKey) migratedBoardKeys = true;
             return { ...b, encryptionKey: b.encryptionKey || E2EE.createKey(), color: b.color || '#0C66E4', members: Array.isArray(b.members) ? b.members.filter(Boolean) : [] };
           });
-          setBoards(cloudBoards);
-          StorageService.saveBoards(cloudBoards);
+          const localBoards = StorageService.getBoards();
+          const mergedBoards = [...cloudBoards];
+          for (const localBoard of localBoards) {
+            if (!mergedBoards.some(board => board.id === localBoard.id)) mergedBoards.push(localBoard);
+          }
+          setBoards(mergedBoards);
+          StorageService.saveBoards(mergedBoards);
           if (migratedBoardKeys) setTimeout(() => CloudSyncService.pushToCloudImmediate(), 1000);
         }
         if (res.data.streaks) setStreaks(res.data.streaks);
@@ -2091,6 +2107,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isTeamRoomOpen,
         setIsTeamRoomOpen,
         activeCall,
+        onlineMemberEmails,
         outgoingCall,
         startCall,
         cancelOutgoingCall,

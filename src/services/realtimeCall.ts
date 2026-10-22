@@ -11,6 +11,7 @@ interface RealtimeCallbacks {
   onChatMessage?: (msg: ChatMessage) => void;
   onTaskDelegated?: (data: { task: any; recipientEmail?: string; boardId?: string; boardName?: string; senderName?: string; senderEmail?: string }) => void;
   onConnectionStatus?: (status: 'connected' | 'connecting' | 'disconnected') => void;
+  onPresenceUpdate?: (onlineEmails: string[]) => void;
 }
 
 export class RealtimeCollabManager {
@@ -85,6 +86,7 @@ export class RealtimeCollabManager {
       if (!configuredSocketUrl?.trim() && !isLocalDevelopment) {
         this.signalingConfigurationError = 'Calling is not configured for this deployment. Deploy the Deepwork signaling server, set VITE_COLLAB_WS_URL in Vercel to its wss://.../api/collab-socket address, then redeploy the web app.';
         this.callbacks.onConnectionStatus?.('disconnected');
+        this.callbacks.onPresenceUpdate?.([]);
         console.error(`[RealtimeCollab] ${this.signalingConfigurationError}`);
         return;
       }
@@ -118,6 +120,7 @@ export class RealtimeCollabManager {
         if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
         this.callbacks.onConnectionStatus?.('disconnected');
+        this.callbacks.onPresenceUpdate?.([]);
         this.scheduleReconnect();
       };
 
@@ -175,6 +178,12 @@ export class RealtimeCollabManager {
         if (data.message && data.message.senderId !== this.currentUserId) {
           this.callbacks.onChatMessage?.(data.message);
         }
+        break;
+
+      case 'presence_update':
+        this.callbacks.onPresenceUpdate?.(Array.isArray(data.onlineEmails)
+          ? data.onlineEmails.map((email: string) => String(email || '').trim().toLowerCase()).filter(Boolean)
+          : []);
         break;
 
       case 'incoming_call':
