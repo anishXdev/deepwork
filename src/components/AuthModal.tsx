@@ -266,6 +266,11 @@ export const AuthModal: React.FC = () => {
             Made with <Heart className="w-3 h-3 fill-rose-500 text-rose-500" aria-label="love" /> by Abhishek
           </p>
         )}
+        <nav aria-label="Legal" className="mt-3 flex justify-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <a className="transition-colors hover:text-slate-200" href="/privacy.html">Privacy</a>
+          <span aria-hidden="true">·</span>
+          <a className="transition-colors hover:text-slate-200" href="/terms.html">Terms</a>
+        </nav>
       </div>
     </div>
   );
