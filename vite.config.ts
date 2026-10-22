@@ -129,25 +129,32 @@ export default defineConfig(({ mode }) => {
                     return;
                   }
 
-                  // 2. Call Ringing: Send incoming_call to targeted users
+                  // 2. Call Ringing: Send incoming_call ONLY to targeted users
                   if (data.type === 'call_ring') {
                     const targetEmails = (data.targetEmails || []).map((e: string) => (e || '').toLowerCase().trim()).filter(Boolean);
+                    const targetMemberIds = data.targetMemberIds || [];
                     const callerId = data.callerId;
+                    const callerEmail = (data.callerEmail || '').toLowerCase().trim();
 
                     for (const [clientWs, client] of collabClients.entries()) {
                       if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        // Never send back to the exact same caller socket or same userId
-                        if (client.userId && callerId && client.userId === callerId) {
-                          continue;
+                        const clientEmail = (client.email || '').toLowerCase().trim();
+                        // Never ring caller themselves
+                        if (client.userId && callerId && client.userId === callerId) continue;
+                        if (clientEmail && callerEmail && clientEmail === callerEmail) continue;
+
+                        let shouldRing = false;
+                        if (targetEmails.length > 0 || targetMemberIds.length > 0) {
+                          const matchesEmail = targetEmails.length > 0 && targetEmails.some((te: string) =>
+                            clientEmail === te || (te && clientEmail && (clientEmail.includes(te) || te.includes(clientEmail)))
+                          );
+                          const matchesMemberId = targetMemberIds.length > 0 && client.userId && targetMemberIds.includes(client.userId);
+                          shouldRing = Boolean(matchesEmail || matchesMemberId);
+                        } else {
+                          shouldRing = Boolean(client.boardId && data.boardId && client.boardId === data.boardId);
                         }
 
-                        const matchesEmail = targetEmails.length > 0 && targetEmails.some((te: string) =>
-                          client.email === te || client.email.includes(te) || te.includes(client.email)
-                        );
-                        const isSameBoard = Boolean(client.boardId && data.boardId && client.boardId === data.boardId);
-                        const isPeerFallback = collabClients.size <= 4;
-
-                        if (matchesEmail || isSameBoard || targetEmails.length === 0 || isPeerFallback) {
+                        if (shouldRing) {
                           clientWs.send(JSON.stringify({
                             type: 'incoming_call',
                             callId: data.callId,
@@ -227,11 +234,28 @@ export default defineConfig(({ mode }) => {
                     return;
                   }
 
-                  // 7. WebRTC Signaling Relays (Offer, Answer, ICE)
+                  // 7. WebRTC Signaling Relays (Offer, Answer, ICE) - Routed specifically to target peer
                   if (data.type === 'webrtc_offer' || data.type === 'webrtc_answer' || data.type === 'webrtc_ice') {
-                    for (const [clientWs] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(JSON.stringify(data));
+                    const targetEmail = (data.targetEmail || '').toLowerCase().trim();
+                    let delivered = false;
+
+                    if (targetEmail) {
+                      for (const [clientWs, client] of collabClients.entries()) {
+                        if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                          const clientEmail = (client.email || '').toLowerCase().trim();
+                          if (clientEmail === targetEmail || (clientEmail && (clientEmail.includes(targetEmail) || targetEmail.includes(clientEmail)))) {
+                            clientWs.send(JSON.stringify(data));
+                            delivered = true;
+                          }
+                        }
+                      }
+                    }
+
+                    if (!delivered) {
+                      for (const [clientWs] of collabClients.entries()) {
+                        if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
+                          clientWs.send(JSON.stringify(data));
+                        }
                       }
                     }
                     return;
@@ -616,18 +640,30 @@ export default defineConfig(({ mode }) => {
                         // If task delegated, also append directly to recipient's tasks list in MongoDB!
                         if (notification.type === 'task_delegated' && notification.task) {
                           try {
-                            const userKey = `user_${cleanRecipient.replace(/[@.]/g, '_')}`;
+                            const userKey = `user_${cleanRecipient.replace(/[^a-z0-9]/g, '_')}`;
                             const userDoc = await col.findOne({ _id: userKey });
-                            if (userDoc && userDoc.data) {
-                              const userTasks = Array.isArray(userDoc.data.tasks) ? [...userDoc.data.tasks] : [];
-                              const existingIdx = userTasks.findIndex((t: any) => t.id === notification.task.id);
-                              if (existingIdx >= 0) {
-                                userTasks[existingIdx] = notification.task;
-                              } else {
-                                userTasks.unshift(notification.task);
-                              }
-                              await col.updateOne({ _id: userKey }, { $set: { 'data.tasks': userTasks, updatedAt: new Date().toISOString() } });
+                            const existingTasks = Array.isArray(userDoc?.data?.tasks)
+                              ? [...userDoc.data.tasks]
+                              : (Array.isArray(userDoc?.data?.topics) ? [...userDoc.data.topics] : []);
+
+                            const existingIdx = existingTasks.findIndex((t: any) => t.id === notification.task.id);
+                            if (existingIdx >= 0) {
+                              existingTasks[existingIdx] = notification.task;
+                            } else {
+                              existingTasks.unshift(notification.task);
                             }
+
+                            await col.updateOne(
+                              { _id: userKey },
+                              {
+                                $set: {
+                                  'data.tasks': existingTasks,
+                                  'data.topics': existingTasks,
+                                  updatedAt: new Date().toISOString()
+                                }
+                              },
+                              { upsert: true }
+                            );
                           } catch (errTask: any) {
                             console.warn('[StudyPulse Dev] Failed to append delegated task to recipient:', errTask?.message);
                           }

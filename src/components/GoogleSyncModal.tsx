@@ -34,7 +34,7 @@ export const GoogleSyncModal: React.FC = () => {
     lastSyncedAt
   } = useApp();
 
-  const [activeSubTab, setActiveSubTab] = useState<'devicesync' | 'account' | 'backup'>('devicesync');
+  const [activeSubTab, setActiveSubTab] = useState<'cloud' | 'account' | 'backup'>('cloud');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [inputSyncKey, setInputSyncKey] = useState('');
@@ -189,13 +189,13 @@ export const GoogleSyncModal: React.FC = () => {
 
         {/* Sub-tabs */}
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-          {(['devicesync', 'account', 'backup'] as const).map(tab => (
+          {(['cloud', 'account', 'backup'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => { Haptics.tap(); setActiveSubTab(tab); }}
               style={tabBtnStyle(activeSubTab === tab)}
             >
-              {tab === 'devicesync' ? 'Device Sync' : tab === 'account' ? 'Google' : 'Backup'}
+              {tab === 'cloud' ? 'Cloud Database' : tab === 'account' ? 'Google' : 'Backup'}
             </button>
           ))}
         </div>
@@ -209,8 +209,8 @@ export const GoogleSyncModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab 1: Device Sync */}
-        {activeSubTab === 'devicesync' && (
+        {/* Tab 1: Cloud Database */}
+        {activeSubTab === 'cloud' && (
           <div className="space-y-4">
             {/* Status card */}
             <div className="p-3.5 rounded-xl flex items-center justify-between"
@@ -222,9 +222,9 @@ export const GoogleSyncModal: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Cloud Sync</span>
+                    <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>MongoDB Atlas Cloud</span>
                   </div>
-                  <p className="text-[11px] font-medium mt-0.5" style={{ color: '#10b981' }}>Automatic real-time data sync active</p>
+                  <p className="text-[11px] font-medium mt-0.5" style={{ color: '#10b981' }}>Automatic cloud persistence active</p>
                 </div>
               </div>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full"
@@ -233,10 +233,10 @@ export const GoogleSyncModal: React.FC = () => {
               </span>
             </div>
 
-            {/* Sync Key */}
+            {/* Cloud Workspace Card */}
             <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Your Device Sync Key</span>
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Cloud Account Linked</span>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${cloudSyncStatus === 'synced' ? 'bg-emerald-400 animate-pulse' : cloudSyncStatus === 'syncing' ? 'bg-amber-400 animate-spin' : 'bg-slate-400'}`} />
                   <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
@@ -245,23 +245,23 @@ export const GoogleSyncModal: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 p-2.5 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                <span className="font-mono text-base font-black tracking-wider flex-1 select-all px-2" style={{ color: 'var(--accent)' }}>
-                  {syncKey}
-                </span>
-                <button
-                  onClick={handleCopyKey}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
-                  style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}
-                >
-                  {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
-                </button>
+              <div className="flex items-center gap-2.5 p-3 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center shrink-0 text-xs">
+                  {(profile.name || profile.email || 'DW').substring(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                    {profile.name || 'Deepwork Member'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {profile.email || 'Cloud workspace active'}
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  {lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Real-time sync active'}
+                  {lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Real-time database sync active'}
                 </span>
                 <button
                   onClick={async () => { Haptics.tap(); await syncWithCloudNow(); }}
@@ -269,48 +269,10 @@ export const GoogleSyncModal: React.FC = () => {
                   className="btn-primary flex items-center gap-1.5 active:scale-95 disabled:opacity-50 text-xs py-1.5 px-3"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${cloudSyncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-                  <span>Sync</span>
+                  <span>Sync Now</span>
                 </button>
               </div>
             </div>
-
-            {/* Pair Another Device */}
-            <form onSubmit={handlePairDevice} className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}>
-              <div>
-                <h4 className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                  <Smartphone className="w-4 h-4" style={{ color: 'var(--accent)' }} />
-                  Pair Another Device
-                </h4>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Enter your phone or laptop&apos;s key below to link both devices immediately.
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="e.g. PULSE-ABCD12"
-                  value={inputSyncKey}
-                  onChange={e => setInputSyncKey(e.target.value)}
-                  className="input-base flex-1 font-mono uppercase"
-                />
-                <button
-                  type="submit"
-                  disabled={!inputSyncKey.trim()}
-                  className="btn-primary disabled:opacity-40 text-xs shrink-0"
-                >
-                  Pair & Pull
-                </button>
-              </div>
-
-              {pairSuccess && (
-                <div className="p-2 rounded-lg text-xs font-medium flex items-center gap-1.5 animate-in fade-in"
-                  style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981' }}>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Devices successfully paired! Data synced.</span>
-                </div>
-              )}
-            </form>
           </div>
         )}
 

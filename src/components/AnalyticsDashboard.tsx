@@ -143,8 +143,8 @@ export const AnalyticsDashboard: React.FC = () => {
 
   // Member Productivity Matrix: "Who has done what"
   const memberProductivity = useMemo(() => {
-    const userEmail = profile.email || 'abhishekmandaljee4@gmail.com';
-    const userName = profile.name || 'Current User';
+    const userEmail = (profile.email || '').toLowerCase().trim();
+    const userName = profile.name || (userEmail ? userEmail.split('@')[0] : 'Current User');
     const currentUserId = profile.id || 'owner_user';
 
     interface MemberItem {
@@ -192,9 +192,10 @@ export const AnalyticsDashboard: React.FC = () => {
       const isCurrentUser = member.id === currentUserId;
       const assignedTopics = boardTopics.filter(t => {
         if (t.assigneeId === member.id) return true;
+        if (member.email && t.assigneeEmail && t.assigneeEmail.toLowerCase() === member.email.toLowerCase()) return true;
         if (t.assigneeName && t.assigneeName.toLowerCase() === member.name.toLowerCase()) return true;
         // Unassigned cards count for the primary user/owner
-        if (isCurrentUser && !t.assigneeId && !t.assigneeName) return true;
+        if (isCurrentUser && !t.assigneeId && !t.assigneeName && !t.assigneeEmail) return true;
         return false;
       });
 

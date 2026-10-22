@@ -219,25 +219,38 @@ export class RealtimeCollabManager {
 
       case 'webrtc_offer':
         if (data.offer && data.senderId !== this.currentUserId) {
-          await this.handleWebRTCOffer(data.offer, data.senderEmail);
+          const myEmail = this.currentUserEmail;
+          const targetEmail = (data.targetEmail || '').toLowerCase().trim();
+          if (!targetEmail || !myEmail || targetEmail === myEmail || !this.activeCallId || this.activeCallId === data.callId) {
+            await this.handleWebRTCOffer(data.offer, data.senderEmail);
+          }
         }
         break;
 
       case 'webrtc_answer':
         if (data.answer && data.senderId !== this.currentUserId) {
-          await this.handleWebRTCAnswer(data.answer);
+          const myEmail = this.currentUserEmail;
+          const targetEmail = (data.targetEmail || '').toLowerCase().trim();
+          if (!targetEmail || !myEmail || targetEmail === myEmail) {
+            await this.handleWebRTCAnswer(data.answer);
+          }
         }
         break;
 
       case 'webrtc_ice':
         if (data.candidate && data.senderId !== this.currentUserId) {
-          await this.handleWebRTCIce(data.candidate);
+          const myEmail = this.currentUserEmail;
+          const targetEmail = (data.targetEmail || '').toLowerCase().trim();
+          if (!targetEmail || !myEmail || targetEmail === myEmail) {
+            await this.handleWebRTCIce(data.candidate);
+          }
         }
         break;
 
       case 'task_delegated':
         if (data.senderId !== this.currentUserId) {
-          this.callbacks.onTaskDelegated?.(data);
+          const taskObj = data.task || data;
+          this.callbacks.onTaskDelegated?.(taskObj);
         }
         break;
 
@@ -360,6 +373,10 @@ export class RealtimeCollabManager {
 
   getLocalStream(): MediaStream | null {
     return this.localStream;
+  }
+
+  getScreenStream(): MediaStream | null {
+    return this.screenStream;
   }
 
   /* ── WebRTC Peer Connection & Media Streams ───────────────── */
@@ -560,12 +577,39 @@ export class RealtimeCollabManager {
     }
   }
 
-  setVideoEnabled(enabled: boolean) {
-    if (this.localStream) {
-      this.localStream.getVideoTracks().forEach(t => {
-        t.enabled = enabled;
-      });
+  async setVideoEnabled(enabled: boolean): Promise<boolean> {
+    if (!this.localStream) return false;
+
+    const existingTracks = this.localStream.getVideoTracks();
+    if (existingTracks.length > 0) {
+      existingTracks.forEach(t => { t.enabled = enabled; });
+      return true;
     }
+
+    if (enabled && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        const newTrack = stream.getVideoTracks()[0];
+        if (newTrack) {
+          this.localStream.addTrack(newTrack);
+          if (this.peerConnection) {
+            const senders = this.peerConnection.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+              videoSender.replaceTrack(newTrack);
+            } else {
+              this.peerConnection.addTrack(newTrack, this.localStream);
+            }
+          }
+          return true;
+        }
+      } catch (e) {
+        console.warn('[RealtimeCollab] Failed to dynamically enable video:', e);
+      }
+    }
+    return false;
   }
 
   private cleanupCall() {

@@ -118,10 +118,13 @@ export const TeamCollaborationRoom: React.FC = () => {
 
   // Handle screen stream attachment to screen video element
   useEffect(() => {
-    if (screenStream && screenVideoRef.current) {
-      screenVideoRef.current.srcObject = screenStream;
+    if (activeCall?.isScreenSharing && screenVideoRef.current) {
+      const s = RealtimeCollab.getScreenStream();
+      if (s && screenVideoRef.current.srcObject !== s) {
+        screenVideoRef.current.srcObject = s;
+      }
     }
-  }, [screenStream, activeCall?.isScreenSharing]);
+  }, [activeCall?.isScreenSharing]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -173,54 +176,13 @@ export const TeamCollaborationRoom: React.FC = () => {
     }
   };
 
-  // Built-in Screen Sharing Handler using getDisplayMedia
+  // Built-in Screen Sharing Handler
   const handleToggleScreenShare = async () => {
     Haptics.tap();
-    if (activeCall?.isScreenSharing) {
-      if (screenStream) {
-        screenStream.getTracks().forEach(t => t.stop());
-        setScreenStream(null);
-      }
-      toggleCallScreenShare();
-      Notifications.toast('info', 'Screen sharing stopped.');
-    } else {
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-          const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: { displaySurface: 'monitor' } as any,
-            audio: false
-          });
-          setScreenStream(stream);
-          toggleCallScreenShare();
-          Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
-
-          if (screenVideoRef.current) {
-            screenVideoRef.current.srcObject = stream;
-          }
-
-          stream.getVideoTracks()[0].onended = () => {
-            setScreenStream(null);
-            if (activeCall?.isScreenSharing) {
-              toggleCallScreenShare();
-            }
-            Notifications.toast('info', 'Screen sharing stopped.');
-          };
-        } else {
-          Notifications.toast('warning', 'Screen sharing is not supported by this browser.');
-        }
-      } catch (err: any) {
-        if (err.name !== 'NotAllowedError') {
-          console.warn('Screen share error:', err);
-        }
-      }
-    }
+    await toggleCallScreenShare();
   };
 
   const handleEndCall = () => {
-    if (screenStream) {
-      screenStream.getTracks().forEach(t => t.stop());
-      setScreenStream(null);
-    }
     endCall();
   };
 
@@ -619,7 +581,13 @@ export const TeamCollaborationRoom: React.FC = () => {
                           </div>
                           <div className="flex-1 flex items-center justify-center p-1 bg-black">
                             <video
-                              ref={screenVideoRef}
+                              ref={el => {
+                                screenVideoRef.current = el;
+                                const s = RealtimeCollab.getScreenStream();
+                                if (el && s && el.srcObject !== s) {
+                                  el.srcObject = s;
+                                }
+                              }}
                               autoPlay
                               playsInline
                               className="w-full h-full max-h-[280px] object-contain rounded-lg"

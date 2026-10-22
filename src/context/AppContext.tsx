@@ -462,18 +462,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Toast notification so collaborator is alerted even when room is closed
         Notifications.toast('info', `💬 ${msg.senderName}: "${msg.content.slice(0, 45)}${msg.content.length > 45 ? '...' : ''}"`);
       },
-      onTaskDelegated: (delegatedTask: any) => {
-        if (!delegatedTask || !delegatedTask.id) return;
+      onTaskDelegated: (data: any) => {
+        const taskObj = data?.task || data;
+        if (!taskObj || !taskObj.id) return;
         setTopics(prev => {
-          const exists = prev.some(t => t.id === delegatedTask.id);
+          const exists = prev.some(t => t.id === taskObj.id);
           const next = exists
-            ? prev.map(t => t.id === delegatedTask.id ? { ...t, ...delegatedTask } : t)
-            : [delegatedTask, ...prev];
+            ? prev.map(t => t.id === taskObj.id ? { ...t, ...taskObj } : t)
+            : [taskObj, ...prev];
           StorageService.saveTopics(next);
           return next;
         });
         sound.playNotificationPop();
-        Notifications.toast('success', `📋 Work delegated directly to your board: "${delegatedTask.name}"`);
+        Notifications.toast('success', `📋 Work delegated directly to your board: "${taskObj.name || 'New Task'}"`);
       }
     });
   }, []);
@@ -593,6 +594,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Prepare local camera/mic stream
     await RealtimeCollab.setupLocalMedia(incomingCall.type);
+
+    if (incomingCall.boardId && incomingCall.boardId !== activeBoardId) {
+      setActiveBoardIdState(incomingCall.boardId);
+      StorageService.saveActiveBoardId(incomingCall.boardId);
+      RealtimeCollab.updateBoard(incomingCall.boardId);
+    }
 
     RealtimeCollab.acceptIncomingCall(incomingCall.id, incomingCall.boardId, incomingCall.callerEmail || '');
 
@@ -1865,7 +1872,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStreaks(StorageService.getStreaks());
     const freshBoards = StorageService.getBoards();
     setBoards(freshBoards);
-    setActiveBoardIdState('board_main');
+    const initialBoardId = freshBoards[0]?.id || 'board_main';
+    setActiveBoardIdState(initialBoardId);
+    StorageService.saveActiveBoardId(initialBoardId);
     CloudSyncService.pushToCloudImmediate();
   };
 

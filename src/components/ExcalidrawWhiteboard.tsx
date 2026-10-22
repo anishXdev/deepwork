@@ -312,9 +312,14 @@ export const ExcalidrawWhiteboard: React.FC = () => {
     }
   }, [isElementHitByEraser, renderCanvas]);
 
-  // Commit typed inline text note
+  const isCommittingTextRef = useRef(false);
+
+  // Commit typed inline text note safely without duplicate creation
   const commitInlineText = useCallback(() => {
+    if (isCommittingTextRef.current) return;
     if (inlineText && inlineText.text.trim()) {
+      isCommittingTextRef.current = true;
+      const textVal = inlineText.text.trim();
       const newEl: WhiteboardElement = {
         id: 'el_' + Date.now(),
         type: 'text',
@@ -322,15 +327,23 @@ export const ExcalidrawWhiteboard: React.FC = () => {
         y: inlineText.y,
         color: selectedColor,
         strokeWidth,
-        text: inlineText.text.trim()
+        text: textVal
       };
       setHistory(prev => [...prev.slice(-20), elements]);
       setRedoStack([]);
-      setElements(prev => [...(prev || []), newEl]);
+      setElements(prev => {
+        const next = [...(prev || []), newEl];
+        elementsRef.current = next;
+        renderCanvas(next);
+        return next;
+      });
       Haptics.tap();
+      setTimeout(() => {
+        isCommittingTextRef.current = false;
+      }, 80);
     }
     setInlineText(null);
-  }, [inlineText, selectedColor, strokeWidth, elements]);
+  }, [inlineText, selectedColor, strokeWidth, elements, renderCanvas]);
 
   // Pointer Handlers
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -429,7 +442,12 @@ export const ExcalidrawWhiteboard: React.FC = () => {
       const finished = { ...currentElementRef.current };
       currentElementRef.current = null;
       isDrawingRef.current = false;
-      setElements(prev => [...(prev || []), finished]);
+      setElements(prev => {
+        const next = [...(prev || []), finished];
+        elementsRef.current = next;
+        renderCanvas(next);
+        return next;
+      });
     } else {
       currentElementRef.current = null;
       isDrawingRef.current = false;
