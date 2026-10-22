@@ -377,6 +377,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   outgoingCallRef.current = outgoingCall;
   const activeCallRef = useRef<ActiveCallState | null>(null);
   activeCallRef.current = activeCall;
+  const activeBoardIdRef = useRef(activeBoardId);
+  activeBoardIdRef.current = activeBoardId;
+  const recordedCallIds = useRef(new Set<string>());
+  const recordCallWorkTime = (call: ActiveCallState | null) => {
+    if (!call || call.durationSeconds < 10 || (call.callId && recordedCallIds.current.has(call.callId))) return;
+    if (call.callId) recordedCallIds.current.add(call.callId);
+    const endedAt = new Date();
+    const durationHours = Math.round((call.durationSeconds / 3600) * 10000) / 10000;
+    const durationMinutes = Math.round((call.durationSeconds / 60) * 10) / 10;
+    const meetingSession: StudySession = {
+      id: `meeting_${call.callId || endedAt.getTime()}`,
+      boardId: activeBoardIdRef.current,
+      subjectId: '',
+      startTime: new Date(endedAt.getTime() - call.durationSeconds * 1000).toISOString(),
+      endTime: endedAt.toISOString(),
+      durationMinutes,
+      durationHours,
+      mode: 'custom',
+      activityType: 'meeting',
+      completed: true,
+      notes: `${call.type === 'video' ? 'Video' : 'Voice'} call`,
+    };
+    setSessions(prev => [meetingSession, ...prev]);
+  };
 
   // Persistent unique tab/window client identifier
   const tabClientId = useMemo(() => {
@@ -477,6 +501,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         Notifications.toast('info', 'Call was cancelled by the caller.');
       },
       onCallEnded: () => {
+        recordCallWorkTime(activeCallRef.current);
         RingtoneService.stopAll();
         RingtoneService.playCallEndedTone();
         setActiveCall(null);
@@ -730,6 +755,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     RingtoneService.stopAll();
     RingtoneService.playCallEndedTone();
     RealtimeCollab.endActiveCall(activeCall?.callId);
+    recordCallWorkTime(activeCallRef.current);
     setActiveCall(null);
     setOutgoingCall(null);
     setRemoteMediaStreams({});
@@ -1848,6 +1874,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       durationMinutes,
       durationHours,
       mode,
+      activityType: 'work',
       completed: true
     };
 

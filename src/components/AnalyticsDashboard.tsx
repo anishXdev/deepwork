@@ -52,6 +52,8 @@ export const AnalyticsDashboard: React.FC = () => {
   const [hoveredDay, setHoveredDay] = useState<{
     date: string;
     hours: number;
+    workedHours: number;
+    meetingHours: number;
     x: number;
     y: number;
   } | null>(null);
@@ -68,15 +70,15 @@ export const AnalyticsDashboard: React.FC = () => {
 
   // Filtered sessions for the selected tag time range
   const tagFilteredSessions = useMemo(() => {
-    if (tagTimeRange === 'all') return sessions;
+    if (tagTimeRange === 'all') return sessions.filter(session => session.activityType !== 'meeting');
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     if (tagTimeRange === 'today') {
-      return sessions.filter(s => s && s.startTime && s.startTime.startsWith(todayStr));
+      return sessions.filter(s => s && s.activityType !== 'meeting' && s.startTime && s.startTime.startsWith(todayStr));
     }
     const days = tagTimeRange === '7d' ? 7 : 30;
     const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    return sessions.filter(s => s && s.startTime && new Date(s.startTime) >= cutoff);
+    return sessions.filter(s => s && s.activityType !== 'meeting' && s.startTime && new Date(s.startTime) >= cutoff);
   }, [sessions, tagTimeRange]);
 
   // Total hours in selected tag period
@@ -86,7 +88,7 @@ export const AnalyticsDashboard: React.FC = () => {
 
   // Total all-time logged hours
   const totalAllTimeHours = Math.round(
-    sessions.reduce((acc, s) => acc + (s.durationHours || (s.durationMinutes || 0) / 60), 0) * 10
+    sessions.filter(session => session.activityType !== 'meeting').reduce((acc, s) => acc + (s.durationHours || (s.durationMinutes || 0) / 60), 0) * 10
   ) / 10;
 
   // Detailed Tag-Based Time Distribution
@@ -245,13 +247,26 @@ export const AnalyticsDashboard: React.FC = () => {
     setIsEditingTarget(false);
   };
 
+  const getActivityForDate = (date: string) => {
+    const daySessions = sessions.filter(session => session.startTime?.startsWith(date));
+    const workSessions = daySessions.filter(session => session.activityType !== 'meeting');
+    const workedHours = workSessions.length
+      ? workSessions.reduce((sum, session) => sum + (session.durationHours || (session.durationMinutes || 0) / 60), 0)
+      : (streaks.activityHistory[date] || 0);
+    const meetingHours = daySessions
+      .filter(session => session.activityType === 'meeting')
+      .reduce((sum, session) => sum + (session.durationHours || (session.durationMinutes || 0) / 60), 0);
+    const round = (hours: number) => Math.round(hours * 10) / 10;
+    return { workedHours: round(workedHours), meetingHours: round(meetingHours), hours: round(workedHours + meetingHours) };
+  };
+
   const getLast30DaysActivity = () => {
     const days = [];
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const hours = streaks.activityHistory[dateStr] || 0;
+      const { hours } = getActivityForDate(dateStr);
       days.push({ date: dateStr, hours, dayNum: d.getDate() });
     }
     return days;
@@ -275,7 +290,7 @@ export const AnalyticsDashboard: React.FC = () => {
         const curDate = new Date(startDate);
         curDate.setDate(startDate.getDate() + (w * 7 + d));
         const dateStr = curDate.toISOString().split('T')[0];
-        const hours = streaks.activityHistory[dateStr] || 0;
+        const { hours } = getActivityForDate(dateStr);
         const month = curDate.toLocaleString('default', { month: 'short' });
         week.push({ date: dateStr, hours, month, isFuture: curDate > today });
       }
@@ -290,7 +305,7 @@ export const AnalyticsDashboard: React.FC = () => {
   const yearlyTotalHours = Math.round(yearlyFlatDays.reduce((acc, d) => acc + d.hours, 0) * 10) / 10;
   const maxYearlyDay = Math.max(...yearlyFlatDays.map(d => d.hours), 0);
 
-  const selectedDayHours = selectedDate ? (streaks.activityHistory[selectedDate] || 0) : 0;
+  const selectedDayHours = selectedDate ? getActivityForDate(selectedDate).hours : 0;
   const completedTopicsOnDate = selectedDate ? topics.filter(t =>
     t.status === 'completed' &&
     (t.updatedAt?.startsWith(selectedDate) || t.scheduledDate === selectedDate)
@@ -896,7 +911,7 @@ export const AnalyticsDashboard: React.FC = () => {
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
               <Calendar className="w-4 h-4 text-emerald-500" />
-              <span>{heatmapRange === '30days' ? '30-Day Activity Heatmap' : '365-Day Annual Study Matrix'}</span>
+              <span>{heatmapRange === '30days' ? '30-Day Activity Heatmap' : '365-Day Annual Work Matrix'}</span>
             </span>
 
             <div className="flex items-center p-0.5 rounded-xl text-[10px] font-bold"
@@ -948,7 +963,8 @@ export const AnalyticsDashboard: React.FC = () => {
                   key={day.date}
                   onMouseEnter={e => {
                     const rect = e.currentTarget.getBoundingClientRect();
-                    setHoveredDay({ date: day.date, hours: day.hours, x: rect.left + rect.width / 2, y: rect.top - 8 });
+                    const activity = getActivityForDate(day.date);
+                    setHoveredDay({ date: day.date, ...activity, x: rect.left + rect.width / 2, y: rect.top - 8 });
                   }}
                   onMouseLeave={() => setHoveredDay(null)}
                   onClick={() => { Haptics.tap(); setSelectedDate(day.date); }}
@@ -960,7 +976,7 @@ export const AnalyticsDashboard: React.FC = () => {
               ))}
             </div>
             <div className="text-[11px] flex items-center justify-between font-mono pt-1" style={{ color: 'var(--text-muted)' }}>
-              <span style={{ color: 'var(--accent)' }}>💡 Hover for hours studied, click any day to inspect completed tasks</span>
+              <span style={{ color: 'var(--accent)' }}>💡 Hover for hours worked and meeting time, click a day to inspect completed tasks</span>
               <span>Last 30 days</span>
             </div>
           </div>
@@ -1012,7 +1028,8 @@ export const AnalyticsDashboard: React.FC = () => {
                               key={day.date}
                               onMouseEnter={e => {
                                 const rect = e.currentTarget.getBoundingClientRect();
-                                setHoveredDay({ date: day.date, hours: day.hours, x: rect.left + rect.width / 2, y: rect.top - 8 });
+                                const activity = getActivityForDate(day.date);
+                                setHoveredDay({ date: day.date, ...activity, x: rect.left + rect.width / 2, y: rect.top - 8 });
                               }}
                               onMouseLeave={() => setHoveredDay(null)}
                               onClick={() => { Haptics.tap(); setSelectedDate(day.date); }}
@@ -1070,7 +1087,11 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
           <div className="text-[12px] font-mono font-extrabold flex items-center gap-1.5 mt-0.5" style={{ color: 'var(--text-primary)' }}>
             <span className={`w-2 h-2 rounded-full ${hoveredDay.hours > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-            <span>{hoveredDay.hours > 0 ? `${hoveredDay.hours} hours studied` : '0 hours studied'}</span>
+            <span>{hoveredDay.workedHours} hours worked</span>
+          </div>
+          <div className="text-[11px] font-mono font-semibold mt-0.5 flex items-center gap-1.5" style={{ color: '#a78bfa' }}>
+            <span className="w-2 h-2 rounded-full bg-violet-400" />
+            <span>{hoveredDay.meetingHours} hours in meetings & calls</span>
           </div>
           <div className="text-[9px] mt-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
             <span>👉 Click to view completed tasks & details</span>

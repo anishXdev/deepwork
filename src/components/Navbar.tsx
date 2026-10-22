@@ -16,7 +16,6 @@ import {
   Bell,
   BellOff,
   PenTool,
-  Hash,
   Keyboard,
   ShieldCheck,
   Video,
@@ -77,7 +76,6 @@ export const Navbar: React.FC = () => {
 
   const navItems = [
     { id: 'study',      label: 'Board',       icon: LayoutGrid },
-    { id: 'tags',       label: 'Tags',        icon: Hash       },
     { id: 'timer',      label: 'Focus',       icon: Timer      },
     { id: 'whiteboard', label: 'White Board', icon: PenTool    },
     { id: 'analytics',  label: 'Analytics',   icon: BarChart3  },

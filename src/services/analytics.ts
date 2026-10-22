@@ -36,6 +36,7 @@ export const AnalyticsService = {
   getHoursStudiedToday(sessions: StudySession[]): number {
     const todayStr = this.getTodayDateString();
     const todaySessions = sessions.filter(s => {
+      if (s.activityType === 'meeting') return false;
       if (!s.startTime) return false;
       return s.startTime.startsWith(todayStr);
     });
@@ -50,6 +51,7 @@ export const AnalyticsService = {
   getHoursStudiedThisWeek(sessions: StudySession[], weekStartsOnMonday = true): number {
     const weekStart = this.getWeekStartDate(weekStartsOnMonday);
     const weekSessions = sessions.filter(s => {
+      if (s.activityType === 'meeting') return false;
       if (!s.startTime) return false;
       const sessionDate = new Date(s.startTime);
       return sessionDate >= weekStart;
@@ -68,14 +70,14 @@ export const AnalyticsService = {
     timeframe: 'all' | 'week' | 'today' = 'all',
     weekStartsOnMonday = true
   ): { subjectId: string; subjectName: string; color: string; hours: number; percentage: number }[] {
-    let filteredSessions = sessions;
+    let filteredSessions = sessions.filter(s => s.activityType !== 'meeting');
     const todayStr = this.getTodayDateString();
     const weekStart = this.getWeekStartDate(weekStartsOnMonday);
 
     if (timeframe === 'today') {
-      filteredSessions = sessions.filter(s => s.startTime && s.startTime.startsWith(todayStr));
+      filteredSessions = filteredSessions.filter(s => s.startTime && s.startTime.startsWith(todayStr));
     } else if (timeframe === 'week') {
-      filteredSessions = sessions.filter(s => s.startTime && new Date(s.startTime) >= weekStart);
+      filteredSessions = filteredSessions.filter(s => s.startTime && new Date(s.startTime) >= weekStart);
     }
 
     const totalHoursOverall = filteredSessions.reduce(
@@ -218,7 +220,7 @@ export const AnalyticsService = {
       const dateStr = d.toISOString().split('T')[0];
       const label = i === 0 ? 'Today' : i === 1 ? 'Yday' : `${dayNames[d.getDay()]}`;
 
-      const daySessions = sessions.filter(s => s.startTime && s.startTime.startsWith(dateStr));
+      const daySessions = sessions.filter(s => s.activityType !== 'meeting' && s.startTime && s.startTime.startsWith(dateStr));
       const hours = daySessions.reduce((acc, s) => acc + (s.durationHours || s.durationMinutes / 60), 0);
 
       result.push({

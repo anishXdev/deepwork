@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { LayoutGrid, Hash, Timer, BarChart3, PenTool } from 'lucide-react';
+import { LayoutGrid, Timer, BarChart3, PenTool } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 
 export const MobileBottomNav: React.FC = () => {
@@ -8,7 +8,6 @@ export const MobileBottomNav: React.FC = () => {
 
   const navItems = [
     { id: 'study',      label: 'Board',      icon: LayoutGrid },
-    { id: 'tags',       label: 'Tags',       icon: Hash       },
     { id: 'timer',      label: 'Focus',      icon: Timer      },
     { id: 'whiteboard', label: 'White Board', icon: PenTool    },
     { id: 'analytics',  label: 'Analytics',  icon: BarChart3  },

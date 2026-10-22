@@ -20,7 +20,6 @@ import { StreakModal } from './components/StreakModal';
 import { AuthModal } from './components/AuthModal';
 import { TaskCelebrationOverlay } from './components/TaskCelebrationOverlay';
 import { ToastContainer } from './components/ToastContainer';
-import { MobileFab } from './components/MobileFab';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -65,8 +64,11 @@ const MainContent: React.FC = () => {
           </Suspense>
         </div>
 
-        {/* Global Floating Action Button for Mobile */}
-        <MobileFab />
+        <footer className="relative z-[1] flex justify-center gap-4 px-4 py-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <a className="transition-colors hover:text-slate-200" href="/privacy.html">Privacy</a>
+          <span aria-hidden="true">·</span>
+          <a className="transition-colors hover:text-slate-200" href="/terms.html">Terms</a>
+        </footer>
 
         {/* Mobile Bottom Navigation Bar */}
         <MobileBottomNav />

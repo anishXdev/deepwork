@@ -33,6 +33,10 @@ import {
   Search,
   Pencil,
   KeyRound,
+  Minimize2,
+  Maximize2,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { parsePriorityShortcut } from '../utils/cardInput';
@@ -89,6 +93,19 @@ export const TodayTomorrowView: React.FC = () => {
   const [inlineHours, setInlineHours] = useState(1);
   const [inlineCategory, setInlineCategory] = useState<GateTaskCategory>('concept');
   const [inlineAssigneeId, setInlineAssigneeId] = useState<string>('');
+
+  const handleAddCardComment = (topic: Topic, text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+    const comment = {
+      id: `comment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      text: cleanText,
+      authorName: profile.name || profile.email.split('@')[0] || 'Teammate',
+      authorEmail: profile.email || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    updateTopic(topic.id, { comments: [...(topic.comments || []), comment] });
+  };
 
   // Drag and Drop & Card delegation
   const [draggedTopicId, setDraggedTopicId] = useState<string | null>(null);
@@ -616,6 +633,7 @@ export const TodayTomorrowView: React.FC = () => {
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
               onEdit={() => openEditTopicModal(topic)}
+              onAddComment={text => handleAddCardComment(topic, text)}
               primaryAction={{
                 label: "Today's Focus",
                 action: () => handleMoveCard(topic.id, 'today'),
@@ -677,6 +695,7 @@ export const TodayTomorrowView: React.FC = () => {
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
               onEdit={() => openEditTopicModal(topic)}
+              onAddComment={text => handleAddCardComment(topic, text)}
               primaryAction={{
                 label: 'Tomorrow',
                 action: () => handleMoveCard(topic.id, 'tomorrow'),
@@ -737,6 +756,7 @@ export const TodayTomorrowView: React.FC = () => {
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
               onEdit={() => openEditTopicModal(topic)}
+              onAddComment={text => handleAddCardComment(topic, text)}
               primaryAction={{
                 label: 'Do Today',
                 action: () => handleMoveCard(topic.id, 'today'),
@@ -798,6 +818,7 @@ export const TodayTomorrowView: React.FC = () => {
               onReschedule={() => openRescheduleModal(topic)}
               onDelete={() => deleteTopic(topic.id)}
               onEdit={() => openEditTopicModal(topic)}
+              onAddComment={text => handleAddCardComment(topic, text)}
               primaryAction={{
                 label: 'Today',
                 action: () => handleMoveCard(topic.id, 'today'),
@@ -1154,6 +1175,7 @@ interface TrelloCardProps {
   onReschedule: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onAddComment: (text: string) => void;
   primaryAction?: {
     label: string;
     action: () => void;
@@ -1176,8 +1198,19 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
   onReschedule,
   onDelete,
   onEdit,
+  onAddComment,
   primaryAction,
 }) => {
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isCommentOpen, setIsCommentOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const latestComment = topic.comments?.[topic.comments.length - 1];
+  const submitComment = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!commentDraft.trim()) return;
+    onAddComment(commentDraft);
+    setCommentDraft('');
+  };
   const topicTags = (topic.tags || [])
     .map(tid => tags.find(t => t?.id === tid))
     .filter((t): t is Tag => Boolean(t && t.id));
@@ -1199,7 +1232,9 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
       }`}
       style={{
         borderLeft: `4px solid ${isCompleted ? '#10B981' : priorityStyle.color}`,
-        background: `linear-gradient(145deg, var(--bg-card), ${priorityStyle.soft})`,
+              background: `linear-gradient(145deg, var(--bg-card), ${priorityStyle.soft})`,
+        minHeight: isMinimized ? 0 : undefined,
+        padding: isMinimized ? '10px 12px' : undefined,
       }}
     >
       {/* Priority and owner */}
@@ -1287,6 +1322,15 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
             </div>
           )}
         </div>
+        <button
+          type="button"
+          onClick={event => { event.stopPropagation(); setIsMinimized(value => !value); }}
+          className="rounded-md p-1 text-slate-400 hover:bg-slate-500/10 hover:text-blue-500"
+          title={isMinimized ? 'Expand card' : 'Minimize card'}
+          aria-label={isMinimized ? 'Expand card' : 'Minimize card'}
+        >
+          {isMinimized ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+        </button>
       </div>
 
       {/* Work title with stable tracking code */}
@@ -1318,35 +1362,62 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
             <span className="inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wide" style={{ background: 'var(--bg-card-alt)', color: 'var(--text-muted)' }} title={`Tracking ID: ${topic.id}`}>{trackingId}</span>
           </div>
 
-          {topic.notes && (
+          {!isMinimized && topic.notes && (
             <p className="text-[11px] line-clamp-2 mt-1 text-slate-400 dark:text-slate-500 select-text">
               {topic.notes}
             </p>
           )}
-          {(topicTags.length > 0 || (!topicTags.length && subject)) && (
+          {!isMinimized && (topicTags.length > 0 || (!topicTags.length && subject)) && (
             <div className="flex flex-wrap gap-1 mt-2">
               {topicTags.slice(0, 2).map(tag => <span key={tag.id} className="rounded-full px-2 py-0.5 text-[9px] font-semibold" style={{ background: `${tag.color || '#3B82F6'}18`, color: tag.color || '#3B82F6' }}>#{tag.name}</span>)}
               {!topicTags.length && subject && <span className="rounded-full px-2 py-0.5 text-[9px] font-semibold" style={{ background: `${subject.color || '#3B82F6'}18`, color: subject.color || '#3B82F6' }}>{subject.name}</span>}
               {topicTags.length > 2 && <span className="text-[9px] text-slate-400 self-center">+{topicTags.length - 2}</span>}
             </div>
           )}
+          {latestComment && (
+            <div className="mt-2 hidden items-start gap-1.5 rounded-lg px-2 py-1.5 text-[10px] group-hover:flex group-focus-within:flex" style={{ background: 'var(--bg-card-alt)' }}>
+              <MessageCircle className="mt-0.5 h-3 w-3 shrink-0 text-violet-400" />
+              <p className="min-w-0 truncate" style={{ color: 'var(--text-secondary)' }}>
+                <span className="font-bold text-violet-400">{latestComment.authorName}: </span>{latestComment.text}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
+      {isCommentOpen && (
+        <div className="rounded-xl border p-2.5 space-y-2" style={{ background: 'var(--bg-card-alt)', borderColor: 'var(--border)' }} onClick={event => event.stopPropagation()}>
+          <div className="max-h-28 space-y-2 overflow-y-auto">
+            {(topic.comments || []).length === 0 && <p className="text-[10px] text-slate-500">No comments yet. Add the first update.</p>}
+            {(topic.comments || []).map(comment => (
+              <div key={comment.id} className="text-[11px]">
+                <span className="font-bold text-violet-400">{comment.authorName}</span>
+                <span className="ml-1 text-[9px] text-slate-500">{new Date(comment.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                <p className="mt-0.5 whitespace-pre-wrap break-words" style={{ color: 'var(--text-secondary)' }}>{comment.text}</p>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={submitComment} className="flex items-center gap-1.5">
+            <input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment…" className="input-base min-w-0 flex-1 py-1.5 text-[11px]" />
+            <button type="submit" disabled={!commentDraft.trim()} className="rounded-lg bg-violet-500 p-2 text-white disabled:opacity-40" aria-label="Send comment"><Send className="h-3.5 w-3.5" /></button>
+          </form>
+        </div>
+      )}
+
       {/* Footer Metadata & Micro-Actions */}
       <div
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t mt-1"
+        className="flex flex-wrap items-center gap-1.5 pt-2 border-t mt-1"
         style={{ borderColor: 'var(--border-subtle)' }}
       >
-        <div className="flex items-center gap-2 text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
-          <span className="inline-flex items-center gap-1">
-            <Clock className="w-3 h-3 text-slate-400" />
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+          <span className="inline-flex items-center gap-1 rounded-md bg-cyan-500/10 px-1.5 py-1 text-cyan-500">
+            <Clock className="w-3 h-3" />
             <span>{topic.approxHours || 1}h</span>
           </span>
 
           {topic.scheduledDate && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400" title={`Planned for ${topic.scheduledDate}`}>
-              <Calendar className="w-3 h-3" /> {topic.scheduledDate.slice(5)}
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-1 text-amber-500" title={`Planned for ${topic.scheduledDate}`}>
+              <Calendar className="w-3 h-3" />{topic.scheduledDate.slice(5)}
             </span>
           )}
         </div>
@@ -1357,13 +1428,23 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onFocus(); }}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 transition-colors cursor-pointer"
               title="Start Focus Timer"
             >
               <Play className="w-2.5 h-2.5 fill-current" />
               <span>Focus</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={event => { event.stopPropagation(); setIsCommentOpen(value => !value); }}
+            className="rounded-md p-1 text-violet-400 hover:bg-violet-500/10 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            title={`${topic.comments?.length || 0} comments`}
+            aria-label={`Comments on ${topic.name}`}
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+          </button>
 
           {primaryAction && (
             <button
@@ -1384,7 +1465,7 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
           <button
             type="button"
             onClick={e => { e.stopPropagation(); onEdit(); }}
-            className="p-1 rounded text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            className="p-1 rounded text-slate-400 hover:text-blue-600 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
             title="Edit Card"
             aria-label={`Edit ${topic.name}`}
           >
@@ -1394,7 +1475,7 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
           <button
             type="button"
             onClick={e => { e.stopPropagation(); onReschedule(); }}
-            className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
             title="Reschedule Date"
           >
             <CalendarClock className="w-3.5 h-3.5" />
@@ -1403,7 +1484,7 @@ const TrelloCard: React.FC<TrelloCardProps> = ({
           <button
             type="button"
             onClick={e => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            className="p-1 rounded text-slate-400 hover:text-rose-500 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
             title="Delete Card"
           >
             <Trash2 className="w-3.5 h-3.5" />

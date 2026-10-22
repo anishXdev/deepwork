@@ -241,6 +241,7 @@ export interface Task {
   priority?: TaskPriority;
   category?: GateTaskCategory; // Concept, PYQ, Mock Test, Revision, Notes
   notes?: string;
+  comments?: { id: string; text: string; authorName: string; authorEmail?: string; createdAt: string }[];
   checklist?: { id: string; text: string; done: boolean }[];
   assigneeId?: string; // Collaborator member ID delegated to this task
   assigneeName?: string; // Collaborator display name
@@ -269,6 +270,7 @@ export interface StudySession {
   durationMinutes: number; // exact minutes
   durationHours: number; // durationMinutes / 60
   mode: 'pomodoro' | 'short_break' | 'long_break' | 'custom';
+  activityType?: 'work' | 'meeting';
   completed: boolean;
   notes?: string;
 }

@@ -67,7 +67,7 @@ export const KeyboardShortcutsModal: React.FC = () => {
         return;
       }
 
-      // Tab navigation numbers: 1 to 5
+      // Tab navigation numbers: 1 to 4
       if (e.key === '1') {
         e.preventDefault();
         Haptics.tap();
@@ -92,13 +92,6 @@ export const KeyboardShortcutsModal: React.FC = () => {
         setActiveTab('analytics');
         return;
       }
-      if (e.key === '5') {
-        e.preventDefault();
-        Haptics.tap();
-        setActiveTab('tags');
-        return;
-      }
-
       // 'm': Toggle Ambient sound
       if (e.key === 'm') {
         e.preventDefault();
@@ -131,7 +124,6 @@ export const KeyboardShortcutsModal: React.FC = () => {
     { key: '2', desc: 'Jump to Focus Timer', badge: 'Nav' },
     { key: '3', desc: 'Jump to Offline Whiteboard', badge: 'Nav' },
     { key: '4', desc: 'Jump to Time Analytics', badge: 'Nav' },
-    { key: '5', desc: 'Jump to Tags & Projects', badge: 'Nav' },
     { key: 'm', desc: 'Toggle Ambient Audio Mute / Sound', badge: 'Audio' },
     { key: '?', desc: 'Toggle this Shortcuts Guide', badge: 'Help' },
     { key: 'Esc', desc: 'Close dialogs & popups', badge: 'Global' },
