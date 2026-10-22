@@ -34,6 +34,7 @@ export class SignalingServer {
         }
         const sender = this.clients.get(socket);
         if (!sender) return;
+        if (data.type === 'heartbeat') return;
         if (data.type === 'update_board') { sender.boardId = data.boardId; return; }
         this.relay(data, sender);
       });

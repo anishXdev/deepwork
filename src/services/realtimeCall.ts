@@ -15,11 +15,13 @@ interface RealtimeCallbacks {
 export class RealtimeCollabManager {
   private ws: WebSocket | null = null;
   private reconnectTimer: any = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private currentBoardId: string = '';
   private currentUserEmail: string = '';
   private currentUserId: string = '';
   private currentUserName: string = '';
   private callbacks: RealtimeCallbacks = {};
+  private signalingConfigurationError: string | null = null;
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private screenStream: MediaStream | null = null;
@@ -77,7 +79,15 @@ export class RealtimeCollabManager {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const configuredSocketUrl = (import.meta as any).env?.VITE_COLLAB_WS_URL as string | undefined;
-      const socketUrl = configuredSocketUrl || `${protocol}//${window.location.host}/api/collab-socket`;
+      const isLocalDevelopment = Boolean((import.meta as any).env?.DEV);
+      if (!configuredSocketUrl?.trim() && !isLocalDevelopment) {
+        this.signalingConfigurationError = 'Calling is not configured for this deployment. Deploy the Deepwork signaling server, set VITE_COLLAB_WS_URL in Vercel to its wss://.../api/collab-socket address, then redeploy the web app.';
+        this.callbacks.onConnectionStatus?.('disconnected');
+        console.error(`[RealtimeCollab] ${this.signalingConfigurationError}`);
+        return;
+      }
+      this.signalingConfigurationError = null;
+      const socketUrl = configuredSocketUrl?.trim() || `${protocol}//${window.location.host}/api/collab-socket`;
       this.ws = new WebSocket(socketUrl);
 
       this.ws.onopen = () => {
@@ -89,6 +99,8 @@ export class RealtimeCollabManager {
           userId: this.currentUserId,
           name: this.currentUserName
         });
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = setInterval(() => this.send({ type: 'heartbeat' }), 15000);
       };
 
       this.ws.onmessage = (event) => {
@@ -101,6 +113,8 @@ export class RealtimeCollabManager {
       };
 
       this.ws.onclose = () => {
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
         this.callbacks.onConnectionStatus?.('disconnected');
         this.scheduleReconnect();
       };
@@ -130,13 +144,14 @@ export class RealtimeCollabManager {
     }
   }
 
-  private async waitForConnection(timeoutMs = 8000): Promise<void> {
+  private async waitForConnection(timeoutMs = 75000): Promise<void> {
+    if (this.signalingConfigurationError) throw new Error(this.signalingConfigurationError);
     const startedAt = Date.now();
     while ((!this.ws || this.ws.readyState !== WebSocket.OPEN) && Date.now() - startedAt < timeoutMs) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error('Could not reach the WebRTC signaling server. Check your connection and server URL.');
+      throw new Error('Could not reach the WebRTC signaling server after 75 seconds. Check your connection and server URL, then try again.');
     }
   }
 

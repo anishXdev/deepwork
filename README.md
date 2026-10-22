@@ -59,7 +59,13 @@ Visit `http://localhost:5173/` in your browser.
 
 ### Deploying calls
 
-Calls use browser-to-browser WebRTC for audio and video, with the Deepwork Node server relaying call setup messages. Run `npm run server` on a public Node host that supports WebSocket upgrades, and serve it over HTTPS/WSS. Set `VITE_COLLAB_WS_URL` to `wss://<your-server>/api/collab-socket` when building the web app. For peers behind restrictive NATs, configure a TURN relay using the `VITE_TURN_*` settings; TURN credentials are exposed to the browser and should be short-lived or otherwise restricted.
+Calls use browser-to-browser WebRTC for audio and video, with the Deepwork Node server relaying call setup messages. The current Vercel deployment serves the web app but does not deploy this Node signaling server. Deploy the signaling server as a long-running Node service (the included `render.yaml` can be used with Render), then configure the Vercel project:
+
+1. Deploy this repository to Render using the included Blueprint. The service starts with `npm run server` and exposes `/health` for its health check. The Blueprint uses Render's free instance, which may take about a minute to wake after inactivity.
+2. Copy the service's public hostname and set the Vercel environment variable `VITE_COLLAB_WS_URL` to `wss://<service-hostname>/api/collab-socket` (use `wss://`, not `https://`).
+3. Redeploy the Vercel web app so the build includes that variable. Both users should open the same deployed app and board.
+
+For peers behind restrictive NATs, configure a TURN relay using the `VITE_TURN_*` settings; TURN credentials are exposed to browsers and should be short-lived or otherwise restricted. Without a signaling URL, production calls now report the required configuration instead of trying the Vercel host and timing out.
 
 For local development, `npm run dev` includes the signaling server.
 
