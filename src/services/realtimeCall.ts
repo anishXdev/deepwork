@@ -32,9 +32,17 @@ export class RealtimeCollabManager {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      ...this.getConfiguredTurnServers()
     ]
   };
+
+  private getConfiguredTurnServers(): RTCIceServer[] {
+    const env = (import.meta as any).env || {};
+    const urls = String(env.VITE_TURN_URLS || '').split(',').map((url: string) => url.trim()).filter(Boolean);
+    if (!urls.length || !env.VITE_TURN_USERNAME || !env.VITE_TURN_CREDENTIAL) return [];
+    return [{ urls, username: env.VITE_TURN_USERNAME, credential: env.VITE_TURN_CREDENTIAL }];
+  }
 
   constructor() {
     // Singleton
@@ -68,7 +76,8 @@ export class RealtimeCollabManager {
 
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const socketUrl = `${protocol}//${window.location.host}/api/collab-socket`;
+      const configuredSocketUrl = (import.meta as any).env?.VITE_COLLAB_WS_URL as string | undefined;
+      const socketUrl = configuredSocketUrl || `${protocol}//${window.location.host}/api/collab-socket`;
       this.ws = new WebSocket(socketUrl);
 
       this.ws.onopen = () => {
@@ -118,6 +127,16 @@ export class RealtimeCollabManager {
   private send(data: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  private async waitForConnection(timeoutMs = 8000): Promise<void> {
+    const startedAt = Date.now();
+    while ((!this.ws || this.ws.readyState !== WebSocket.OPEN) && Date.now() - startedAt < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('Could not reach the WebRTC signaling server. Check your connection and server URL.');
     }
   }
 
@@ -260,7 +279,7 @@ export class RealtimeCollabManager {
   }
 
   /* ── Call Initiation & Ringing ────────────────────────────── */
-  startRingingCall(params: {
+  async startRingingCall(params: {
     callType: CallType;
     boardId: string;
     boardName: string;
@@ -268,7 +287,8 @@ export class RealtimeCollabManager {
     targetMemberIds: string[];
     callerColor?: string;
     callerAvatar?: string;
-  }): string {
+  }): Promise<string> {
+    await this.waitForConnection();
     const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     this.activeCallId = callId;
     this.isCaller = true;
@@ -299,13 +319,15 @@ export class RealtimeCollabManager {
         type: 'call_cancel',
         callId: id,
         callerId: this.currentUserId,
-        callerEmail: this.currentUserEmail
+        callerEmail: this.currentUserEmail,
+        targetEmail: this.targetPeerEmail
       });
     }
     this.cleanupCall();
   }
 
-  acceptIncomingCall(callId: string, boardId: string, callerEmail: string) {
+  async acceptIncomingCall(callId: string, boardId: string, callerEmail: string) {
+    await this.waitForConnection();
     this.activeCallId = callId;
     this.isCaller = false;
     this.targetPeerEmail = (callerEmail || '').toLowerCase();
@@ -316,7 +338,8 @@ export class RealtimeCollabManager {
       accepterId: this.currentUserId,
       accepterEmail: this.currentUserEmail,
       accepterName: this.currentUserName,
-      boardId
+      boardId,
+      targetEmail: callerEmail
     });
   }
 
@@ -539,9 +562,10 @@ export class RealtimeCollabManager {
           const senders = this.peerConnection.getSenders();
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
           if (videoSender) {
-            videoSender.replaceTrack(videoTrack);
+            await videoSender.replaceTrack(videoTrack);
           } else {
             this.peerConnection.addTrack(videoTrack, stream);
+            if (this.peerConnection.remoteDescription) await this.initiateWebRTCOffer();
           }
         }
 
@@ -598,9 +622,10 @@ export class RealtimeCollabManager {
             const senders = this.peerConnection.getSenders();
             const videoSender = senders.find(s => s.track && s.track.kind === 'video');
             if (videoSender) {
-              videoSender.replaceTrack(newTrack);
+              await videoSender.replaceTrack(newTrack);
             } else {
               this.peerConnection.addTrack(newTrack, this.localStream);
+              if (this.peerConnection.remoteDescription) await this.initiateWebRTCOffer();
             }
           }
           return true;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studypulse-v2';
+const CACHE_NAME = 'deepwork-v1';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -7,7 +7,7 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      // Purge all old caches including studypulse-v1
+      // Remove caches created by earlier app names and releases.
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {

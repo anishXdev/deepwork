@@ -1,6 +1,17 @@
 import { StorageService } from './storage';
 import { CloudSyncStatus } from '../types';
 
+async function readJsonResponse(response: Response): Promise<any> {
+  const body = await response.text();
+  if (!body.trim()) throw new Error(`The server returned an empty response (HTTP ${response.status}).`);
+  try {
+    return JSON.parse(body);
+  } catch {
+    const type = response.headers.get('content-type') || 'unknown content type';
+    throw new Error(`Expected JSON from the server but received ${type} (HTTP ${response.status}). Check that /api/sync is deployed.`);
+  }
+}
+
 const SYNC_KEY_STORAGE = 'studypulse_sync_key';
 const LAST_SYNCED_STORAGE = 'studypulse_last_synced_at';
 
@@ -75,7 +86,7 @@ export const CloudSyncService = {
         return { success: false, found: false, error: `HTTP ${res.status}` };
       }
 
-      const json = await res.json();
+        const json = await readJsonResponse(res);
       if (json.found && json.data) {
         StorageService.importData(json.data);
         if (json.updatedAt) {
@@ -114,7 +125,7 @@ export const CloudSyncService = {
         return { success: false, error: `HTTP ${res.status}` };
       }
 
-      const json = await res.json();
+      const json = await readJsonResponse(res);
       const now = json.updatedAt || new Date().toISOString();
       this.setLastSyncedAt(now);
       return { success: true, updatedAt: now };
@@ -157,7 +168,7 @@ export const CloudSyncService = {
     try {
       const res = await fetch('/api/sync?status=1');
       if (!res.ok) return { connected: false, error: `HTTP ${res.status}` };
-      return await res.json();
+      return await readJsonResponse(res);
     } catch (e: any) {
       return { connected: false, error: e?.message || 'Network unreachable' };
     }
@@ -204,7 +215,7 @@ export const CloudSyncService = {
     try {
       const res = await fetch(`/api/sync?notifications=1&email=${encodeURIComponent(email.toLowerCase())}`);
       if (res.ok) {
-        const json = await res.json();
+        const json = await readJsonResponse(res);
         return Array.isArray(json.notifications) ? json.notifications : [];
       }
     } catch (e) {
@@ -239,7 +250,7 @@ export const CloudSyncService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'join_board', boardCode, user })
       });
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       return data;
     } catch (e: any) {
       return { success: false, message: e.message || 'Network error' };
@@ -254,7 +265,7 @@ export const CloudSyncService = {
     try {
       const res = await fetch(`/api/sync?chat=1&boardId=${encodeURIComponent(boardId)}`);
       if (res.ok) {
-        const json = await res.json();
+        const json = await readJsonResponse(res);
         return Array.isArray(json.messages) ? json.messages : [];
       }
     } catch (e) {

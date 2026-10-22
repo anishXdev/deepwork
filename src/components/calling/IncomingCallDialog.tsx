@@ -66,7 +66,7 @@ export const IncomingCallDialog: React.FC<IncomingCallDialogProps> = ({
 
         <div className="pt-1 flex items-center justify-center gap-1 text-[11px] text-slate-500">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>LiveKit Cloud SFU encrypted session</span>
+          <span>Peer to peer WebRTC call</span>
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { sound } from '../services/audio';
 import { Notifications } from '../services/notifications';
 import { Haptics } from '../utils/haptics';
-import { DStudyLogo } from './DStudyLogo';
+import { DeepworkLogo } from './DeepworkLogo';
 import { 
   Lock, 
   Unlock, 
@@ -83,7 +83,7 @@ export const StrictFocusOverlay: React.FC = () => {
         // User switched tabs or minimized!
         incrementDistractionCount();
         sound.playWarningAlert();
-        Notifications.showToast('⚠️ Distraction detected! Stay locked into dstudy.', 'warning');
+        Notifications.showToast('⚠️ Distraction detected! Stay locked into Deepwork.', 'warning');
       }
     };
 
@@ -143,7 +143,7 @@ export const StrictFocusOverlay: React.FC = () => {
       {/* Top Bar */}
       <div className="relative z-10 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <DStudyLogo size={32} showText={true} />
+          <DeepworkLogo size={32} showText={true} />
           <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-bold font-mono tracking-wider animate-pulse">
             <Lock className="w-3.5 h-3.5" />
             <span>STRICT FOCUS ACTIVE</span>
@@ -255,7 +255,7 @@ export const StrictFocusOverlay: React.FC = () => {
       {/* Bottom Status */}
       <div className="relative z-10 flex items-center justify-between text-xs text-slate-500 font-mono">
         <span>Session auto-completes and unlocks when timer finishes</span>
-        <span>dstudy lockdown engine</span>
+        <span>Deepwork lockdown engine</span>
       </div>
 
       {/* Emergency Unlock Modal Barrier */}

@@ -1,4 +1,4 @@
-// Vercel Serverless Function: Gemini AI & Jev router for dstudy
+// Vercel Serverless Function: Gemini AI & Jev router for Deepwork
 export default async function handler(req, res) {
   // CORS configuration
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
     if (!apiKey) {
       return res.status(400).json({ 
-        error: 'No Gemini API key available. Please provide an API key in dstudy AI settings or configure GEMINI_API_KEY on the server.' 
+        error: 'No Gemini API key available. Please provide an API key in Deepwork AI settings or configure GEMINI_API_KEY on the server.'
       });
     }
 

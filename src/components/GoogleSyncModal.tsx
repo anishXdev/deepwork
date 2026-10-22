@@ -116,7 +116,7 @@ export const GoogleSyncModal: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dstudy-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `deepwork-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

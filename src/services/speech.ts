@@ -1,4 +1,4 @@
-// High-Fidelity Human Neural Speech Service for dstudy
+// High-Fidelity Human Neural Speech Service for Deepwork
 // Emulates ChatGPT-style warm, natural conversational vocal delivery
 
 export interface VoicePreset {
@@ -74,7 +74,8 @@ export const VOICE_PRESETS: VoicePreset[] = [
   }
 ];
 
-const PRESET_STORAGE_KEY = 'dstudy_voice_preset';
+const LEGACY_PRESET_STORAGE_KEY = 'dstudy_voice_preset';
+const PRESET_STORAGE_KEY = 'deepwork_voice_preset';
 
 class HumanSpeechService {
   private voices: SpeechSynthesisVoice[] = [];
@@ -110,7 +111,14 @@ class HumanSpeechService {
 
   public getSavedPresetId(): string {
     if (typeof window === 'undefined') return 'warm_female';
-    return localStorage.getItem(PRESET_STORAGE_KEY) || 'warm_female';
+    const saved = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (saved) return saved;
+    const legacy = localStorage.getItem(LEGACY_PRESET_STORAGE_KEY);
+    if (legacy) {
+      localStorage.setItem(PRESET_STORAGE_KEY, legacy);
+      return legacy;
+    }
+    return 'warm_female';
   }
 
   public setSavedPresetId(id: string) {

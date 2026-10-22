@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[StudyPulse] Uncaught error caught by ErrorBoundary:', error, errorInfo);
+    console.error('[Deepwork] Uncaught error caught by ErrorBoundary:', error, errorInfo);
   }
 
   private handleReload = () => {
@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
               Flow Interrupted
             </h2>
             <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-              dstudy caught an unexpected ripple. Don't worry, your progress is safely preserved.
+              Deepwork caught an unexpected ripple. Don't worry, your progress is safely preserved.
             </p>
 
             {this.state.error && (

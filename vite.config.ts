@@ -2,10 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
-import { WebSocketServer, WebSocket } from 'ws';
-import mongoose from 'mongoose';
-import { app as callExpressApp } from './server/app';
-import { setSignalingBroadcaster } from './server/routes/calls';
+import { SignalingServer } from './server/socket';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -20,33 +17,6 @@ export default defineConfig(({ mode }) => {
       {
         name: 'api-config-and-cache-buster-middleware',
         configureServer(server) {
-          // Stale asset self-healing interceptor
-          server.middlewares.use((req, res, next) => {
-            if (req.url && req.url.startsWith('/assets/') && req.url.endsWith('.js')) {
-              res.setHeader('Content-Type', 'application/javascript');
-              res.end(`
-                console.warn('[StudyPulse] Stale build asset requested (' + window.location.pathname + '). Purging Service Worker & refreshing...');
-                if ('serviceWorker' in navigator) {
-                  navigator.serviceWorker.getRegistrations().then(function(regs) {
-                    for (var r of regs) r.unregister();
-                    if ('caches' in window) {
-                      caches.keys().then(function(keys) {
-                        for (var k of keys) caches.delete(k);
-                        window.location.href = '/';
-                      });
-                    } else {
-                      window.location.href = '/';
-                    }
-                  });
-                } else {
-                  window.location.href = '/';
-                }
-              `);
-              return;
-            }
-            next();
-          });
-
           // Google OAuth Client ID config endpoint
           server.middlewares.use('/api/config', (req, res) => {
             const clientId = env.GOOGLE_CLIENT_ID || env.VITE_GOOGLE_CLIENT_ID || '';
@@ -58,286 +28,17 @@ export default defineConfig(({ mode }) => {
             }));
           });
 
-          // Real-time WebRTC Signaling & Chat WebSocket Server for Deepwork
-          const collabClients = new Map<WebSocket, { email: string; boardId: string; userId: string; name: string }>();
-
-          // Ensure Mongoose is connected for LiveKit Calling & CallRecords
-          const livekitMongoUri = env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-          if (mongoose.connection.readyState === 0) {
-            mongoose.connect(livekitMongoUri, { dbName: 'studypulse' }).then(() => {
-              console.log('[StudyPulse Dev] Mongoose connected for LiveKit Calling & CallRecords');
-            }).catch((err) => {
-              console.warn('[StudyPulse Dev] Mongoose connection error:', err.message);
-            });
-          }
-
-          // Wire signaling broadcaster so calls initiated via Express API broadcast over WebSocket server
-          setSignalingBroadcaster((event: string, payload: any) => {
-            for (const [clientWs, client] of collabClients.entries()) {
-              if (clientWs.readyState === WebSocket.OPEN) {
-                const clientEmail = (client.email || '').toLowerCase().trim();
-                let shouldSend = false;
-                if (payload.targetEmails && Array.isArray(payload.targetEmails)) {
-                  shouldSend = payload.targetEmails.map((e: string) => (e || '').toLowerCase().trim()).includes(clientEmail);
-                } else if (payload.targetEmail) {
-                  shouldSend = clientEmail === (payload.targetEmail || '').toLowerCase().trim();
-                } else if (payload.callerEmail && event === 'call_accepted') {
-                  shouldSend = clientEmail === (payload.callerEmail || '').toLowerCase().trim();
-                } else if (payload.boardId) {
-                  shouldSend = client.boardId === payload.boardId;
-                } else {
-                  shouldSend = true;
-                }
-                if (shouldSend) {
-                  clientWs.send(JSON.stringify({ type: event, ...payload }));
-                }
-              }
-            }
-          });
-
-          // Mount Express app for LiveKit Calling API endpoints (/api/calls/*)
-          server.middlewares.use(callExpressApp);
-
-          if (server.httpServer) {
-            const wss = new WebSocketServer({ noServer: true });
-
-            server.httpServer.on('upgrade', (req, socket, head) => {
-              if (req.url && req.url.startsWith('/api/collab-socket')) {
-                wss.handleUpgrade(req, socket, head, (ws) => {
-                  wss.emit('connection', ws, req);
-                });
-              }
-            });
-
-            wss.on('connection', (ws: WebSocket) => {
-              ws.on('message', (messageRaw: any) => {
-                try {
-                  const data = JSON.parse(messageRaw.toString());
-
-                  if (data.type === 'register') {
-                    collabClients.set(ws, {
-                      email: (data.email || '').toLowerCase().trim(),
-                      boardId: data.boardId,
-                      userId: data.userId,
-                      name: data.name
-                    });
-                    return;
-                  }
-
-                  if (data.type === 'update_board') {
-                    const client = collabClients.get(ws);
-                    if (client) {
-                      client.boardId = data.boardId;
-                    }
-                    return;
-                  }
-
-                  // 1. Chat Message Broadcast & DB Persistence
-                  if (data.type === 'chat_message') {
-                    const sender = collabClients.get(ws);
-                    const targetBoardId = data.boardId || sender?.boardId;
-                    for (const [clientWs, client] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        const isSameBoard = Boolean(client.boardId && targetBoardId && client.boardId === targetBoardId);
-                        const isPeerInWorkspace = collabClients.size <= 4;
-                        if (isSameBoard || isPeerInWorkspace) {
-                          clientWs.send(JSON.stringify(data));
-                        }
-                      }
-                    }
-
-                    // Save chat message to MongoDB Atlas asynchronously
-                    if (data.message) {
-                      getDevCollection('chat_messages').then(async (chatCol) => {
-                        if (chatCol) {
-                          const msgDoc = {
-                            _id: data.message.id || `msg_${Date.now()}`,
-                            boardId: targetBoardId || 'default',
-                            senderId: data.message.senderId || 'anon',
-                            senderName: data.message.senderName || 'Teammate',
-                            senderColor: data.message.senderColor || '#0C66E4',
-                            content: data.message.content || '',
-                            taskId: data.message.taskId || null,
-                            taskTitle: data.message.taskTitle || null,
-                            timestamp: data.message.timestamp || new Date().toISOString(),
-                            createdAt: new Date().toISOString()
-                          };
-                          await chatCol.updateOne({ _id: msgDoc._id }, { $set: msgDoc }, { upsert: true });
-                        }
-                      }).catch(() => {});
-                    }
-                    return;
-                  }
-
-                  // 2. Call Ringing: Send incoming_call ONLY to targeted users
-                  if (data.type === 'call_ring') {
-                    const targetEmails = (data.targetEmails || []).map((e: string) => (e || '').toLowerCase().trim()).filter(Boolean);
-                    const targetMemberIds = data.targetMemberIds || [];
-                    const callerId = data.callerId;
-                    const callerEmail = (data.callerEmail || '').toLowerCase().trim();
-
-                    for (const [clientWs, client] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        const clientEmail = (client.email || '').toLowerCase().trim();
-                        // Never ring caller themselves
-                        if (client.userId && callerId && client.userId === callerId) continue;
-                        if (clientEmail && callerEmail && clientEmail === callerEmail) continue;
-
-                        let shouldRing = false;
-                        if (targetEmails.length > 0 || targetMemberIds.length > 0) {
-                          const matchesEmail = targetEmails.length > 0 && targetEmails.some((te: string) =>
-                            clientEmail === te || (te && clientEmail && (clientEmail.includes(te) || te.includes(clientEmail)))
-                          );
-                          const matchesMemberId = targetMemberIds.length > 0 && client.userId && targetMemberIds.includes(client.userId);
-                          shouldRing = Boolean(matchesEmail || matchesMemberId);
-                        } else {
-                          shouldRing = Boolean(client.boardId && data.boardId && client.boardId === data.boardId);
-                        }
-
-                        if (shouldRing) {
-                          clientWs.send(JSON.stringify({
-                            type: 'incoming_call',
-                            callId: data.callId,
-                            callerId: data.callerId,
-                            callerName: data.callerName,
-                            callerEmail: data.callerEmail,
-                            callerColor: data.callerColor,
-                            callerAvatar: data.callerAvatar,
-                            boardId: data.boardId,
-                            boardName: data.boardName,
-                            callType: data.callType
-                          }));
-                        }
-                      }
-                    }
-                    return;
-                  }
-
-                  // 3. Call Accepted: At least one person accepted!
-                  if (data.type === 'call_accept') {
-                    for (const [clientWs] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(JSON.stringify({
-                          type: 'call_accepted',
-                          callId: data.callId,
-                          accepterId: data.accepterId,
-                          accepterEmail: data.accepterEmail,
-                          accepterName: data.accepterName,
-                          boardId: data.boardId
-                        }));
-                      }
-                    }
-                    return;
-                  }
-
-                  // 4. Call Rejected
-                  if (data.type === 'call_reject') {
-                    for (const [clientWs] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(JSON.stringify({
-                          type: 'call_rejected',
-                          callId: data.callId,
-                          rejecterId: data.rejecterId,
-                          rejecterEmail: data.rejecterEmail,
-                          rejecterName: data.rejecterName
-                        }));
-                      }
-                    }
-                    return;
-                  }
-
-                  // 5. Call Cancelled (caller hung up before acceptance)
-                  if (data.type === 'call_cancel') {
-                    for (const [clientWs] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(JSON.stringify({
-                          type: 'call_cancelled',
-                          callId: data.callId,
-                          callerId: data.callerId
-                        }));
-                      }
-                    }
-                    return;
-                  }
-
-                  // 6. Call Ended
-                  if (data.type === 'call_end') {
-                    for (const [clientWs] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(JSON.stringify({
-                          type: 'call_ended',
-                          callId: data.callId,
-                          senderId: data.senderId
-                        }));
-                      }
-                    }
-                    return;
-                  }
-
-                  // 7. WebRTC Signaling Relays (Offer, Answer, ICE) - Routed specifically to target peer
-                  if (data.type === 'webrtc_offer' || data.type === 'webrtc_answer' || data.type === 'webrtc_ice') {
-                    const targetEmail = (data.targetEmail || '').toLowerCase().trim();
-                    let delivered = false;
-
-                    if (targetEmail) {
-                      for (const [clientWs, client] of collabClients.entries()) {
-                        if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                          const clientEmail = (client.email || '').toLowerCase().trim();
-                          if (clientEmail === targetEmail || (clientEmail && (clientEmail.includes(targetEmail) || targetEmail.includes(clientEmail)))) {
-                            clientWs.send(JSON.stringify(data));
-                            delivered = true;
-                          }
-                        }
-                      }
-                    }
-
-                    if (!delivered) {
-                      for (const [clientWs] of collabClients.entries()) {
-                        if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                          clientWs.send(JSON.stringify(data));
-                        }
-                      }
-                    }
-                    return;
-                  }
-
-                  // 8. Task Delegation Relay (Reflects directly on recipient's board in real time)
-                  if (data.type === 'task_delegated') {
-                    const recipientEmail = (data.recipientEmail || '').toLowerCase().trim();
-                    for (const [clientWs, client] of collabClients.entries()) {
-                      if (clientWs !== ws && clientWs.readyState === WebSocket.OPEN) {
-                        const matchesEmail = Boolean(recipientEmail && (client.email === recipientEmail || client.email.includes(recipientEmail) || recipientEmail.includes(client.email)));
-                        const isSameBoard = Boolean(client.boardId && data.boardId && client.boardId === data.boardId);
-                        const isPeerFallback = collabClients.size <= 4;
-                        if (matchesEmail || isSameBoard || isPeerFallback) {
-                          clientWs.send(JSON.stringify(data));
-                        }
-                      }
-                    }
-                    return;
-                  }
-                } catch (err) {
-                  console.warn('[Vite Collab Socket] Error processing message:', err);
-                }
-              });
-
-              ws.on('close', () => {
-                collabClients.delete(ws);
-              });
-
-              ws.on('error', () => {
-                collabClients.delete(ws);
-              });
-            });
-          }
+          if (server.httpServer) new SignalingServer().init(server.httpServer);
 
           // Cross-device Cloud Sync Dev Middleware powered by MongoDB Atlas
           const devSyncStore = new Map();
-          const mongoUri = env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+          const devChatStore = new Map<string, any[]>();
+          const mongoUri = env.MONGODB_URI;
           let devMongoClient: any = null;
           let lastMongoAttempt = 0;
 
           const getDevCollection = async (collName = 'user_data') => {
+            if (!mongoUri) return null;
             if (devMongoClient) {
               try {
                 return devMongoClient.db('studypulse').collection(collName);
@@ -353,11 +54,11 @@ export default defineConfig(({ mode }) => {
               const { MongoClient } = await import('mongodb');
               devMongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 7000, connectTimeoutMS: 7000 });
               await devMongoClient.connect();
-              console.log(`[StudyPulse Dev] Connected to MongoDB Atlas (studypulse.${collName})`);
+              console.log(`[Deepwork Dev] Connected to MongoDB Atlas (studypulse.${collName})`);
               return devMongoClient.db('studypulse').collection(collName);
             } catch (e: any) {
               devMongoClient = null;
-              console.warn('[StudyPulse Dev] MongoDB connect attempt failed:', e?.message);
+              console.warn('[Deepwork Dev] MongoDB connect attempt failed:', e?.message);
               return null;
             }
           };
@@ -408,10 +109,11 @@ export default defineConfig(({ mode }) => {
                   return;
                 }
               } catch (err: any) {
-                console.warn('[StudyPulse Dev] Chat history query error:', err?.message);
+                console.warn('[Deepwork Dev] Chat history query error:', err?.message);
               }
+              const fallbackMessages = devChatStore.get(chatBoardId) || [];
               res.statusCode = 200;
-              res.end(JSON.stringify({ messages: [] }));
+              res.end(JSON.stringify({ messages: fallbackMessages }));
               return;
             }
 
@@ -467,7 +169,7 @@ export default defineConfig(({ mode }) => {
                   return;
                 }
               } catch (err: any) {
-                console.warn('[StudyPulse Dev] Users list error:', err?.message);
+                console.warn('[Deepwork Dev] Users list error:', err?.message);
               }
               res.statusCode = 200;
               res.end(JSON.stringify({ users: [] }));
@@ -505,7 +207,7 @@ export default defineConfig(({ mode }) => {
                   }
                 }
               } catch (err: any) {
-                console.warn('[StudyPulse Dev] Email lookup error:', err?.message);
+                console.warn('[Deepwork Dev] Email lookup error:', err?.message);
               }
               res.statusCode = 200;
               res.end(JSON.stringify({ found: false }));
@@ -552,7 +254,7 @@ export default defineConfig(({ mode }) => {
                   return;
                 }
               } catch (err: any) {
-                console.warn('[StudyPulse Dev] Notifications query fallback:', err?.message);
+                console.warn('[Deepwork Dev] Notifications query fallback:', err?.message);
               }
               res.statusCode = 200;
               res.end(JSON.stringify({ notifications: [] }));
@@ -601,7 +303,7 @@ export default defineConfig(({ mode }) => {
                   }
                 }
               } catch (err: any) {
-                console.warn('[StudyPulse Dev] Board code lookup error:', err?.message);
+                console.warn('[Deepwork Dev] Board code lookup error:', err?.message);
               }
               res.statusCode = 200;
               res.end(JSON.stringify({ found: false, message: `No board found matching invite code "${rawCode}"` }));
@@ -626,7 +328,7 @@ export default defineConfig(({ mode }) => {
                   }
                 }
               } catch (err: any) {
-                console.warn('[StudyPulse Dev] MongoDB query fallback:', err?.message);
+                console.warn('[Deepwork Dev] MongoDB query fallback:', err?.message);
               }
 
               const payload = devSyncStore.get(key);
@@ -705,7 +407,7 @@ export default defineConfig(({ mode }) => {
                               { upsert: true }
                             );
                           } catch (errTask: any) {
-                            console.warn('[StudyPulse Dev] Failed to append delegated task to recipient:', errTask?.message);
+                            console.warn('[Deepwork Dev] Failed to append delegated task to recipient:', errTask?.message);
                           }
                         }
                       }
@@ -722,9 +424,25 @@ export default defineConfig(({ mode }) => {
                   // A2. Send Chat Message (MongoDB Atlas)
                   if (action === 'send_chat' && parsed.message) {
                     try {
+                      const m = parsed.message;
+                      const doc = {
+                        id: m.id || `msg_${Date.now()}`,
+                        boardId: m.boardId || 'default',
+                        senderId: m.senderId || 'anon',
+                        senderName: m.senderName || 'Teammate',
+                        senderColor: m.senderColor || '#0C66E4',
+                        content: String(m.content || '').trim(),
+                        taskId: m.taskId || null,
+                        taskTitle: m.taskTitle || null,
+                        timestamp: m.timestamp || new Date().toISOString()
+                      };
+                      if (!doc.content) {
+                        res.statusCode = 400;
+                        res.end(JSON.stringify({ success: false, error: 'Message content is required.' }));
+                        return;
+                      }
                       const chatCol = await getDevCollection('chat_messages');
                       if (chatCol) {
-                        const m = parsed.message;
                         const doc = {
                           _id: m.id || `msg_${Date.now()}`,
                           boardId: m.boardId || 'default',
@@ -739,6 +457,9 @@ export default defineConfig(({ mode }) => {
                         };
                         await chatCol.updateOne({ _id: doc._id }, { $set: doc }, { upsert: true });
                       }
+                      const messages = devChatStore.get(doc.boardId) || [];
+                      if (!messages.some((message: any) => message.id === doc.id)) messages.push(doc);
+                      devChatStore.set(doc.boardId, messages.slice(-100));
                       res.statusCode = 200;
                       res.end(JSON.stringify({ success: true }));
                       return;
@@ -901,7 +622,7 @@ export default defineConfig(({ mode }) => {
                       return;
                     }
                   } catch (err: any) {
-                    console.warn('[StudyPulse Dev] MongoDB save fallback:', err?.message);
+                    console.warn('[Deepwork Dev] MongoDB save fallback:', err?.message);
                   }
 
                   devSyncStore.set(targetKey, { data: parsed.data, updatedAt });

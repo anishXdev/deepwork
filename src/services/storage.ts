@@ -473,6 +473,7 @@ export const StorageService = {
 
   signOut(): void {
     try {
+      localStorage.removeItem('deepwork_has_authenticated');
       localStorage.removeItem('dstudy_has_authenticated');
       localStorage.removeItem(STORAGE_KEYS.SYNC_ROOM);
       localStorage.removeItem('studypulse_sync_key');
@@ -514,7 +515,7 @@ export const StorageService = {
       const updatedBoards = parsed.map((b: any) => {
         if (!b || typeof b !== 'object') return b;
         const members = Array.isArray(b.members) ? [...b.members] : [];
-        const ownerIdx = members.findIndex(m => m.role === 'owner' || m.email === 'you@dstudy.app' || m.id === 'member_me');
+        const ownerIdx = members.findIndex(m => m.role === 'owner' || m.email === 'you@dstudy.app' || m.email === 'you@deepwork.app' || m.id === 'member_me');
         if (ownerIdx >= 0) {
           members[ownerIdx] = {
             ...members[ownerIdx],
@@ -711,8 +712,8 @@ export const StorageService = {
             .map(b => {
               const members = Array.isArray(b.members)
                 ? b.members.filter(Boolean).map(m => {
-                    const isOwnerOrDStudy = m?.role === 'owner' || m?.email === 'you@dstudy.app' || m?.id === 'member_me';
-                    if (isOwnerOrDStudy && profile.email) {
+                    const isOwner = m?.role === 'owner' || m?.email === 'you@dstudy.app' || m?.email === 'you@deepwork.app' || m?.id === 'member_me';
+                    if (isOwner && profile.email) {
                       return {
                         id: profile.id || m?.id || 'owner_1',
                         name: `${profile.name || 'You'} (Owner)`,
@@ -724,7 +725,7 @@ export const StorageService = {
                     return {
                       id: m?.id || 'member_' + Math.random().toString(36).substring(2, 6),
                       name: m?.name || 'Member',
-                      email: m?.email === 'you@dstudy.app' ? (profile.email || '') : (m?.email || ''),
+                      email: m?.email === 'you@dstudy.app' || m?.email === 'you@deepwork.app' ? (profile.email || '') : (m?.email || ''),
                       color: m?.color || '#0C66E4',
                       role: m?.role || 'editor'
                     };

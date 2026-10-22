@@ -50,7 +50,7 @@ export const OutgoingCallScreen: React.FC<OutgoingCallScreenProps> = ({
 
         <div className="pt-1 flex items-center justify-center gap-1 text-[11px] text-slate-500">
           <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-          <span>LiveKit SFU Encrypted Voice & Video</span>
+          <span>Peer to peer WebRTC voice & video</span>
         </div>
 
         <p className="text-[11px] text-slate-400 pt-2 leading-relaxed">

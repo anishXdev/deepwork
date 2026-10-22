@@ -40,6 +40,7 @@ export const TeamCollaborationRoom: React.FC = () => {
     setIsTeamRoomOpen,
     activeCall,
     outgoingCall,
+    incomingCall,
     startCall,
     cancelOutgoingCall,
     endCall,
@@ -95,13 +96,13 @@ export const TeamCollaborationRoom: React.FC = () => {
   });
   const effectiveCallable = callableMembers;
 
-  // Selected participants to call
+  // Direct peer connections call one collaborator at a time.
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(() =>
-    effectiveCallable.map(m => m.id)
+    effectiveCallable.slice(0, 1).map(m => m.id)
   );
 
   useEffect(() => {
-    setSelectedMemberIds(effectiveCallable.map(m => m.id));
+    setSelectedMemberIds(effectiveCallable.slice(0, 1).map(m => m.id));
   }, [effectiveCallable.length]);
 
   // If a call or ring is started, auto-switch to call tab and ensure floating mode
@@ -175,18 +176,7 @@ export const TeamCollaborationRoom: React.FC = () => {
 
   const handleToggleMember = (id: string) => {
     Haptics.tap();
-    setSelectedMemberIds(prev =>
-      prev.includes(id) ? prev.filter(mId => mId !== id) : [...prev, id]
-    );
-  };
-
-  const handleToggleAllMembers = () => {
-    Haptics.tap();
-    if (selectedMemberIds.length === effectiveCallable.length) {
-      setSelectedMemberIds([]);
-    } else {
-      setSelectedMemberIds(effectiveCallable.map(m => m.id));
-    }
+    setSelectedMemberIds(prev => prev.includes(id) ? [] : [id]);
   };
 
   // Built-in Screen Sharing Handler
@@ -554,8 +544,15 @@ export const TeamCollaborationRoom: React.FC = () => {
               <div className="flex-1 flex flex-col p-4 overflow-y-auto bg-slate-950">
                 {activeCall?.active ? (
                   <CallWindow
-                    roomName={activeCall.callId || 'LiveKit Call'}
+                    roomName={activeCall.participants[0]?.name || outgoingCall?.targetNames?.[0] || incomingCall?.callerName || 'Teammate'}
                     durationSeconds={activeCall.durationSeconds}
+                    remoteMediaStream={remoteMediaStream}
+                    isMuted={activeCall.isMuted}
+                    isVideoOn={activeCall.isVideoOn}
+                    isScreenSharing={activeCall.isScreenSharing}
+                    onToggleMute={toggleCallMute}
+                    onToggleVideo={toggleCallVideo}
+                    onToggleScreenShare={toggleCallScreenShare}
                     onEndCall={handleEndCall}
                     isFloating={windowMode === 'floating'}
                     onToggleFloating={() => setWindowMode(windowMode === 'floating' ? 'full' : 'floating')}
@@ -583,23 +580,14 @@ export const TeamCollaborationRoom: React.FC = () => {
                     <div className="w-full max-w-sm p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-2.5 shadow-lg">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                          Select Teammates to Call
+                          Select a Teammate to Call
                         </span>
-                        {effectiveCallable.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleToggleAllMembers}
-                            className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold cursor-pointer"
-                          >
-                            {selectedMemberIds.length === effectiveCallable.length ? 'Clear Selection' : 'Select All'}
-                          </button>
-                        )}
                       </div>
 
                       {effectiveCallable.length === 0 ? (
                         <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400">
                           <p className="font-semibold text-slate-300">No other teammates on this board yet</p>
-                          <p className="text-[11px] text-slate-500 mt-1">Invite teammates by their email to start group voice or video calls!</p>
+                          <p className="text-[11px] text-slate-500 mt-1">Invite a teammate by email to start a direct voice or video call.</p>
                         </div>
                       ) : (
                         <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
@@ -616,7 +604,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                               >
                                 <div className="flex items-center gap-2 min-w-0">
                                   <input
-                                    type="checkbox"
+                                    type="radio"
                                     checked={isSelected}
                                     onChange={() => handleToggleMember(m.id)}
                                     className="rounded accent-blue-600"
@@ -640,7 +628,7 @@ export const TeamCollaborationRoom: React.FC = () => {
 
                       {effectiveCallable.length > 0 && (
                         <p className="text-[11px] text-slate-500">
-                          Calling: <strong className="text-slate-300">{selectedMemberIds.length}</strong> of {effectiveCallable.length} teammate(s).
+                          Peer to peer calling connects one teammate at a time.
                         </p>
                       )}
                     </div>
@@ -654,7 +642,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                         className="btn-primary text-xs px-5 py-2.5 flex items-center gap-2 font-bold shadow-lg disabled:opacity-40 cursor-pointer"
                       >
                         <Video className="w-4 h-4" />
-                        <span>Start Video Call ({selectedMemberIds.length})</span>
+                        <span>Start Video Call</span>
                       </button>
 
                       <button
@@ -664,7 +652,7 @@ export const TeamCollaborationRoom: React.FC = () => {
                         className="btn-secondary text-xs px-4 py-2.5 flex items-center gap-2 font-bold bg-slate-800 text-white border-slate-700 hover:bg-slate-700 disabled:opacity-40 cursor-pointer"
                       >
                         <PhoneCall className="w-4 h-4 text-emerald-400" />
-                        <span>Voice Only ({selectedMemberIds.length})</span>
+                        <span>Voice Only</span>
                       </button>
                     </div>
 

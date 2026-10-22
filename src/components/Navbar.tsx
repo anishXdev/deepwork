@@ -24,7 +24,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
-import { DStudyLogo } from './DStudyLogo';
+import { DeepworkLogo } from './DeepworkLogo';
 import { Notifications } from '../services/notifications';
 
 export const Navbar: React.FC = () => {

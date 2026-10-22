@@ -34,8 +34,6 @@ import { Notifications } from '../services/notifications';
 import { Haptics } from '../utils/haptics';
 import { RealtimeCollab } from '../services/realtimeCall';
 import { RingtoneService } from '../services/ringtone';
-import { livekitClient } from '../services/livekitClient';
-import { CallApiService } from '../services/callApiService';
 
 interface AppContextType {
   subjects: Subject[];
@@ -348,6 +346,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Team Room & Audio/Video Call State with Realtime WebRTC & Sockets
   const [isTeamRoomOpen, setIsTeamRoomOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => StorageService.getChatMessages());
+  const knownChatMessageIds = useRef(new Set(StorageService.getChatMessages().map(message => message.id)));
   const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<OutgoingCallState | null>(null);
@@ -384,16 +383,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Keep active board synced on the socket & load remote chat messages
   useEffect(() => {
-    if (activeBoardId) {
-      RealtimeCollab.updateBoard(activeBoardId);
-      CloudSyncService.fetchRemoteChat(activeBoardId).then(remoteMsgs => {
-        if (remoteMsgs && remoteMsgs.length > 0) {
-          remoteMsgs.forEach(m => StorageService.addChatMessage(m));
-          setChatMessages(StorageService.getChatMessages());
-        }
+    if (!activeBoardId) return;
+    RealtimeCollab.updateBoard(activeBoardId);
+    let stopped = false;
+    const pullChat = async () => {
+      const remoteMsgs = await CloudSyncService.fetchRemoteChat(activeBoardId);
+      if (stopped || !remoteMsgs.length) return;
+      const newMessages = remoteMsgs.filter(message => !knownChatMessageIds.current.has(message.id));
+      remoteMsgs.forEach(message => {
+        knownChatMessageIds.current.add(message.id);
+        StorageService.addChatMessage(message);
       });
-    }
-  }, [activeBoardId]);
+      setChatMessages(StorageService.getChatMessages());
+      newMessages.filter(message => message.senderId !== profile.id).forEach(message => {
+        sound.playNotificationPop();
+        Notifications.sendNotification(`💬 ${message.senderName}`, { body: message.content.slice(0, 120), tag: `deepwork-chat-${message.id}` });
+      });
+    };
+    pullChat();
+    const interval = setInterval(pullChat, 3000);
+    return () => { stopped = true; clearInterval(interval); };
+  }, [activeBoardId, profile.id]);
 
   // Register Realtime Collab Callbacks
   useEffect(() => {
@@ -455,6 +465,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setRemoteMediaStream(stream);
       },
       onChatMessage: (msg) => {
+        if (knownChatMessageIds.current.has(msg.id)) return;
+        knownChatMessageIds.current.add(msg.id);
         setChatMessages(prev => {
           if (prev.some(m => m.id === msg.id)) return prev;
           return [...prev, msg];
@@ -462,7 +474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         StorageService.addChatMessage(msg);
         sound.playNotificationPop();
         // Toast notification so collaborator is alerted even when room is closed
-        Notifications.toast('info', `💬 ${msg.senderName}: "${msg.content.slice(0, 45)}${msg.content.length > 45 ? '...' : ''}"`);
+        Notifications.sendNotification(`💬 ${msg.senderName}`, { body: msg.content.slice(0, 120), tag: `deepwork-chat-${msg.id}` });
       },
       onTaskDelegated: (data: any) => {
         const taskObj = data?.task || data;
@@ -536,9 +548,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     });
 
-    const targetMembers = selectedMemberIds && selectedMemberIds.length > 0
+    const targetMembers = (selectedMemberIds && selectedMemberIds.length > 0
       ? otherMembers.filter(m => selectedMemberIds.includes(m.id))
-      : otherMembers;
+      : otherMembers).slice(0, 1);
 
     if (targetMembers.length === 0) {
       Notifications.toast('warning', '⚠️ Please invite another collaborator to call. You cannot call yourself.');
@@ -546,9 +558,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const targetMember = targetMembers[0];
-    const targetEmails = targetMembers.map(m => m.email).filter(Boolean);
-    const recipientEmail = targetEmails[0] || targetMember?.email || `${targetMember?.id || 'teammate'}@deepwork.local`;
-    const memberIds = targetMembers.map(m => m.id);
+    const targetEmails = [targetMember.email].filter(Boolean);
+    const recipientEmail = targetEmails[0];
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      Notifications.toast('warning', `${targetMember.name} needs a valid email address before calls can be delivered.`);
+      return;
+    }
+    const memberIds = [targetMember.id];
 
     if (myEmail && recipientEmail.toLowerCase().trim() === myEmail) {
       Notifications.toast('warning', '⚠️ You cannot call yourself. Please invite another teammate to call.');
@@ -556,41 +572,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      // 1. Call secure backend Express API /api/calls/initiate
-      const apiRes = await CallApiService.initiateCall({
-        recipientId: targetMember?.id,
-        recipientEmail,
-        recipientName: targetMembers.map(m => m.name).join(', '),
-        recipientAvatar: targetMember?.avatar,
-        boardId: activeBoardId,
-        boardName: currentBoard?.name || 'Deepwork Board',
-        callType: type
+      const localStream = await RealtimeCollab.setupLocalMedia(type);
+      if (!localStream) throw new Error('Allow microphone access to start a call.');
+      const callId = await RealtimeCollab.startRingingCall({
+        callType: type, boardId: activeBoardId, boardName: currentBoard?.name || 'Deepwork Board',
+        targetEmails: [recipientEmail], targetMemberIds: memberIds,
+        callerColor: '#0C66E4', callerAvatar: profile.avatarUrl || profile.avatar
       });
-
-      if (!apiRes.success) {
-        if (apiRes.status === 'busy') {
-          Notifications.toast('warning', '⚠️ Collaborator is currently busy in another call.');
-        } else {
-          Notifications.toast('warning', `⚠️ ${apiRes.error || 'Could not initiate call.'}`);
-        }
-        return;
-      }
-
-      const callId = apiRes.callId || `call_${Date.now()}`;
-
-      // 2. Connect to LiveKit Room if token and URL are returned
-      if (apiRes.token && apiRes.livekitUrl) {
-        livekitClient.connect(apiRes.livekitUrl, apiRes.token, type).catch(err => {
-          console.warn('[AppContext] LiveKit connect notice:', err);
-        });
-      }
 
       setOutgoingCall({
         callId,
         type,
         status: 'ringing',
         targetMemberIds: memberIds,
-        targetNames: targetMembers.map(m => m.name),
+        targetNames: [targetMember.name],
         targetEmails: [recipientEmail],
         boardId: activeBoardId,
         boardName: currentBoard?.name || 'Deepwork Board',
@@ -602,12 +597,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       StorageService.logTelemetryEvent('call_started', {
         callType: type,
-        participantCount: targetMembers.length,
+        participantCount: 1,
         boardTitle: currentBoard?.name
       });
 
-      Notifications.toast('info', `📞 Calling ${targetMembers.map(m => m.name).join(', ')}... Ringing...`);
+      Notifications.toast('info', `📞 Calling ${targetMember.name}... Ringing...`);
     } catch (err: any) {
+      RealtimeCollab.endActiveCall();
       console.warn('[AppContext] Error starting call:', err);
       Notifications.toast('warning', `⚠️ Call error: ${err.message || 'Unable to connect'}`);
     }
@@ -618,10 +614,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     RingtoneService.stopOutgoingRing();
     RingtoneService.playCallEndedTone();
     if (outgoingCall) {
-      CallApiService.cancelCall(outgoingCall.callId).catch(() => {});
       RealtimeCollab.cancelRingingCall(outgoingCall.callId);
     }
-    livekitClient.disconnect().catch(() => {});
     setOutgoingCall(null);
     Notifications.toast('info', 'Call cancelled.');
   };
@@ -632,16 +626,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     RingtoneService.stopIncomingRing();
     RingtoneService.playCallConnectedTone();
 
-    try {
-      const apiRes = await CallApiService.acceptCall(incomingCall.id);
-      if (apiRes.token && apiRes.livekitUrl) {
-        await livekitClient.connect(apiRes.livekitUrl, apiRes.token, incomingCall.type);
-      } else {
-        await RealtimeCollab.setupLocalMedia(incomingCall.type);
-      }
-    } catch (err) {
-      console.warn('[AppContext] LiveKit accept notice:', err);
-      await RealtimeCollab.setupLocalMedia(incomingCall.type);
+    const localStream = await RealtimeCollab.setupLocalMedia(incomingCall.type);
+    if (!localStream) {
+      Notifications.toast('warning', 'Allow microphone access to join the call.');
+      return;
     }
 
     if (incomingCall.boardId && incomingCall.boardId !== activeBoardId) {
@@ -650,7 +638,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       RealtimeCollab.updateBoard(incomingCall.boardId);
     }
 
-    RealtimeCollab.acceptIncomingCall(incomingCall.id, incomingCall.boardId, incomingCall.callerEmail || '');
+    try {
+      await RealtimeCollab.acceptIncomingCall(incomingCall.id, incomingCall.boardId, incomingCall.callerEmail || '');
+    } catch (err: any) {
+      RealtimeCollab.endActiveCall(incomingCall.id);
+      Notifications.toast('warning', err.message || 'Could not reach the signaling server.');
+      return;
+    }
 
     setActiveCall({
       active: true,
@@ -673,7 +667,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!incomingCall) return;
     Haptics.warning();
     RingtoneService.stopIncomingRing();
-    CallApiService.rejectCall(incomingCall.id).catch(() => {});
     RealtimeCollab.rejectIncomingCall(incomingCall.id, incomingCall.callerEmail || '');
     Notifications.toast('info', `Call from ${incomingCall.callerName} declined.`);
     setIncomingCall(null);
@@ -704,10 +697,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     Haptics.tap();
     RingtoneService.stopAll();
     RingtoneService.playCallEndedTone();
-    if (activeCall?.callId) {
-      CallApiService.endCall(activeCall.callId).catch(() => {});
-    }
-    livekitClient.disconnect().catch(() => {});
     RealtimeCollab.endActiveCall(activeCall?.callId);
     setActiveCall(null);
     setOutgoingCall(null);
@@ -720,7 +709,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveCall(prev => {
       if (!prev) return null;
       const nextMuted = !prev.isMuted;
-      livekitClient.setMicrophoneEnabled(!nextMuted).catch(() => {});
       RealtimeCollab.setMuted(nextMuted);
       return { ...prev, isMuted: nextMuted };
     });
@@ -731,7 +719,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveCall(prev => {
       if (!prev) return null;
       const nextVideo = !prev.isVideoOn;
-      livekitClient.setCameraEnabled(nextVideo).catch(() => {});
       RealtimeCollab.setVideoEnabled(nextVideo);
       return { ...prev, isVideoOn: nextVideo };
     });
@@ -740,26 +727,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleCallScreenShare = async () => {
     Haptics.tap();
     if (activeCall?.isScreenSharing) {
-      await livekitClient.setScreenShareEnabled(false);
       RealtimeCollab.stopScreenShare();
       setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
       Notifications.toast('info', 'Screen sharing stopped.');
     } else {
-      const success = await livekitClient.setScreenShareEnabled(true);
-      if (success) {
+      const stream = await RealtimeCollab.startScreenShare();
+      if (stream) {
         setActiveCall(prev => prev ? { ...prev, isScreenSharing: true } : null);
         Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
-      } else {
-        const stream = await RealtimeCollab.startScreenShare();
-        if (stream) {
-          setActiveCall(prev => prev ? { ...prev, isScreenSharing: true } : null);
-          Notifications.toast('success', '🖥️ Now sharing screen with call participants!');
-          stream.getVideoTracks()[0].onended = () => {
-            RealtimeCollab.stopScreenShare();
-            setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
-            Notifications.toast('info', 'Screen sharing stopped.');
-          };
-        }
+        stream.getVideoTracks()[0].onended = () => {
+          RealtimeCollab.stopScreenShare();
+          setActiveCall(prev => prev ? { ...prev, isScreenSharing: false } : null);
+          Notifications.toast('info', 'Screen sharing stopped.');
+        };
       }
     }
   };
@@ -776,6 +756,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       taskTitle
     });
     setChatMessages(StorageService.getChatMessages());
+    knownChatMessageIds.current.add(newMsg.id);
     RealtimeCollab.broadcastChatMessage(newMsg);
     CloudSyncService.sendRemoteChat(newMsg);
     Haptics.tap();
@@ -867,7 +848,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         let changed = false;
         const updated = prev.map(b => {
           const members = Array.isArray(b.members) ? [...b.members] : [];
-          const ownerIdx = members.findIndex(m => m.role === 'owner' || m.email === 'you@dstudy.app' || m.id === 'member_me');
+          const ownerIdx = members.findIndex(m => m.role === 'owner' || m.email === 'you@dstudy.app' || m.email === 'you@deepwork.app' || m.id === 'member_me');
           if (ownerIdx >= 0) {
             if (members[ownerIdx].email !== profile.email || members[ownerIdx].name !== `${profile.name || 'You'} (Owner)`) {
               changed = true;
@@ -1348,14 +1329,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Real-Time Delta Loop & Visibility/Focus Sync
   useEffect(() => {
     if (!isTimerRunning) {
-      document.title = 'dstudy — Minimalist Focus & Deep Flow';
+      document.title = 'Deepwork — Minimalist Focus & Deep Flow';
       return;
     }
 
     const updateTitle = (secs: number) => {
       const mins = Math.floor(secs / 60);
       const remainingSecs = secs % 60;
-      document.title = `(${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}) 🌊 dstudy`;
+      document.title = `(${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}) 🌊 Deepwork`;
     };
 
     updateTitle(timeLeft);
@@ -1424,7 +1405,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => {
     // Auto popup on website load if user has not yet authenticated
-    const hasAuth = localStorage.getItem('dstudy_has_authenticated');
+    const hasAuth = localStorage.getItem('deepwork_has_authenticated') || localStorage.getItem('dstudy_has_authenticated');
     return !hasAuth;
   });
   const [isTourOpen, setIsTourOpen] = useState(false);
@@ -1447,7 +1428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const completeTour = () => {
-    localStorage.setItem('dstudy_interactive_tour_completed', 'true');
+    localStorage.setItem('deepwork_interactive_tour_completed', 'true');
     setIsTourOpen(false);
     setTourStep(1);
     setActiveTab('study');

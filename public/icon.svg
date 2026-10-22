@@ -4,18 +4,18 @@
       <stop offset="0%" stopColor="#030a12" />
       <stop offset="100%" stopColor="#081e2b" />
     </linearGradient>
-    <linearGradient id="dstudy-grad" x1="80" y1="60" x2="440" y2="460" gradientUnits="userSpaceOnUse">
+    <linearGradient id="deepwork-grad" x1="80" y1="60" x2="440" y2="460" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stopColor="#2dd4bf" />
       <stop offset="35%" stopColor="#06b6d4" />
       <stop offset="70%" stopColor="#0d9488" />
       <stop offset="100%" stopColor="#10b981" />
     </linearGradient>
-    <radialGradient id="dstudy-core" cx="220" cy="300" r="150" gradientUnits="userSpaceOnUse">
+    <radialGradient id="deepwork-core" cx="220" cy="300" r="150" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.75" />
       <stop offset="60%" stopColor="#0d9488" stopOpacity="0.3" />
       <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
     </radialGradient>
-    <linearGradient id="dstudy-highlight" x1="140" y1="120" x2="340" y2="280" gradientUnits="userSpaceOnUse">
+    <linearGradient id="deepwork-highlight" x1="140" y1="120" x2="340" y2="280" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
       <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
     </linearGradient>
@@ -25,21 +25,21 @@
   <rect width="512" height="512" rx="128" fill="url(#bg-grad)" stroke="#14b8a6" stroke-width="4" stroke-opacity="0.3" />
 
   <!-- Core Glow -->
-  <circle cx="260" cy="280" r="160" fill="url(#dstudy-core)" />
+  <circle cx="260" cy="280" r="160" fill="url(#deepwork-core)" />
 
   <!-- Lowercase 'd' Geometric Sculpture -->
   <!-- Bowl Fill -->
-  <path d="M 330 190 A 120 120 0 1 0 330 410 L 330 190 Z" fill="url(#dstudy-grad)" fill-opacity="0.18" />
+  <path d="M 330 190 A 120 120 0 1 0 330 410 L 330 190 Z" fill="url(#deepwork-grad)" fill-opacity="0.18" />
 
   <!-- Outer 'd' Continuous Stroke -->
   <path d="M 336 80 C 336 65 318 60 300 75 L 318 200 A 120 120 0 1 0 336 380 L 336 80 Z" 
-        stroke="url(#dstudy-grad)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" />
+        stroke="url(#deepwork-grad)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" />
 
   <!-- Inner Focal Pupil -->
-  <circle cx="224" cy="290" r="52" fill="url(#dstudy-grad)" />
+  <circle cx="224" cy="290" r="52" fill="url(#deepwork-grad)" />
 
   <!-- Specular Highlight Arc -->
-  <path d="M 140 250 A 100 100 0 0 1 260 185" stroke="url(#dstudy-highlight)" stroke-width="14" stroke-linecap="round" />
+  <path d="M 140 250 A 100 100 0 0 1 260 185" stroke="url(#deepwork-highlight)" stroke-width="14" stroke-linecap="round" />
 
   <!-- Top Beacon Spark -->
   <circle cx="330" cy="80" r="18" fill="#ffffff" />

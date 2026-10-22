@@ -1,4 +1,4 @@
-# StudyPulse ⏱️📚
+# Deepwork ⏱️📚
 
 A minimalist, cross-platform study tracking and scheduling application that syncs seamlessly across **Web** and **Android**. 
 
@@ -57,6 +57,12 @@ npm run dev
 
 Visit `http://localhost:5173/` in your browser.
 
+### Deploying calls
+
+Calls use browser-to-browser WebRTC for audio and video, with the Deepwork Node server relaying call setup messages. Run `npm run server` on a public Node host that supports WebSocket upgrades, and serve it over HTTPS/WSS. Set `VITE_COLLAB_WS_URL` to `wss://<your-server>/api/collab-socket` when building the web app. For peers behind restrictive NATs, configure a TURN relay using the `VITE_TURN_*` settings; TURN credentials are exposed to the browser and should be short-lived or otherwise restricted.
+
+For local development, `npm run dev` includes the signaling server.
+
 ---
 
 ## 📱 Running on Android
@@ -65,7 +71,7 @@ Visit `http://localhost:5173/` in your browser.
 1. Open `http://<your-computer-ip>:5173` in Google Chrome on your Android device (or deploy to Vercel/Netlify).
 2. Tap the **Menu (⋮)** in Chrome.
 3. Tap **"Install app"** or **"Add to Home screen"**.
-4. StudyPulse launches fullscreen without an address bar and works completely offline!
+4. Deepwork launches fullscreen without an address bar and works completely offline!
 
 ### Method 2: Native Android App (Capacitor)
 The native Android project is already configured in `/android`:

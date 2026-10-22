@@ -1,5 +1,5 @@
 /**
- * Notifications and In-App Toast Service for dstudy
+ * Notifications and In-App Toast Service for Deepwork
  */
 
 export type ToastType = 'info' | 'success' | 'warning' | 'error';
@@ -77,9 +77,9 @@ class NotificationServiceManager {
   notifyFocusComplete(topicName?: string, durationMinutes?: number) {
     const minsText = durationMinutes ? `${durationMinutes}m ` : '';
     const nameText = topicName ? `on "${topicName}"` : '';
-    this.sendNotification('🍅 Focus Session Complete! — dstudy', {
+    this.sendNotification('🍅 Focus Session Complete! — Deepwork', {
       body: `Awesome work! Completed ${minsText}focus ${nameText}. Time for a short break.`,
-      tag: 'dstudy-focus-complete'
+      tag: 'deepwork-focus-complete'
     });
   }
 
@@ -87,9 +87,9 @@ class NotificationServiceManager {
    * Notify on break conclusion
    */
   notifyBreakComplete() {
-    this.sendNotification('⚡ Break Finished! — dstudy', {
+    this.sendNotification('⚡ Break Finished! — Deepwork', {
       body: 'Your mind is rested and primed. Ready for your next deep focus session?',
-      tag: 'dstudy-break-complete'
+      tag: 'deepwork-break-complete'
     });
   }
 
@@ -97,9 +97,9 @@ class NotificationServiceManager {
    * Notify on streak milestone
    */
   notifyStreakMilestone(currentStreak: number) {
-    this.sendNotification('🔥 Daily Goal Achieved! — dstudy', {
+    this.sendNotification('🔥 Daily Goal Achieved! — Deepwork', {
       body: `You are on a ${currentStreak}-day study streak! Keep up the incredible momentum.`,
-      tag: 'dstudy-streak'
+      tag: 'deepwork-streak'
     });
   }
 

@@ -1,14 +1,15 @@
 // Vercel Serverless Function: Cloud Sync with MongoDB Atlas
 import { MongoClient } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://abhishek44work:abhishek44M@cluster0.pmmziei.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'studypulse';
 const COLLECTION_NAME = 'user_data';
 
 // Cached MongoClient connection across serverless invocations
 let cachedClient = null;
 
-async function getCollection() {
+async function getCollection(collectionName = COLLECTION_NAME) {
+  if (!MONGODB_URI) throw new Error('MONGODB_URI is not configured');
   if (!cachedClient) {
     cachedClient = new MongoClient(MONGODB_URI, {
       maxPoolSize: 10,
@@ -17,11 +18,12 @@ async function getCollection() {
     await cachedClient.connect();
   }
   const db = cachedClient.db(DB_NAME);
-  return db.collection(COLLECTION_NAME);
+  return db.collection(collectionName);
 }
 
 // In-memory fallback in case of transient database connection issue
 const memoryFallback = new Map();
+const chatFallback = new Map();
 
 export default async function handler(req, res) {
   // CORS configuration
@@ -34,6 +36,20 @@ export default async function handler(req, res) {
   }
 
   const { key, status, users, lookupEmail, boardCode, notifications, email } = req.query;
+
+  // Shared board chat history. Keep a short in-memory fallback for transient DB outages.
+  if (req.method === 'GET' && req.query.chat === '1') {
+    const boardId = String(req.query.boardId || '').trim();
+    if (!boardId) return res.status(200).json({ messages: [] });
+    try {
+      const collection = await getCollection('chat_messages');
+      const messages = await collection.find({ boardId, content: { $exists: true } })
+        .sort({ timestamp: 1 }).limit(100).toArray();
+      return res.status(200).json({ messages: messages.map(({ _id, messageId, ...m }) => ({ id: messageId || _id, ...m })) });
+    } catch (err) {
+      return res.status(200).json({ messages: chatFallback.get(boardId) || [], fallbackMode: true });
+    }
+  }
 
   // Health/status check for MongoDB
   if (status === '1') {
@@ -235,6 +251,39 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const body = req.body || {};
     const { action, notification, notifId, status: updateStatus, read: updateRead, boardCode: joinCode, user: joinUser, key: bodyKey, data } = body;
+
+    // Save board messages for collaborators using polling when a live socket is unavailable.
+    if (action === 'send_chat' && body.message) {
+      const m = body.message;
+      const boardId = String(m.boardId || '').trim();
+      if (!boardId || !String(m.content || '').trim()) {
+        return res.status(400).json({ success: false, error: 'Board and message content are required.' });
+      }
+      const message = {
+        id: m.id || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        boardId,
+        senderId: m.senderId || 'anon',
+        senderName: m.senderName || 'Teammate',
+        senderColor: m.senderColor || '#0C66E4',
+        content: String(m.content).trim(),
+        taskId: m.taskId || null,
+        taskTitle: m.taskTitle || null,
+        timestamp: m.timestamp || new Date().toISOString()
+      };
+      try {
+        const collection = await getCollection('chat_messages');
+        await collection.updateOne(
+          { _id: `chat_${boardId}_${message.id}` },
+          { $set: { ...message, messageId: message.id, _id: `chat_${boardId}_${message.id}` } },
+          { upsert: true }
+        );
+      } catch (err) {
+        const messages = chatFallback.get(boardId) || [];
+        if (!messages.some(existing => existing.id === message.id)) messages.push(message);
+        chatFallback.set(boardId, messages.slice(-100));
+      }
+      return res.status(200).json({ success: true, message });
+    }
 
     // A. Send Notification to Recipient
     if (action === 'send_notification' && notification && notification.recipientEmail) {

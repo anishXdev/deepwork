@@ -1,16 +1,16 @@
-# StudyPulse: Architecture & Cloud Sync Engine
+# Deepwork: Architecture & Cloud Sync Engine
 
-This document provides a technical walkthrough of **StudyPulse**, its **MongoDB Atlas persistence layer**, cross-device synchronization pipeline, and real-time offline-first timing architecture.
+This document provides a technical walkthrough of **Deepwork**, its **MongoDB Atlas persistence layer**, cross-device synchronization pipeline, and real-time offline-first timing architecture.
 
 ---
 
 ## 1. System Architecture Overview
 
-StudyPulse combines **Local-First Speed** with **Cloud Resilience** backed by MongoDB Atlas.
+Deepwork combines **Local-First Speed** with **Cloud Resilience** backed by MongoDB Atlas.
 
 ```mermaid
 flowchart TD
-    subgraph Client["StudyPulse Client (Web / Android / PWA)"]
+    subgraph Client["Deepwork Client (Web / Android / PWA)"]
         UI["React UI (Obsidian Graph, Focus Vessel, Queue)"]
         State["AppContext (Central State & Delta Engine)"]
         LocalCache[("Browser LocalStorage Cache")]
@@ -42,7 +42,7 @@ flowchart TD
 
 ## 2. Multi-Device Sync & Pairing Process
 
-Whether you are using a desktop browser, iPhone, Android device, or tablet, StudyPulse enables seamless data synchronization.
+Whether you are using a desktop browser, iPhone, Android device, or tablet, Deepwork enables seamless data synchronization.
 
 ```mermaid
 sequenceDiagram
