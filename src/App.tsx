@@ -64,10 +64,13 @@ const MainContent: React.FC = () => {
           </Suspense>
         </div>
 
-        <footer className="relative z-[1] flex justify-center gap-4 px-4 py-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-          <a className="transition-colors hover:text-slate-200" href="/privacy.html">Privacy</a>
-          <span aria-hidden="true">·</span>
-          <a className="transition-colors hover:text-slate-200" href="/terms.html">Terms</a>
+        <footer className="relative z-[1] flex flex-col items-center gap-1 px-4 py-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <nav aria-label="Legal" className="flex items-center gap-4">
+            <a className="transition-colors hover:text-slate-200" href="/privacy.html">Privacy</a>
+            <span aria-hidden="true">·</span>
+            <a className="transition-colors hover:text-slate-200" href="/terms.html">Terms</a>
+          </nav>
+          <p>Made with love by Abhishek</p>
         </footer>
 
         {/* Mobile Bottom Navigation Bar */}
