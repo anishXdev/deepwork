@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { GoogleAuthService } from '../services/googleAuth';
 import { StorageService } from '../services/storage';
+import { CloudSyncService } from '../services/cloudSync';
 import {
   X,
   Cloud,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Haptics } from '../utils/haptics';
 import { Notifications } from '../services/notifications';
+import type { UserProfile } from '../types';
 
 export const AuthModal: React.FC = () => {
   const {
@@ -30,6 +32,11 @@ export const AuthModal: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [emailAuthOpen, setEmailAuthOpen] = useState(false);
+  const [emailAuthMode, setEmailAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [emailName, setEmailName] = useState('');
+  const [emailAddress, setEmailAddress] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
 
   if (!isAuthModalOpen) return null;
 
@@ -100,6 +107,63 @@ export const AuthModal: React.FC = () => {
       schemaVersion: 2
     };
     handleSuccessfulSignIn(guestProfile);
+  };
+
+  const handleEmailAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: emailAuthMode,
+          name: emailName,
+          email: emailAddress,
+          password: emailPassword
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success || !result.profile) {
+        throw new Error(result.error || 'Email sign-in failed. Please try again.');
+      }
+      const authenticatedProfile: UserProfile = {
+        id: result.profile.id,
+        name: result.profile.name,
+        email: result.profile.email,
+        googleConnected: false,
+        googleCalendarSyncEnabled: false,
+        authProvider: 'email',
+        emailVerified: false,
+        schemaVersion: 2
+      };
+      if (emailAuthMode === 'signup') {
+        handleSuccessfulSignIn(authenticatedProfile);
+      } else {
+        // Switch to this account's sync key, restore its cloud snapshot if present,
+        // then reload so all app state initializes from the selected account.
+        StorageService.saveProfile(authenticatedProfile);
+        const cloud = await CloudSyncService.pullFromCloud();
+        if (!cloud.success) {
+          StorageService.saveProfile(profile);
+          throw new Error('Signed-in account could not be loaded. Please try again.');
+        }
+        if (!cloud.found) StorageService.resetToCleanSlate(authenticatedProfile);
+        StorageService.saveProfile(authenticatedProfile);
+        setProfile(authenticatedProfile);
+        setIsLoading(false);
+        setIsAuthModalOpen(false);
+        Haptics.success();
+        Notifications.toast('success', `Welcome back, ${authenticatedProfile.name}!`);
+        window.location.reload();
+      }
+      setEmailPassword('');
+    } catch (error: any) {
+      setIsLoading(false);
+      setErrorMessage(error.message || 'Could not reach the email sign-in service.');
+      Haptics.warning();
+    }
   };
 
   return (
@@ -199,6 +263,13 @@ export const AuthModal: React.FC = () => {
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Switch / Sign in with Another Account</span>
               </button>
+              <button
+                type="button"
+                onClick={() => { setEmailAuthOpen(open => !open); setEmailAuthMode('signin'); setErrorMessage(''); }}
+                className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs btn-secondary cursor-pointer"
+              >
+                {emailAuthOpen ? 'Hide email sign-in' : 'Sign in with another email'}
+              </button>
             </div>
           </div>
         ) : (
@@ -237,7 +308,83 @@ export const AuthModal: React.FC = () => {
               <User className="w-3.5 h-3.5" />
               <span>Continue as Guest</span>
             </button>
+            <button
+              type="button"
+              onClick={() => { setEmailAuthOpen(open => !open); setErrorMessage(''); }}
+              className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs btn-secondary cursor-pointer"
+            >
+              {emailAuthOpen ? 'Hide email sign-in' : 'Continue with email'}
+            </button>
           </div>
+        )}
+
+        {emailAuthOpen && (
+          <form onSubmit={handleEmailAuth} className="mt-3 space-y-2.5 text-left">
+            <div className="flex gap-2 pb-1">
+              {(['signin', 'signup'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => { setEmailAuthMode(mode); setErrorMessage(''); }}
+                  className="flex-1 rounded-lg py-2 text-xs font-semibold transition-colors"
+                  style={{
+                    color: emailAuthMode === mode ? 'var(--accent)' : 'var(--text-muted)',
+                    background: emailAuthMode === mode ? 'var(--accent-soft)' : 'var(--bg-card-alt)',
+                    border: `1px solid ${emailAuthMode === mode ? 'var(--accent-border)' : 'var(--border)'}`
+                  }}
+                >
+                  {mode === 'signin' ? 'Sign in' : 'Create account'}
+                </button>
+              ))}
+            </div>
+            {emailAuthMode === 'signup' && (
+              <input
+                type="text"
+                autoComplete="name"
+                required
+                maxLength={80}
+                value={emailName}
+                onChange={event => setEmailName(event.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={{ color: 'var(--text-primary)', background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
+              />
+            )}
+            <input
+              type="email"
+              autoComplete="email"
+              required
+              maxLength={254}
+              value={emailAddress}
+              onChange={event => setEmailAddress(event.target.value)}
+              placeholder="Email address"
+              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{ color: 'var(--text-primary)', background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
+            />
+            <input
+              type="password"
+              autoComplete={emailAuthMode === 'signup' ? 'new-password' : 'current-password'}
+              required
+              minLength={8}
+              maxLength={128}
+              value={emailPassword}
+              onChange={event => setEmailPassword(event.target.value)}
+              placeholder="Password (at least 8 characters)"
+              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{ color: 'var(--text-primary)', background: 'var(--bg-card-alt)', border: '1px solid var(--border)' }}
+            />
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full rounded-xl py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+            >
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {emailAuthMode === 'signup' ? 'Create account' : 'Sign in with email'}
+            </button>
+            <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>
+              Passwords are stored as salted hashes. Email verification and password recovery are not available yet.
+            </p>
+          </form>
         )}
 
         {/* Feature Highlights */}

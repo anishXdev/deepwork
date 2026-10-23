@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { SignalingServer } from './server/socket';
+import { authenticateEmail } from './api/emailAuth.js';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -15,6 +16,34 @@ export default defineConfig(({ mode }) => {
       {
         name: 'api-config-and-cache-buster-middleware',
         configureServer(server) {
+          // Email/password signup and sign-in for local development.
+          server.middlewares.use('/api/auth', (req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'no-store');
+            if (req.method === 'OPTIONS') {
+              res.statusCode = 204;
+              res.end();
+              return;
+            }
+            const chunks: Buffer[] = [];
+            req.on('data', chunk => chunks.push(Buffer.from(chunk)));
+            req.on('end', async () => {
+              try {
+                const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+                const result = await authenticateEmail(req.method || 'GET', body, async () => {
+                  const collection = await getDevCollection('auth_users');
+                  if (!collection) throw new Error('MONGODB_URI is not configured or MongoDB is unavailable');
+                  return collection;
+                });
+                res.statusCode = result.status;
+                res.end(JSON.stringify(result.data));
+              } catch {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ error: 'Could not process the email sign-in request.' }));
+              }
+            });
+          });
+
           // Google OAuth Client ID config endpoint
           server.middlewares.use('/api/config', (req, res) => {
             const clientId = env.GOOGLE_CLIENT_ID || env.VITE_GOOGLE_CLIENT_ID || '';

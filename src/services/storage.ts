@@ -444,7 +444,7 @@ export const StorageService = {
         schemaVersion: 2,
         role: parsed.role || 'user',
         authProvider: parsed.authProvider || (parsed.googleConnected ? 'google' : (parsed.email ? 'email' : 'guest')),
-        emailVerified: Boolean(parsed.googleConnected || parsed.email),
+        emailVerified: parsed.emailVerified === true || Boolean(parsed.googleConnected),
         updatedAt: parsed.updatedAt || new Date().toISOString(),
         createdAt: parsed.createdAt || new Date().toISOString()
       };
@@ -460,7 +460,7 @@ export const StorageService = {
       schemaVersion: 2,
       role: profile.role || 'user',
       authProvider: profile.authProvider || (profile.googleConnected ? 'google' : (profile.email ? 'email' : 'guest')),
-      emailVerified: Boolean(profile.googleConnected || profile.email),
+      emailVerified: profile.emailVerified === true || Boolean(profile.googleConnected),
       updatedAt: new Date().toISOString(),
       createdAt: profile.createdAt || new Date().toISOString()
     };
