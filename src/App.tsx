@@ -70,7 +70,7 @@ const MainContent: React.FC = () => {
             <span aria-hidden="true">·</span>
             <a className="transition-colors hover:text-slate-200" href="/terms.html">Terms</a>
           </nav>
-          <p>Made with love by Abhishek</p>
+          <p>Made with ❤️ by Abhishek</p>
         </footer>
 
         {/* Mobile Bottom Navigation Bar */}
